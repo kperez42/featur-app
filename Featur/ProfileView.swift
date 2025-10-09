@@ -35,14 +35,7 @@ struct ProfileView: View {
 
             // Actions
             VStack(spacing: 12) {
-                Button {
-                    Task { await auth.signOut() }
-                } label: {
-                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.purple)
+                
 
                 // (Optional) show UID for debugging
                 if let uid = Auth.auth().currentUser?.uid {
