@@ -1,9 +1,14 @@
+// EnhancedHomeView.swift
 import SwiftUI
 import FirebaseAuth
 
 struct EnhancedHomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @EnvironmentObject var auth: AuthViewModel
+    @EnvironmentObject var adManager: AdManager
+    
+    @State private var swipeCount = 0
+    @State private var showAdLoadingIndicator = false
     
     var body: some View {
         ZStack {
@@ -35,6 +40,24 @@ struct EnhancedHomeView: View {
                 }
                 .padding(.bottom, 24)
             }
+            
+            // Ad Loading Overlay
+            if showAdLoadingIndicator {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .overlay {
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                                .tint(.white)
+                            Text("Loading Ad...")
+                                .foregroundStyle(.white)
+                                .font(.subheadline)
+                        }
+                        .padding(32)
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                    }
+            }
         }
         .task {
             await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
@@ -42,6 +65,7 @@ struct EnhancedHomeView: View {
         }
         .refreshable {
             await viewModel.refresh(currentUserId: auth.user?.uid ?? "")
+            swipeCount = 0 // Reset swipe count on refresh
         }
         .alert("It's a Match!", isPresented: $viewModel.showMatchAlert) {
             Button("Send Message", role: .none) {
@@ -84,12 +108,12 @@ struct EnhancedHomeView: View {
                     SwipeCard(
                         onSwipeLeft: {
                             Task {
-                                await viewModel.handleSwipe(profile: profile, action: .pass)
+                                await handleSwipeWithAds(profile: profile, action: .pass)
                             }
                         },
                         onSwipeRight: {
                             Task {
-                                await viewModel.handleSwipe(profile: profile, action: .like)
+                                await handleSwipeWithAds(profile: profile, action: .like)
                             }
                         }
                     ) {
@@ -114,7 +138,7 @@ struct EnhancedHomeView: View {
             Button {
                 Haptics.impact(.rigid)
                 if let current = viewModel.currentProfile {
-                    Task { await viewModel.handleSwipe(profile: current, action: .pass) }
+                    Task { await handleSwipeWithAds(profile: current, action: .pass) }
                 }
             } label: {
                 ActionButtonView(icon: "xmark", color: .red, size: 62)
@@ -122,15 +146,17 @@ struct EnhancedHomeView: View {
             
             Button {
                 Haptics.impact(.soft)
-                // TODO: Undo last swipe
+                undoLastSwipe()
             } label: {
                 ActionButtonView(icon: "arrow.uturn.left", color: AppTheme.accent, size: 50)
             }
+            .disabled(viewModel.swipeHistory.isEmpty)
+            .opacity(viewModel.swipeHistory.isEmpty ? 0.5 : 1.0)
             
             Button {
                 Haptics.impact(.heavy)
                 if let current = viewModel.currentProfile {
-                    Task { await viewModel.handleSwipe(profile: current, action: .like) }
+                    Task { await handleSwipeWithAds(profile: current, action: .like) }
                 }
             } label: {
                 ActionButtonView(icon: "heart.fill", color: .green, size: 62)
@@ -185,6 +211,7 @@ struct EnhancedHomeView: View {
             Button("Refresh") {
                 Task {
                     await viewModel.refresh(currentUserId: auth.user?.uid ?? "")
+                    swipeCount = 0
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -192,6 +219,60 @@ struct EnhancedHomeView: View {
         }
         .frame(height: 400)
         .padding()
+    }
+    
+    // MARK: - Swipe Handling with Ads
+    
+    /// Handle swipe action and show ads every 5 swipes
+    private func handleSwipeWithAds(profile: UserProfile, action: SwipeAction.Action) async {
+        // Process the swipe
+        await viewModel.handleSwipe(profile: profile, action: action)
+        swipeCount += 1
+        
+        // Show ad every 5 swipes
+        if swipeCount % 5 == 0 {
+            await showInterstitialAdIfReady()
+        }
+    }
+    
+    /// Show interstitial ad with proper error handling
+    private func showInterstitialAdIfReady() async {
+        guard let rootVC = AdManager.getRootViewController() else {
+            print("⚠️ Could not get root view controller for ad")
+            return
+        }
+        
+        // Check if ad is ready
+        if !adManager.isInterstitialLoaded {
+            print("⚠️ Interstitial ad not loaded, skipping...")
+            // Preload for next time
+            await adManager.loadInterstitialAd()
+            return
+        }
+        
+        // Show loading indicator
+        showAdLoadingIndicator = true
+        
+        // Small delay for smooth transition
+        try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+        
+        // Show the ad
+        await MainActor.run {
+            showAdLoadingIndicator = false
+            adManager.showInterstitialAd(from: rootVC)
+        }
+    }
+    
+    /// Undo last swipe action
+    private func undoLastSwipe() {
+        guard let lastSwipe = viewModel.swipeHistory.last else {
+            return
+        }
+        
+        Task {
+            await viewModel.undoSwipe(lastSwipe)
+            Haptics.notify(.success)
+        }
     }
 }
 
@@ -381,6 +462,7 @@ final class HomeViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var showMatchAlert = false
     @Published var lastMatch: UserProfile?
+    @Published var swipeHistory: [SwipeRecord] = []
     
     private let service = FirebaseService()
     private var swipedUserIds: Set<String> = []
@@ -424,6 +506,12 @@ final class HomeViewModel: ObservableObject {
             timestamp: Date()
         )
         
+        // Record for undo functionality
+        swipeHistory.append(SwipeRecord(profile: profile, action: action))
+        if swipeHistory.count > 10 {
+            swipeHistory.removeFirst()
+        }
+        
         do {
             try await service.recordSwipe(swipe)
             
@@ -453,11 +541,33 @@ final class HomeViewModel: ObservableObject {
         }
     }
     
+    func undoSwipe(_ record: SwipeRecord) async {
+        swipedUserIds.remove(record.profile.uid)
+        swipeHistory.removeAll { $0.id == record.id }
+        
+        // Add profile back to the front
+        withAnimation(.spring(response: 0.3)) {
+            profiles.insert(record.profile, at: 0)
+        }
+        
+        Haptics.impact(.medium)
+    }
+    
     func refresh(currentUserId: String) async {
         swipedUserIds.removeAll()
+        swipeHistory.removeAll()
         await loadProfiles(currentUserId: currentUserId)
         await loadFeaturedCreators()
     }
+}
+
+// MARK: - Swipe Record for Undo
+
+struct SwipeRecord: Identifiable {
+    let id = UUID()
+    let profile: UserProfile
+    let action: SwipeAction.Action
+    let timestamp = Date()
 }
 
 struct FeaturedCreatorCard: View {

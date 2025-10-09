@@ -1,10 +1,40 @@
+ 
+
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict/>
-	</array>
+    <!-- App basics -->
+    <key>CFBundleName</key>
+    <string>Featur</string>
+    <key>CFBundleIdentifier</key>
+    <string>featur-app.Featur</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <!-- Firebase (proxy handy unless you customize) -->
+    <key>FirebaseAppDelegateProxyEnabled</key>
+    <true/>
+
+    <!-- (Optional) If you use IDFA / ATT prompts -->
+    <key>NSUserTrackingUsageDescription</key>
+    <string>This identifier will be used to deliver more relevant ads to you.</string>
+
+    <key>GADApplicationIdentifier</key>
+    <string>ca-app-pub-3940256099942544~1458002511</string>
+
+
+    <!-- (Optional) Custom deep links / Firebase Auth callback scheme -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>REVERSED_CLIENT_ID_FROM_GoogleService_Info</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>

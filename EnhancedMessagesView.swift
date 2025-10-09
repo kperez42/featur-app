@@ -74,8 +74,9 @@ struct EnhancedMessagesView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    ForEach(viewModel.newMatches.indices, id: \.self) { index in
-                        if let profile = viewModel.newMatches[index].profile {
+                    // ✅ FIXED VERSION:
+                    ForEach(Array(viewModel.newMatches.enumerated()), id: \.offset) { index, match in
+                        if let profile = match.profile {
                             NewMatchCard(profile: profile)
                         }
                     }
