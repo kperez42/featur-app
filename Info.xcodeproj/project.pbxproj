@@ -14,6 +14,8 @@
 		BA10A0BE2E984F7F00E0196E /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = BA10A0BD2E984F7F00E0196E /* FirebaseRemoteConfig */; };
 		BA10A0C02E984F7F00E0196E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = BA10A0BF2E984F7F00E0196E /* FirebaseStorage */; };
 		BAD98B652E984FFF00C0D174 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = BAD98B642E984FFF00C0D174 /* GoogleSignIn */; };
+		BAD98B962E98782D00C0D174 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = BAD98B952E98782D00C0D174 /* GoogleMobileAds */; };
+		BAD98BA02E987E3E00C0D174 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BAD98B9F2E987E3E00C0D174 /* Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -37,6 +39,7 @@
 		BA109D562E946C3800E0196E /* Featur.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Featur.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA109D662E946C3A00E0196E /* FeaturTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FeaturTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA109D702E946C3A00E0196E /* FeaturUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FeaturUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BAD98B9F2E987E3E00C0D174 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -66,6 +69,7 @@
 				BA10A0C02E984F7F00E0196E /* FirebaseStorage in Frameworks */,
 				BA10A0B22E984F7F00E0196E /* FirebaseAnalytics in Frameworks */,
 				BA10A0BA2E984F7F00E0196E /* FirebaseCrashlytics in Frameworks */,
+				BAD98B962E98782D00C0D174 /* GoogleMobileAds in Frameworks */,
 				BA10A0B42E984F7F00E0196E /* FirebaseAuth in Frameworks */,
 				BA10A0BC2E984F7F00E0196E /* FirebaseFirestore in Frameworks */,
 				BAD98B652E984FFF00C0D174 /* GoogleSignIn in Frameworks */,
@@ -92,6 +96,7 @@
 		BA109D4D2E946C3800E0196E = {
 			isa = PBXGroup;
 			children = (
+				BAD98B9F2E987E3E00C0D174 /* Info.plist */,
 				BA109D582E946C3800E0196E /* Featur */,
 				BA109D692E946C3A00E0196E /* FeaturTests */,
 				BA109D732E946C3A00E0196E /* FeaturUITests */,
@@ -136,6 +141,7 @@
 				BA10A0BD2E984F7F00E0196E /* FirebaseRemoteConfig */,
 				BA10A0BF2E984F7F00E0196E /* FirebaseStorage */,
 				BAD98B642E984FFF00C0D174 /* GoogleSignIn */,
+				BAD98B952E98782D00C0D174 /* GoogleMobileAds */,
 			);
 			productName = Featur;
 			productReference = BA109D562E946C3800E0196E /* Featur.app */;
@@ -222,6 +228,7 @@
 			packageReferences = (
 				BA10A0B02E984F7F00E0196E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				BAD98B632E984FFF00C0D174 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				BAD98B942E98782D00C0D174 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BA109D572E946C3800E0196E /* Products */;
@@ -240,6 +247,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BAD98BA02E987E3E00C0D174 /* Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -610,6 +618,14 @@
 				minimumVersion = 9.0.0;
 			};
 		};
+		BAD98B942E98782D00C0D174 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.12.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -647,6 +663,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BAD98B632E984FFF00C0D174 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignIn;
+		};
+		BAD98B952E98782D00C0D174 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BAD98B942E98782D00C0D174 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
