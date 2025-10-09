@@ -7,8 +7,8 @@ struct FeaturApp: App {
 
   var body: some Scene {
     WindowGroup {
-      AuthGateView()
-        .environmentObject(auth)
+      ContentView()                 // ✅ always show tabs
+        .environmentObject(auth)    // single source of truth for auth
     }
   }
 }

@@ -93,6 +93,16 @@ final class AuthViewModel: NSObject, ObservableObject {
         }
     }
 
+    func signOut() async {
+        do {
+            try Auth.auth().signOut()
+            self.user = nil
+            self.errorMessage = nil
+            self.currentNonce = nil
+        } catch {
+            self.errorMessage = "Sign out failed"
+        }
+    }
     // MARK: - Helpers / Diagnostics
     private func dumpEnvironmentOnce() {
         let bundleID = Bundle.main.bundleIdentifier ?? "nil"
