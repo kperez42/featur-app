@@ -1,0 +1,27 @@
+# Xcode
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Swift Package artifacts
+.build/
+
+
+# Firebase / secrets
+GoogleService-Info.plist
+*.env
+.env.*
+
+# macOS files
+.DS_Store
+
+# User-specific data
+*.swp
+*.orig
+*.tmp
