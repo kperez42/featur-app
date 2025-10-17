@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Xcode
+**/xcuserdata/
+**/DerivedData/
+*.xcuserstate
+
+# Firebase config
+Featur/GoogleService-Info.plist
+
