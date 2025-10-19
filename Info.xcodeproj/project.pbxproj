@@ -15,7 +15,6 @@
 		BA10A0C02E984F7F00E0196E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = BA10A0BF2E984F7F00E0196E /* FirebaseStorage */; };
 		BAD98B652E984FFF00C0D174 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = BAD98B642E984FFF00C0D174 /* GoogleSignIn */; };
 		BAD98B962E98782D00C0D174 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = BAD98B952E98782D00C0D174 /* GoogleMobileAds */; };
-		BAD98BA02E987E3E00C0D174 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BAD98B9F2E987E3E00C0D174 /* Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,12 +38,25 @@
 		BA109D562E946C3800E0196E /* Featur.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Featur.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA109D662E946C3A00E0196E /* FeaturTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FeaturTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA109D702E946C3A00E0196E /* FeaturUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FeaturUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		BAD98B9F2E987E3E00C0D174 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F64A54C62EA392BF00BC1B4D /* Exceptions for "Featur" folder in "Featur" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				.gitignore,
+				Info.plist,
+			);
+			target = BA109D552E946C3800E0196E /* Featur */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BA109D582E946C3800E0196E /* Featur */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				F64A54C62EA392BF00BC1B4D /* Exceptions for "Featur" folder in "Featur" target */,
+			);
 			path = Featur;
 			sourceTree = "<group>";
 		};
@@ -96,7 +108,6 @@
 		BA109D4D2E946C3800E0196E = {
 			isa = PBXGroup;
 			children = (
-				BAD98B9F2E987E3E00C0D174 /* Info.plist */,
 				BA109D582E946C3800E0196E /* Featur */,
 				BA109D692E946C3A00E0196E /* FeaturTests */,
 				BA109D732E946C3A00E0196E /* FeaturUITests */,
@@ -216,7 +227,7 @@
 					};
 				};
 			};
-			buildConfigurationList = BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Featur" */;
+			buildConfigurationList = BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Info" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -247,7 +258,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BAD98BA02E987E3E00C0D174 /* Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -433,10 +443,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Featur/Preview Content\"";
-				DEVELOPMENT_TEAM = Z86968747M;
+				DEVELOPMENT_TEAM = W4UWGH7JM4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "featur-app.Featur";
+				INFOPLIST_KEY_CFBundleDisplayName = Featur;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -448,7 +458,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "featur-app.Featur";
+				PRODUCT_BUNDLE_IDENTIFIER = "featur-app.Featur-lh";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -465,10 +475,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Featur/Preview Content\"";
-				DEVELOPMENT_TEAM = Z86968747M;
+				DEVELOPMENT_TEAM = W4UWGH7JM4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "featur-app.Featur";
+				INFOPLIST_KEY_CFBundleDisplayName = Featur;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -480,7 +490,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "featur-app.Featur";
+				PRODUCT_BUNDLE_IDENTIFIER = "featur-app.Featur-lh";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -563,7 +573,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Featur" */ = {
+		BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Info" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BA109D782E946C3A00E0196E /* Debug */,
