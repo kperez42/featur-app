@@ -10,31 +10,17 @@ final class AuthViewModel: NSObject, ObservableObject {
     @Published var user: User?
     @Published var errorMessage: String?
     private var currentNonce: String?
-    private var authHandle: AuthStateDidChangeListenerHandle?
-
 
     private let log = Logger(subsystem: "featur-app.Featur", category: "Auth")
-    
+
     override init() {
         super.init()
-
-        if FirebaseApp.app() == nil {
-            print("⚠️ Firebase not configured yet, skipping listener setup")
-            return
-        }
-
-        // Now safe to use Auth
+        // Keep local state in sync with Firebase Auth
         Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor in self?.user = user }
         }
-
         self.dumpEnvironmentOnce()
     }
-    deinit {
-        if let h = authHandle { Auth.auth().removeStateDidChangeListener(h) }
-    }
-
-
 
     // MARK: - Apple Sign-In
 
