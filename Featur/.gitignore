@@ -19,7 +19,8 @@ GoogleService-Info.plist
 .env.*
 
 # macOS files
-.DS_Store
+**/.DS_Store
+
 
 # User-specific data
 *.swp
