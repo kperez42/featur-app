@@ -13,6 +13,7 @@ struct UserProfile: Identifiable, Codable {
     var contentStyles: [ContentStyle]
     var socialLinks: SocialLinks
     var mediaURLs: [String]
+    var profileImageURL: String?
     var isVerified: Bool
     var followerCount: Int
     var collaborationPreferences: CollaborationPreferences

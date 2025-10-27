@@ -9,7 +9,8 @@ struct RegistrationView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var isLoading = false
-    
+    @Binding var navigationPath: NavigationPath // Bind to AuthGateView's navigationPath
+
     var body: some View {
         ZStack {
             AppTheme.gradient.ignoresSafeArea()
@@ -27,7 +28,6 @@ struct RegistrationView: View {
                         inputField("Confirm Password", text: $confirmPassword, secure: true)
                     }
                     
-                    // Firebase auth runs here
                     Button {
                         Task { await register() }
                     } label: {
@@ -49,6 +49,11 @@ struct RegistrationView: View {
                 .padding(32)
             }
         }
+        .navigationDestination(for: String.self) { destination in
+            if destination == "VerifyEmailView" {
+                VerifyEmailView(email: email)
+            }
+        }
     }
     
     func inputField(_ placeholder: String, text: Binding<String>, secure: Bool = false) -> some View {
@@ -68,16 +73,13 @@ struct RegistrationView: View {
         .background(Color.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
         .foregroundColor(.white)
     }
-
     
     func register() async {
         isLoading = true
         do {
-            // Create account
             let result = try await Auth.auth().createUser(withEmail: email, password: password)
             let uid = result.user.uid
             
-            // Save to Firestore
             let db = Firestore.firestore()
             try await db.collection("users").document(uid).setData([
                 "name": name,
@@ -85,17 +87,15 @@ struct RegistrationView: View {
                 "createdAt": Timestamp(date: Date())
             ])
             
-            // Send verification email ONCE at registration
             try await result.user.sendEmailVerification()
             print("Verification email sent to \(email)")
             
-            // sign out automatically so they log in after verifying
-            try Auth.auth().signOut()
-            
+            DispatchQueue.main.async {
+                navigationPath.append("VerifyEmailView")
+            }
         } catch {
             print("Registration failed: \(error.localizedDescription)")
         }
         isLoading = false
     }
 }
-

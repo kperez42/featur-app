@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct FeaturApp: App {
+    
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var auth = AuthViewModel()
     @StateObject private var appState = AppStateManager()
@@ -9,8 +10,10 @@ struct FeaturApp: App {
     @State private var showLaunch = true // controls the splash
     
     var body: some Scene {
+        
         WindowGroup {
             ZStack {
+                
                 // your main app content
                 AuthGateView()
                     .environmentObject(auth)
