@@ -15,7 +15,7 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchLogo" translatesAutoresizingMaskIntoConstraints="NO" id="2pp-Fy-lFw">
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="AppIcon" translatesAutoresizingMaskIntoConstraints="NO" id="2pp-Fy-lFw">
                                 <rect key="frame" x="126.66666666666669" y="356" width="140" height="140"/>
                                 <constraints>
                                     <constraint firstAttribute="width" constant="140" id="4g9-Pt-ZUD"/>
@@ -39,6 +39,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="LaunchLogo" width="1024" height="1024"/>
+        <image name="AppIcon" width="1024" height="1024"/>
     </resources>
 </document>
