@@ -1,7 +1,7 @@
 import SwiftUI
 import PhotosUI
 import FirebaseAuth
-import AuthenticationServices  // ✅ ADD THIS IMPORT
+import AuthenticationServices  // âœ… ADD THIS IMPORT
 
 struct EnhancedProfileView: View {
     @StateObject private var viewModel = ProfileViewModel()

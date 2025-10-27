@@ -15,7 +15,6 @@
 		BA10A0C02E984F7F00E0196E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = BA10A0BF2E984F7F00E0196E /* FirebaseStorage */; };
 		BAD98B652E984FFF00C0D174 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = BAD98B642E984FFF00C0D174 /* GoogleSignIn */; };
 		BAD98B962E98782D00C0D174 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = BAD98B952E98782D00C0D174 /* GoogleMobileAds */; };
-		BAD98BA02E987E3E00C0D174 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BAD98B9F2E987E3E00C0D174 /* Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,12 +38,24 @@
 		BA109D562E946C3800E0196E /* Featur.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Featur.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA109D662E946C3A00E0196E /* FeaturTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FeaturTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA109D702E946C3A00E0196E /* FeaturUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FeaturUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		BAD98B9F2E987E3E00C0D174 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BA4F76A42EA55E7000FEB2BA /* Exceptions for "Featur" folder in "Featur" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BA109D552E946C3800E0196E /* Featur */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BA109D582E946C3800E0196E /* Featur */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BA4F76A42EA55E7000FEB2BA /* Exceptions for "Featur" folder in "Featur" target */,
+			);
 			path = Featur;
 			sourceTree = "<group>";
 		};
@@ -96,7 +107,6 @@
 		BA109D4D2E946C3800E0196E = {
 			isa = PBXGroup;
 			children = (
-				BAD98B9F2E987E3E00C0D174 /* Info.plist */,
 				BA109D582E946C3800E0196E /* Featur */,
 				BA109D692E946C3A00E0196E /* FeaturTests */,
 				BA109D732E946C3A00E0196E /* FeaturUITests */,
@@ -216,7 +226,7 @@
 					};
 				};
 			};
-			buildConfigurationList = BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Featur" */;
+			buildConfigurationList = BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Info" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -247,7 +257,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BAD98BA02E987E3E00C0D174 /* Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -563,7 +572,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Featur" */ = {
+		BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Info" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BA109D782E946C3A00E0196E /* Debug */,
