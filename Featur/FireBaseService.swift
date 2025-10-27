@@ -19,11 +19,15 @@ final class FirebaseService: ObservableObject {
     }
     
     func updateProfile(_ profile: UserProfile) async throws {
-        guard let uid = profile.id else { return }
+        // Use uid, not id
         var updated = profile
         updated.updatedAt = Date()
-        try db.collection("users").document(uid).setData(from: updated, merge: true)
+
+        try db.collection("users")
+            .document(profile.uid)
+            .setData(from: updated, merge: true)
     }
+
     
     // MARK: - Discovery & Matching
     

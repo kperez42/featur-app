@@ -4,18 +4,25 @@ import AuthenticationServices
 struct AuthGateView: View {
     @EnvironmentObject var auth: AuthViewModel
     @State private var showAppleSheet = false
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
         Group {
-            if auth.user != nil {
-                //  User already logged in → go to main app
+            if let user = auth.user, user.isEmailVerified {
                 ContentView()
             } else {
-                //  Default screen = your Firebase email/password login
-                NavigationStack {
-                    LoginView()
+                NavigationStack(path: $navigationPath) {
+                    LoginView(navigationPath: $navigationPath) // Pass navigationPath
+                        .navigationDestination(for: String.self) { destination in
+                            if destination == "RegistrationView" {
+                                RegistrationView(navigationPath: $navigationPath) // Pass navigationPath
+                            } else if destination == "LoginView" {
+                                LoginView(navigationPath: $navigationPath) // Pass navigationPath
+                            } else if destination == "VerifyEmailView" {
+                                VerifyEmailView(email: "") // Update to pass email if needed
+                            }
+                        }
                         .toolbar {
-                            // Optional button to show Apple Sign-In
                             ToolbarItem(placement: .navigationBarTrailing) {
                                 Button {
                                     showAppleSheet = true
@@ -26,16 +33,21 @@ struct AuthGateView: View {
                             }
                         }
                         .sheet(isPresented: $showAppleSheet) {
-                            //
                             AppleSignInSheet(auth: auth)
                         }
+                }
+                .onChange(of: auth.user) { _, newUser in
+                    if newUser == nil {
+                        navigationPath = NavigationPath() // Reset to LoginView
+                        navigationPath.append("LoginView")
+                    }
                 }
             }
         }
     }
 }
 
-/// Small wrapper for apple sign in 
+/// Small wrapper for Apple Sign-In
 struct AppleSignInSheet: View {
     @ObservedObject var auth: AuthViewModel
     var body: some View {

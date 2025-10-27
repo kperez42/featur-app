@@ -10,12 +10,14 @@ struct EnhancedProfileView: View {
     
     var body: some View {
         Group {
-            if auth.user == nil {
-                GuestProfileView()
-            } else {
-                authenticatedProfile
-            }
+        if auth.user == nil {
+            GuestProfileView()
+        } else if viewModel.needsSetup {
+            ProfileCreationFlow(viewModel: viewModel)
+        } else {
+            authenticatedProfile
         }
+    }
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .background(AppTheme.bg)
@@ -55,15 +57,16 @@ struct EnhancedProfileView: View {
                     
                     // Social Links
                     socialLinksSection(profile)
-                    
-                    // Settings
-                    settingsSection
                 } else if viewModel.isLoading {
                     ProgressView()
                         .frame(height: 300)
                 } else {
                     createProfilePrompt
                 }
+
+                // TEMPORARILY SHOW LOGOUT ALWAYS
+                settingsSection
+
             }
             .padding(.bottom, 32)
         }
@@ -81,7 +84,7 @@ struct EnhancedProfileView: View {
     private func profileHeader(_ profile: UserProfile) -> some View {
         VStack(spacing: 16) {
             // Profile Photo
-            AsyncImage(url: URL(string: profile.mediaURLs.first ?? "")) { image in
+            AsyncImage(url: URL(string: profile.profileImageURL ?? profile.mediaURLs.first ?? "")) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -97,9 +100,9 @@ struct EnhancedProfileView: View {
             .frame(width: 120, height: 120)
             .clipShape(Circle())
             .overlay(
-                Circle()
-                    .stroke(AppTheme.accent, lineWidth: 3)
+                Circle().stroke(AppTheme.accent, lineWidth: 3)
             )
+
             
             // Name & Verification
             HStack(spacing: 8) {
@@ -633,9 +636,14 @@ final class ProfileViewModel: ObservableObject {
     @Published var profile: UserProfile?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var needsSetup = false
+
     
     private let service = FirebaseService()
-    
+    // helper function to encapsulate service 
+    func uploadImageToStorage(userId: String, data: Data) async throws -> String {
+            try await service.uploadProfilePhoto(userId: userId, imageData: data)
+        }
     func loadProfile(uid: String) async {
         isLoading = true
         defer { isLoading = false }
@@ -643,31 +651,11 @@ final class ProfileViewModel: ObservableObject {
         do {
             profile = try await service.fetchProfile(uid: uid)
             
-            // If no profile exists, create a default one
-            if profile == nil {
-                let defaultProfile = UserProfile(
-                    uid: uid,
-                    displayName: "New Creator",
-                    interests: [],
-                    contentStyles: [],
-                    socialLinks: .init(),
-                    mediaURLs: [],
-                    isVerified: false,
-                    followerCount: 0,
-                    collaborationPreferences: .init(
-                        lookingFor: [],
-                        availability: [],
-                        responseTime: .moderate
-                    ),
-                    createdAt: Date(),
-                    updatedAt: Date()
-                )
-                try await service.createProfile(defaultProfile)
-                profile = defaultProfile
-            }
+            // if nothing in firestore show onboarding
+            needsSetup = (profile == nil)
         } catch {
             errorMessage = error.localizedDescription
-            print("Error loading profile: \(error)")
+            needsSetup = true
         }
     }
     

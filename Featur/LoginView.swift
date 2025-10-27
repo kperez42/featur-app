@@ -9,6 +9,7 @@ struct LoginView: View {
     @State private var isLoading = false
     @State private var show = false
     @FocusState private var focused: Field?
+    @Binding var navigationPath: NavigationPath // Bind to AuthGateView's navigationPath
 
     enum Field { case email, password }
 
@@ -19,10 +20,8 @@ struct LoginView: View {
                 Spacer()
                 Image("FeaturLogo")
                     .resizable()
-                        .scaledToFit()
-                        .frame(width: 140, height: 140)
-                        
-
+                    .scaledToFit()
+                    .frame(width: 140, height: 140)
 
                 Text("")
                     .foregroundStyle(.white.opacity(0.7))
@@ -61,7 +60,6 @@ struct LoginView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 10)
 
-                // Forgot Password
                 Button("Forgot Password?") {
                     Task { await resetPassword() }
                 }
@@ -69,9 +67,8 @@ struct LoginView: View {
                 .foregroundColor(.white.opacity(0.8))
                 .padding(.top, 6)
 
-                // Create Account → RegistrationView
-                NavigationLink {
-                    RegistrationView()
+                Button {
+                    navigationPath.append("RegistrationView")
                 } label: {
                     Text("Create an account")
                         .font(.headline)
@@ -87,11 +84,12 @@ struct LoginView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
 
-                                Spacer()
-                            }
-                            .padding(.vertical)
-                        }
-                    }
+                Spacer()
+            }
+            .padding(.vertical)
+        }
+    }
+
     func resetPassword() async {
         guard !email.isEmpty else {
             print("Please enter your email first.")
@@ -108,14 +106,12 @@ struct LoginView: View {
 
     func signIn() async {
         isLoading = true
-        do{
-            try await Auth.auth().signIn(withEmail: email, password: password )
+        do {
+            try await Auth.auth().signIn(withEmail: email, password: password)
             print("Successfully logged in as \(email)")
-        }catch {
+        } catch {
             print("Sign in failed: \(error.localizedDescription)")
         }
         isLoading = false
-        
     }
 }
-
