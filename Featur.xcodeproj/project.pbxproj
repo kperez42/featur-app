@@ -60,7 +60,6 @@
 			path = Featur;
 			sourceTree = "<group>";
 		};
-
 		BA109D692E946C3A00E0196E /* FeaturTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = FeaturTests;
@@ -228,7 +227,7 @@
 					};
 				};
 			};
-			buildConfigurationList = BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Info" */;
+			buildConfigurationList = BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Featur" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -574,7 +573,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Info" */ = {
+		BA109D512E946C3800E0196E /* Build configuration list for PBXProject "Featur" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BA109D782E946C3A00E0196E /* Debug */,
