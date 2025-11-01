@@ -1,5 +1,5 @@
 import SwiftUI
-
+import CoreLocation
 struct ReviewPage: View {
     var gender: String
     var age: Int?
@@ -7,6 +7,7 @@ struct ReviewPage: View {
     var ig: String
     var tt: String
     var media: [String]
+    @State private var locationManager = LocationManager()
     
     var body: some View {
         FlowPageContainer(title: "Review Your Profile") {
@@ -55,6 +56,18 @@ struct ReviewPage: View {
                         Text("\(media.count) item\(media.count > 1 ? "s" : "") added")
                     }
                 }
+                if locationManager.isNotDetermined {
+                               VStack(alignment: .leading, spacing: 8) {
+                                   Text(" Location Access")
+                                       .font(.headline)
+                                   Text("We use your location to match you with nearby creators.")
+                                       .font(.subheadline)
+                                       .foregroundStyle(.secondary)
+                                       .multilineTextAlignment(.leading)
+                               }
+                               .padding()
+                               .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                           }
 
                 Text("Tap **Finish** below to create your profile.")
                     .font(.footnote)
