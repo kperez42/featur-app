@@ -1,210 +1,324 @@
-// ProfileDetailView.swift - Complete Profile Detail Screen
 import SwiftUI
 import FirebaseAuth
+
+// MARK: - Identifiable wrapper for Int
+struct IdentifiableInt: Identifiable {
+    let id: Int
+}
 
 struct ProfileDetailView: View {
     let profile: UserProfile
     @Environment(\.dismiss) var dismiss
-    @State private var selectedMediaIndex = 0
-    @State private var showMessageSheet = false
-    @State private var showLikeAnimation = false
+    @State private var showingMessageSheet = false
+    @State private var selectedMediaIndex: IdentifiableInt?
     
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Media Gallery with Page Control
-                mediaGallery
+                // Hero Media Section
+                HeroMediaSection(
+                    mediaURLs: profile.mediaURLs,
+                    profileImageURL: profile.profileImageURL,
+                    selectedIndex: $selectedMediaIndex
+                )
                 
                 // Profile Content
-                VStack(alignment: .leading, spacing: 20) {
-                    // Name, Age, and Verification
-                    headerSection
+                VStack(spacing: 20) {
+                    // Name and Verification
+                    ProfileHeaderInfo(profile: profile)
                     
-                    // Bio
-                    if let bio = profile.bio {
-                        bioSection(bio)
-                    }
-                    
-                    // Stats
-                    statsSection
-                    
-                    // Content Styles
-                    contentStylesSection
-                    
-                    // Location
-                    if let location = profile.location {
-                        locationSection(location)
-                    }
-                    
-                    // Social Links
-                    socialLinksSection
-                    
-                    // Collaboration Preferences
-                    collaborationSection
-                    
-                    // Interests
-                    if !profile.interests.isEmpty {
-                        interestsSection
-                    }
+                    // Quick Stats
+                    QuickStatsRow(profile: profile)
                     
                     // Action Buttons
-                    actionButtons
+                    ActionButtonsRow(
+                        onMessage: { showingMessageSheet = true },
+                        onCollaborate: { /* Handle collab request */ }
+                    )
+                    
+                    Divider()
+                    
+                    // Bio
+                    if let bio = profile.bio, !bio.isEmpty {
+                        BioSection(bio: bio)
+                    }
+                    
+                    // Content Styles
+                    if !profile.contentStyles.isEmpty {
+                        ContentStylesDetailSection(styles: profile.contentStyles)
+                    }
+                    
+                    // Collaboration Info
+                    if !profile.collaborationPreferences.lookingFor.isEmpty {
+                        CollaborationDetailSection(preferences: profile.collaborationPreferences)
+                    }
+                    
+                    // Social Accounts
+                    if hasSocialLinks(profile.socialLinks) {
+                        SocialAccountsSection(socialLinks: profile.socialLinks)
+                    }
+                    
+                    // Location
+                    if let location = profile.location, location.city != nil {
+                        LocationDetailSection(location: location)
+                    }
+                    
+                    // Full Media Grid
+                    if profile.mediaURLs.count > 1 {
+                        FullMediaGrid(
+                            mediaURLs: profile.mediaURLs,
+                            selectedIndex: $selectedMediaIndex
+                        )
+                    }
                 }
                 .padding()
             }
         }
-        .ignoresSafeArea(edges: .top)
-        .overlay(alignment: .topLeading) {
-            // Back Button
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(12)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            .padding()
-        }
-        .overlay(alignment: .topTrailing) {
-            // More Menu
-            Menu {
-                Button {
-                    // Share profile
-                } label: {
-                    Label("Share Profile", systemImage: "square.and.arrow.up")
+        .background(AppTheme.bg)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 2) {
+                    Text(profile.displayName)
+                        .font(.headline)
+                    
+                    if profile.isVerified {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.caption2)
+                            Text("Verified Creator")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.blue)
+                    }
                 }
-                
-                Button(role: .destructive) {
-                    // Report user
-                } label: {
-                    Label("Report", systemImage: "exclamationmark.triangle")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(12)
-                    .background(.ultraThinMaterial, in: Circle())
             }
-            .padding()
+            
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        // Share profile
+                    } label: {
+                        Label("Share Profile", systemImage: "square.and.arrow.up")
+                    }
+                    
+                    Button(role: .destructive) {
+                        // Report user
+                    } label: {
+                        Label("Report", systemImage: "exclamationmark.triangle")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
         }
-        .sheet(isPresented: $showMessageSheet) {
-            MessageComposeView(recipient: profile)
+        .sheet(isPresented: $showingMessageSheet) {
+            MessageComposeSheet(recipientProfile: profile)
+        }
+        .fullScreenCover(item: $selectedMediaIndex) { identifiableIndex in
+            MediaGalleryViewer(
+                mediaURLs: profile.mediaURLs,
+                selectedIndex: identifiableIndex.id,
+                onDismiss: { selectedMediaIndex = nil }
+            )
         }
     }
     
-    // MARK: - Media Gallery
+    private func hasSocialLinks(_ links: UserProfile.SocialLinks) -> Bool {
+        links.instagram != nil || links.tiktok != nil ||
+        links.youtube != nil || links.twitch != nil
+    }
+}
+
+// MARK: - Hero Media Section
+private struct HeroMediaSection: View {
+    let mediaURLs: [String]
+    let profileImageURL: String?
+    @Binding var selectedIndex: IdentifiableInt?
     
-    private var mediaGallery: some View {
-        TabView(selection: $selectedMediaIndex) {
-            if !profile.mediaURLs.isEmpty {
-                ForEach(Array(profile.mediaURLs.enumerated()), id: \.offset) { index, url in
-                    AsyncImage(url: URL(string: url)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        case .failure:
-                            Rectangle()
-                                .fill(AppTheme.gradient)
-                        case .empty:
-                            ProgressView()
-                        @unknown default:
-                            EmptyView()
-                        }
-                    }
-                    .frame(height: 500)
-                    .clipped()
-                    .tag(index)
-                }
-            } else if let profileImageURL = profile.profileImageURL {
-                AsyncImage(url: URL(string: profileImageURL)) { phase in
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            if let firstMedia = mediaURLs.first,
+               let url = URL(string: firstMedia) {
+                AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure, .empty:
-                        Rectangle()
-                            .fill(AppTheme.gradient)
-                    @unknown default:
-                        EmptyView()
+                            .scaledToFill()
+                            .frame(height: 400)
+                            .clipped()
+                    default:
+                        AppTheme.gradient
+                            .frame(height: 400)
                     }
                 }
-                .frame(height: 500)
-                .clipped()
-                .tag(0)
+                .onTapGesture {
+                    selectedIndex = IdentifiableInt(id: 0)
+                }
             } else {
-                Rectangle()
-                    .fill(AppTheme.gradient)
-                    .frame(height: 500)
-                    .overlay {
-                        VStack(spacing: 16) {
-                            Image(systemName: "person.circle.fill")
-                                .font(.system(size: 80))
-                                .foregroundStyle(.white.opacity(0.5))
-                            
-                            Text(profile.displayName)
-                                .font(.title.bold())
-                                .foregroundStyle(.white)
-                        }
-                    }
-                    .tag(0)
+                AppTheme.gradient
+                    .frame(height: 400)
             }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .always))
-        .frame(height: 500)
-        .overlay(alignment: .bottomTrailing) {
-            if !profile.mediaURLs.isEmpty {
-                Text("\(selectedMediaIndex + 1)/\(profile.mediaURLs.count)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding()
+            
+            // Gradient overlay
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.7)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+            .frame(height: 400)
+            
+            // Media count indicator
+            if mediaURLs.count > 1 {
+                HStack(spacing: 6) {
+                    Image(systemName: "photo.stack")
+                    Text("\(mediaURLs.count)")
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.black.opacity(0.5), in: Capsule())
+                .padding()
             }
         }
     }
+}
+
+// MARK: - Profile Header Info
+private struct ProfileHeaderInfo: View {
+    let profile: UserProfile
     
-    // MARK: - Header Section
-    
-    private var headerSection: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    Text(profile.displayName)
-                        .font(.largeTitle.bold())
-                    
-                    if let age = profile.age {
-                        Text("\(age)")
-                            .font(.title.weight(.medium))
-                            .foregroundStyle(.secondary)
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(profile.displayName)
+                            .font(.title.bold())
+                        
+                        if profile.isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundStyle(.blue)
+                                .font(.title3)
+                        }
                     }
                     
-                    if profile.isVerified {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.title2)
-                            .foregroundStyle(.blue)
+                    if let age = profile.age {
+                        Text("\(age) years old")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 
-                // Follower Count
-                Text("\(formatFollowerCount(profile.followerCount)) followers")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
+                Spacer()
+                
+                // Online status indicator
+                if profile.isOnline {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 8, height: 8)
+                        Text("Active")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
-            
-            Spacer()
         }
     }
+}
+
+// MARK: - Quick Stats Row
+private struct QuickStatsRow: View {
+    let profile: UserProfile
     
-    // MARK: - Bio Section
+    var body: some View {
+        HStack(spacing: 0) {
+            QuickStatItem(
+                icon: "person.2.fill",
+                value: formatFollowerCount(profile.followerCount),
+                label: "Followers"
+            )
+            
+            Divider()
+                .frame(height: 40)
+            
+            QuickStatItem(
+                icon: "photo.stack.fill",
+                value: "\(profile.mediaURLs.count)",
+                label: "Posts"
+            )
+            
+            Divider()
+                .frame(height: 40)
+            
+            QuickStatItem(
+                icon: "checkmark.seal.fill",
+                value: "\(profile.contentStyles.count)",
+                label: "Styles"
+            )
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+private struct QuickStatItem: View {
+    let icon: String
+    let value: String
+    let label: String
     
-    private func bioSection(_ bio: String) -> some View {
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .foregroundStyle(AppTheme.accent)
+                .font(.title3)
+            
+            Text(value)
+                .font(.headline)
+            
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Action Buttons Row
+private struct ActionButtonsRow: View {
+    let onMessage: () -> Void
+    let onCollaborate: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onMessage) {
+                Label("Message", systemImage: "bubble.left.and.bubble.right.fill")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundStyle(.white)
+            }
+            
+            Button(action: onCollaborate) {
+                Label("Collab", systemImage: "person.2.badge.gearshape")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundStyle(AppTheme.accent)
+            }
+        }
+    }
+}
+
+// MARK: - Bio Section
+private struct BioSection: View {
+    let bio: String
+    @State private var isExpanded = false
+    
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("About")
                 .font(.headline)
@@ -212,495 +326,472 @@ struct ProfileDetailView: View {
             Text(bio)
                 .font(.body)
                 .foregroundStyle(.secondary)
-        }
-    }
-    
-    // MARK: - Stats Section
-    
-    private var statsSection: some View {
-        HStack(spacing: 20) {
-            StatCard(
-                icon: "person.3.fill",
-                value: formatFollowerCount(profile.followerCount),
-                label: "Followers"
-            )
+                .lineLimit(isExpanded ? nil : 3)
             
-            StatCard(
-                icon: "video.fill",
-                value: "\(profile.mediaURLs.count)",
-                label: "Posts"
-            )
-            
-            StatCard(
-                icon: "clock.fill",
-                value: profile.collaborationPreferences.responseTime.displayText,
-                label: "Response"
-            )
+            if bio.count > 150 {
+                Button(isExpanded ? "Show Less" : "Show More") {
+                    withAnimation {
+                        isExpanded.toggle()
+                    }
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppTheme.accent)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
     }
+}
+
+// MARK: - Content Styles Detail Section
+private struct ContentStylesDetailSection: View {
+    let styles: [UserProfile.ContentStyle]
     
-    // MARK: - Content Styles Section
-    
-    private var contentStylesSection: some View {
+    var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Content Styles")
-                .font(.headline)
+            HStack {
+                Image(systemName: "star.circle.fill")
+                    .foregroundStyle(AppTheme.accent)
+                Text("Content Specialties")
+                    .font(.headline)
+            }
             
             FlowLayout(spacing: 8) {
-                ForEach(profile.contentStyles, id: \.self) { style in
-                    HStack(spacing: 6) {
+                ForEach(styles, id: \.self) { style in
+                    HStack(spacing: 8) {
                         Image(systemName: style.icon)
-                            .font(.caption)
                         Text(style.rawValue)
-                            .font(.caption.weight(.semibold))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                    .font(.subheadline.weight(.medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(
+                        LinearGradient(
+                            colors: [AppTheme.accent.opacity(0.2), AppTheme.accent.opacity(0.1)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 12)
+                    )
                     .foregroundStyle(AppTheme.accent)
-                }
-            }
-        }
-    }
-    
-    // MARK: - Location Section
-    
-    private func locationSection(_ location: UserProfile.Location) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Location")
-                .font(.headline)
-            
-            HStack(spacing: 8) {
-                Image(systemName: "mappin.circle.fill")
-                    .foregroundStyle(AppTheme.accent)
-                
-                if let city = location.city, let state = location.state {
-                    Text("\(city), \(state)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else if let country = location.country {
-                    Text(country)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                
-                if location.isNearby {
-                    Spacer()
-                    Text("Nearby")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(.green.opacity(0.15), in: Capsule())
-                }
-            }
-        }
-    }
-    
-    // MARK: - Social Links Section
-    
-    private var socialLinksSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Social Media")
-                .font(.headline)
-            
-            VStack(spacing: 12) {
-                if let tiktok = profile.socialLinks.tiktok {
-                    ProfileSocialLinkRow(
-                        platform: "TikTok",
-                        icon: "music.note",
-                        username: tiktok.username,
-                        followers: tiktok.followerCount,
-                        isVerified: tiktok.isVerified
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppTheme.accent.opacity(0.3), lineWidth: 1)
                     )
                 }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - Collaboration Detail Section
+private struct CollaborationDetailSection: View {
+    let preferences: UserProfile.CollaborationPreferences
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "person.2.badge.gearshape.fill")
+                    .foregroundStyle(AppTheme.accent)
+                Text("Open to Collaborate")
+                    .font(.headline)
+            }
+            
+            VStack(spacing: 12) {
+                ForEach(preferences.lookingFor, id: \.self) { collab in
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.title3)
+                        
+                        Text(collab.rawValue)
+                            .font(.subheadline.weight(.medium))
+                        
+                        Spacer()
+                    }
+                    .padding()
+                    .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 10))
+                }
                 
-                if let instagram = profile.socialLinks.instagram {
-                    ProfileSocialLinkRow(
+                Divider()
+                
+                HStack {
+                    Image(systemName: "clock.fill")
+                        .foregroundStyle(.secondary)
+                    
+                    Text("Response time: \(preferences.responseTime.displayText)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - Social Accounts Section
+private struct SocialAccountsSection: View {
+    let socialLinks: UserProfile.SocialLinks
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "link.circle.fill")
+                    .foregroundStyle(AppTheme.accent)
+                Text("Connect on Social")
+                    .font(.headline)
+            }
+            
+            VStack(spacing: 10) {
+                if let instagram = socialLinks.instagram {
+                    SocialAccountRow(
                         platform: "Instagram",
                         icon: "camera.fill",
+                        color: .pink,
                         username: instagram.username,
-                        followers: instagram.followerCount,
+                        followerCount: instagram.followerCount,
                         isVerified: instagram.isVerified
                     )
                 }
                 
-                if let youtube = profile.socialLinks.youtube {
-                    ProfileSocialLinkRow(
+                if let tiktok = socialLinks.tiktok {
+                    SocialAccountRow(
+                        platform: "TikTok",
+                        icon: "music.note",
+                        color: .black,
+                        username: tiktok.username,
+                        followerCount: tiktok.followerCount,
+                        isVerified: tiktok.isVerified
+                    )
+                }
+                
+                if let youtube = socialLinks.youtube {
+                    SocialAccountRow(
                         platform: "YouTube",
                         icon: "play.rectangle.fill",
+                        color: .red,
                         username: youtube.username,
-                        followers: youtube.followerCount,
+                        followerCount: youtube.followerCount,
                         isVerified: youtube.isVerified
                     )
                 }
                 
-                if let twitch = profile.socialLinks.twitch {
-                    ProfileSocialLinkRow(
+                if let twitch = socialLinks.twitch {
+                    SocialAccountRow(
                         platform: "Twitch",
                         icon: "tv.fill",
+                        color: .purple,
                         username: twitch.username,
-                        followers: twitch.followerCount,
+                        followerCount: twitch.followerCount,
                         isVerified: twitch.isVerified
                     )
                 }
-                
-                if let spotify = profile.socialLinks.spotify {
-                    ProfileSocialLinkRow(
-                        platform: "Spotify",
-                        icon: "music.note.list",
-                        username: spotify,
-                        followers: nil,
-                        isVerified: false
-                    )
-                }
             }
         }
-    }
-    
-    // MARK: - Collaboration Section
-    
-    private var collaborationSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Looking to Collaborate On")
-                .font(.headline)
-            
-            FlowLayout(spacing: 8) {
-                ForEach(profile.collaborationPreferences.lookingFor, id: \.self) { collab in
-                    Text(collab.rawValue)
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(AppTheme.card, in: Capsule())
-                        .overlay(Capsule().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
-                }
-            }
-            
-            // Availability
-            if !profile.collaborationPreferences.availability.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "calendar")
-                        .foregroundStyle(.secondary)
-                    
-                    Text(profile.collaborationPreferences.availability
-                        .map { $0.rawValue.capitalized }
-                        .joined(separator: ", "))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 4)
-            }
-        }
-    }
-    
-    // MARK: - Interests Section
-    
-    private var interestsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Interests")
-                .font(.headline)
-            
-            FlowLayout(spacing: 8) {
-                ForEach(profile.interests, id: \.self) { interest in
-                    Text(interest)
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(AppTheme.card, in: Capsule())
-                }
-            }
-        }
-    }
-    
-    // MARK: - Action Buttons
-    
-    private var actionButtons: some View {
-        VStack(spacing: 12) {
-            // Primary Action - Message
-            Button {
-                showMessageSheet = true
-                Haptics.impact(.medium)
-            } label: {
-                HStack {
-                    Image(systemName: "message.fill")
-                    Text("Send Message")
-                        .font(.headline)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))
-                .foregroundStyle(.white)
-            }
-            
-            HStack(spacing: 12) {
-                // Like Button
-                Button {
-                    withAnimation(.spring(response: 0.3)) {
-                        showLikeAnimation = true
-                    }
-                    Haptics.notify(.success)
-                    
-                    // Handle like action
-                    Task {
-                        await handleLike()
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: showLikeAnimation ? "heart.fill" : "heart")
-                        Text("Like")
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(showLikeAnimation ? .red : .primary)
-                }
-                
-                // Collaborate Button
-                Button {
-                    Haptics.impact(.medium)
-                    // Handle collaborate request
-                } label: {
-                    HStack {
-                        Image(systemName: "person.2.fill")
-                        Text("Collab")
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(.primary)
-                }
-            }
-        }
-        .padding(.top, 8)
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func formatFollowerCount(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            return String(format: "%.1fM", Double(count) / 1_000_000)
-        } else if count >= 1_000 {
-            return String(format: "%.1fK", Double(count) / 1_000)
-        } else {
-            return "\(count)"
-        }
-    }
-    
-    private func handleLike() async {
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-        
-        let swipe = SwipeAction(
-            userId: currentUserId,
-            targetUserId: profile.uid,
-            action: .like,
-            timestamp: Date()
-        )
-        
-        do {
-            let service = FirebaseService()
-            try await service.recordSwipe(swipe)
-        } catch {
-            print("Error recording like: \(error)")
-        }
-        
-        // Reset animation after delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            withAnimation {
-                showLikeAnimation = false
-            }
-        }
-    }
-}
-
-// MARK: - Supporting Views (Private to ProfileDetailView)
-
-private struct StatCard: View {
-    let icon: String
-    let value: String
-    let label: String
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(AppTheme.accent)
-            
-            Text(value)
-                .font(.headline)
-            
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
-// ✅ RENAMED to avoid conflicts
-private struct ProfileSocialLinkRow: View {
+private struct SocialAccountRow: View {
     let platform: String
     let icon: String
+    let color: Color
     let username: String
-    let followers: Int?
+    let followerCount: Int?
     let isVerified: Bool
     
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(AppTheme.accent)
-                .frame(width: 30)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(platform)
-                        .font(.subheadline.weight(.semibold))
+        Button {
+            // Open social profile
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.15))
+                        .frame(width: 44, height: 44)
                     
-                    if isVerified {
-                        Image(systemName: "checkmark.seal.fill")
+                    Image(systemName: icon)
+                        .foregroundStyle(color)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(platform)
+                            .font(.subheadline.weight(.semibold))
+                        
+                        if isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                    
+                    HStack(spacing: 4) {
+                        Text("@\(username)")
                             .font(.caption)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(.secondary)
+                        
+                        if let count = followerCount {
+                            Text("•")
+                                .foregroundStyle(.tertiary)
+                            Text("\(formatFollowerCount(count))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 
-                Text("@\(username)")
+                Spacer()
+                
+                Image(systemName: "arrow.up.right")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding()
+            .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Location Detail Section
+private struct LocationDetailSection: View {
+    let location: UserProfile.Location
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "location.circle.fill")
+                    .foregroundStyle(AppTheme.accent)
+                Text("Location")
+                    .font(.headline)
             }
             
-            Spacer()
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.accent.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    
+                    Image(systemName: "mappin.and.ellipse")
+                        .foregroundStyle(AppTheme.accent)
+                }
+                
+                if let city = location.city, let state = location.state {
+                    Text("\(city), \(state)")
+                        .font(.subheadline)
+                } else if let city = location.city {
+                    Text(city)
+                        .font(.subheadline)
+                }
+                
+                Spacer()
+            }
+            .padding()
+            .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - Full Media Grid
+private struct FullMediaGrid: View {
+    let mediaURLs: [String]
+    @Binding var selectedIndex: IdentifiableInt?
+    
+    private let columns = [
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("All Content")
+                .font(.headline)
             
-            if let followers = followers {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(formatFollowerCount(followers))
-                        .font(.subheadline.weight(.semibold))
-                    Text("followers")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            LazyVGrid(columns: columns, spacing: 2) {
+                ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, urlString in
+                    if let url = URL(string: urlString) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(height: 120)
+                                    .clipped()
+                            default:
+                                Rectangle()
+                                    .fill(AppTheme.card)
+                                    .frame(height: 120)
+                            }
+                        }
+                        .clipShape(Rectangle())
+                        .onTapGesture {
+                            selectedIndex = IdentifiableInt(id: index)
+                        }
+                    }
                 }
             }
-            
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
-        .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Media Gallery Viewer
+private struct MediaGalleryViewer: View {
+    let mediaURLs: [String]
+    let selectedIndex: Int
+    let onDismiss: () -> Void
+    
+    @State private var currentIndex: Int
+    
+    init(mediaURLs: [String], selectedIndex: Int, onDismiss: @escaping () -> Void) {
+        self.mediaURLs = mediaURLs
+        self.selectedIndex = selectedIndex
+        self.onDismiss = onDismiss
+        _currentIndex = State(initialValue: selectedIndex)
     }
     
-    private func formatFollowerCount(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            return String(format: "%.1fM", Double(count) / 1_000_000)
-        } else if count >= 1_000 {
-            return String(format: "%.1fK", Double(count) / 1_000)
-        } else {
-            return "\(count)"
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            TabView(selection: $currentIndex) {
+                ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, urlString in
+                    if let url = URL(string: urlString) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFit()
+                            default:
+                                ProgressView()
+                            }
+                        }
+                        .tag(index)
+                    }
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .always))
+            
+            VStack {
+                HStack {
+                    Spacer()
+                    
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(.white)
+                            .padding()
+                    }
+                }
+                
+                Spacer()
+            }
         }
     }
 }
 
-// MARK: - Message Compose View
-
-struct MessageComposeView: View {
-    let recipient: UserProfile
+// MARK: - Message Compose Sheet
+private struct MessageComposeSheet: View {
+    let recipientProfile: UserProfile
     @Environment(\.dismiss) var dismiss
     @State private var messageText = ""
-    @State private var isSending = false
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Recipient Header
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(AppTheme.gradient)
-                        .frame(width: 50, height: 50)
-                        .overlay {
-                            Text(recipient.displayName.prefix(1))
-                                .font(.title3.bold())
-                                .foregroundStyle(.white)
+            VStack {
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Recipient info
+                        HStack(spacing: 12) {
+                            if let profileImageURL = recipientProfile.profileImageURL,
+                               let url = URL(string: profileImageURL) {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 50, height: 50)
+                                            .clipShape(Circle())
+                                    default:
+                                        Circle()
+                                            .fill(AppTheme.card)
+                                            .frame(width: 50, height: 50)
+                                    }
+                                }
+                            } else {
+                                Circle()
+                                    .fill(AppTheme.card)
+                                    .frame(width: 50, height: 50)
+                            }
+                            
+                            VStack(alignment: .leading) {
+                                Text(recipientProfile.displayName)
+                                    .font(.headline)
+                                Text("Start a conversation")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
                         }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(recipient.displayName)
-                            .font(.headline)
-                        Text("Usually responds \(recipient.collaborationPreferences.responseTime.displayText)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        .padding()
+                        
+                        // Message field
+                        TextEditor(text: $messageText)
+                            .frame(minHeight: 200)
+                            .padding()
+                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(AppTheme.accent.opacity(0.3), lineWidth: 1)
+                            )
+                            .padding(.horizontal)
                     }
-                    
-                    Spacer()
                 }
-                .padding()
-                .background(AppTheme.card)
                 
-                Divider()
-                
-                // Message Input
-                TextEditor(text: $messageText)
-                    .padding()
-                    .frame(minHeight: 200, maxHeight: .infinity)
-                
-                Spacer()
-                
-                // Send Button
+                // Send button
                 Button {
-                    Task {
-                        await sendMessage()
-                    }
+                    // Send message
+                    dismiss()
                 } label: {
-                    Text(isSending ? "Sending..." : "Send Message")
+                    Text("Send Message")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(messageText.isEmpty ? Color.gray : AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
                         .foregroundStyle(.white)
                 }
-                .disabled(messageText.isEmpty || isSending)
+                .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .padding()
             }
             .navigationTitle("New Message")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    Button("Cancel") { dismiss() }
                 }
             }
         }
     }
-    
-    private func sendMessage() async {
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-        
-        isSending = true
-        
-        // Create message
-        let message = Message(
-            conversationId: "\(currentUserId)_\(recipient.uid)",
-            senderId: currentUserId,
-            recipientId: recipient.uid,
-            content: messageText,
-            sentAt: Date()
-        )
-        
-        do {
-            let service = FirebaseService()
-            try await service.sendMessage(message)
-            Haptics.notify(.success)
-            dismiss()
-        } catch {
-            print("Error sending message: \(error)")
-            Haptics.notify(.error)
-        }
-        
-        isSending = false
-    }
 }
-
- 
