@@ -449,7 +449,7 @@ struct FeaturedCreatorCard: View {
         HStack(spacing: 16) {
             // Profile Image / Avatar
             ZStack {
-                if let profile = creator.profile, let firstMedia = profile.mediaURLs.first {
+                if let profile = creator.profile, let firstMedia = profile.mediaURLs?.first {
                     AsyncImage(url: URL(string: firstMedia)) { phase in
                         switch phase {
                         case .success(let image):

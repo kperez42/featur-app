@@ -32,7 +32,7 @@ final class FirebaseService: ObservableObject {
     // MARK: - Discovery & Matching
     
     // ✅ FIXED: Convert PrefixSequence to Array
-    func fetchDiscoverProfiles(limit: Int = 20, excludeUserIds: [String] = []) async throws -> [UserProfile] {
+    func fetchDiscoverProfiles(for user: UserProfile, limit: Int = 20, excludeUserIds: [String] = []) async throws -> [UserProfile] {
         var query: Query = db.collection("users").limit(to: limit)
         
         // Exclude already swiped users
@@ -43,7 +43,14 @@ final class FirebaseService: ObservableObject {
         }
         
         let snapshot = try await query.getDocuments()
-        return try snapshot.documents.compactMap { try $0.data(as: UserProfile.self) }
+        var profiles = try snapshot.documents.compactMap{ try $0.data(as: UserProfile.self)}
+        //remove current user
+        profiles.removeAll {$0.uid == user.uid}
+        
+        //sort by similarity
+        profiles.sort { similarityScore(current: user, other: $0) > similarityScore(current: user, other: $1)}
+        
+        return profiles
     }
     
     func recordSwipe(_ action: SwipeAction) async throws {
@@ -53,7 +60,9 @@ final class FirebaseService: ObservableObject {
         if action.action == .like {
             try await checkAndCreateMatch(userId: action.userId, targetUserId: action.targetUserId)
         }
+        
     }
+    
     
     private func checkAndCreateMatch(userId: String, targetUserId: String) async throws {
         // Check if target user also liked this user
@@ -181,4 +190,24 @@ final class FirebaseService: ObservableObject {
         let path = "profile_photos/\(userId)/\(UUID().uuidString).jpg"
         return try await uploadMedia(data: imageData, path: path)
     }
+    /// Calculates how similar two user profiles are based on shared traits.
+    ///
+    /// - Parameters:
+    ///   - current: The logged-in user's profile.
+    ///   - other: Another user's profile to compare against.
+    /// - Returns: An integer score representing compatibility.
+    ///
+    /// The score is calculated by:
+    /// 1. Counting how many content styles they share, weighted ×2.
+    /// 2. Counting how many interests they share, weighted ×1.
+    ///
+    /// Example: If both users share 2 content styles and 1 interest,
+    /// the score is (2 * 2) + 1 = 5.
+
+    private func similarityScore(current: UserProfile, other: UserProfile) -> Int {
+        let sharedStyles = Set(current.contentStyles).intersection(other.contentStyles).count
+        let sharedInterests = Set(current.interests ?? []).intersection(other.interests ?? []).count
+        return sharedStyles * 2 + sharedInterests // weight content styles higher
+    }
+
 }

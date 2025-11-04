@@ -197,7 +197,7 @@ struct ConversationRow: View {
     }
     
     private func profileAvatar(_ profile: UserProfile) -> some View {
-        AsyncImage(url: URL(string: profile.mediaURLs.first ?? "")) { image in
+        AsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
             image.resizable()
         } placeholder: {
             Circle()
@@ -231,7 +231,7 @@ struct NewMatchCard: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            AsyncImage(url: URL(string: profile.mediaURLs.first ?? "")) { image in
+            AsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)

@@ -84,7 +84,7 @@ struct EnhancedProfileView: View {
     private func profileHeader(_ profile: UserProfile) -> some View {
         VStack(spacing: 16) {
             // Profile Photo
-            AsyncImage(url: URL(string: profile.profileImageURL ?? profile.mediaURLs.first ?? "")) { image in
+            AsyncImage(url: URL(string: profile.profileImageURL ?? profile.mediaURLs?.first ?? "")) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -115,7 +115,7 @@ struct EnhancedProfileView: View {
                         .foregroundStyle(.secondary)
                 }
                 
-                if profile.isVerified {
+                if profile.isVerified ?? false {
                     Image(systemName: "checkmark.seal.fill")
                         .foregroundStyle(AppTheme.accent)
                 }
@@ -134,7 +134,7 @@ struct EnhancedProfileView: View {
             
             // Stats
             HStack(spacing: 32) {
-                StatView(value: profile.followerCount, label: "Followers")
+                StatView(value: profile.followerCount ?? 0, label: "Followers")
                 StatView(value: 0, label: "Following")
                 StatView(value: 0, label: "Collabs")
             }
@@ -148,7 +148,7 @@ struct EnhancedProfileView: View {
                 .padding(.horizontal)
             
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
-                ForEach(profile.mediaURLs.prefix(6), id: \.self) { url in
+                ForEach(profile.mediaURLs?.prefix(6) ?? [], id: \.self) { url in
                     AsyncImage(url: URL(string: url)) { image in
                         image
                             .resizable()
@@ -161,7 +161,7 @@ struct EnhancedProfileView: View {
                 }
                 
                 // Add more button
-                if profile.mediaURLs.count < 6 {
+                if (profile.mediaURLs?.count ?? 0) < 6 {
                     Button {
                         showEditSheet = true
                     } label: {
@@ -216,7 +216,7 @@ struct EnhancedProfileView: View {
                 .padding(.horizontal)
             
             VStack(spacing: 8) {
-                if let tiktok = profile.socialLinks.tiktok {
+                if let tiktok = profile.socialLinks?.tiktok {
                     SocialLinkRow(
                         platform: "TikTok",
                         username: tiktok.username,
@@ -225,7 +225,7 @@ struct EnhancedProfileView: View {
                     )
                 }
                 
-                if let instagram = profile.socialLinks.instagram {
+                if let instagram = profile.socialLinks?.instagram {
                     SocialLinkRow(
                         platform: "Instagram",
                         username: instagram.username,
@@ -234,7 +234,7 @@ struct EnhancedProfileView: View {
                     )
                 }
                 
-                if let youtube = profile.socialLinks.youtube {
+                if let youtube = profile.socialLinks?.youtube {
                     SocialLinkRow(
                         platform: "YouTube",
                         username: youtube.username,
@@ -243,7 +243,7 @@ struct EnhancedProfileView: View {
                     )
                 }
                 
-                if let twitch = profile.socialLinks.twitch {
+                if let twitch = profile.socialLinks?.twitch {
                     SocialLinkRow(
                         platform: "Twitch",
                         username: twitch.username,
@@ -383,10 +383,10 @@ struct EditProfileView: View {
                     // Photo Picker
                     PhotosPicker(selection: $selectedPhotos, maxSelectionCount: 6, matching: .images) {
                         VStack(spacing: 12) {
-                            if !profile.mediaURLs.isEmpty {
+                            if !(profile.mediaURLs?.isEmpty ?? true) {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 12) {
-                                        ForEach(profile.mediaURLs, id: \.self) { url in
+                                        ForEach(profile.mediaURLs ?? [], id: \.self) { url in
                                             AsyncImage(url: URL(string: url)) { image in
                                                 image.resizable()
                                             } placeholder: {
@@ -468,12 +468,12 @@ struct EditProfileView: View {
                             platform: "TikTok",
                             icon: "music.note",
                             username: Binding(
-                                get: { profile.socialLinks.tiktok?.username ?? "" },
+                                get: { profile.socialLinks?.tiktok?.username ?? "" },
                                 set: { newValue in
                                     if newValue.isEmpty {
-                                        profile.socialLinks.tiktok = nil
+                                        profile.socialLinks?.tiktok = nil
                                     } else {
-                                        profile.socialLinks.tiktok = .init(username: newValue, followerCount: profile.socialLinks.tiktok?.followerCount, isVerified: false)
+                                        profile.socialLinks?.tiktok = .init(username: newValue, followerCount: profile.socialLinks?.tiktok?.followerCount, isVerified: false)
                                     }
                                 }
                             )
@@ -483,12 +483,12 @@ struct EditProfileView: View {
                             platform: "Instagram",
                             icon: "camera",
                             username: Binding(
-                                get: { profile.socialLinks.instagram?.username ?? "" },
+                                get: { profile.socialLinks?.instagram?.username ?? "" },
                                 set: { newValue in
                                     if newValue.isEmpty {
-                                        profile.socialLinks.instagram = nil
+                                        profile.socialLinks?.instagram = nil
                                     } else {
-                                        profile.socialLinks.instagram = .init(username: newValue, followerCount: profile.socialLinks.instagram?.followerCount, isVerified: false)
+                                        profile.socialLinks?.instagram = .init(username: newValue, followerCount: profile.socialLinks?.instagram?.followerCount, isVerified: false)
                                     }
                                 }
                             )
@@ -498,12 +498,12 @@ struct EditProfileView: View {
                             platform: "YouTube",
                             icon: "play.rectangle",
                             username: Binding(
-                                get: { profile.socialLinks.youtube?.username ?? "" },
+                                get: { profile.socialLinks?.youtube?.username ?? "" },
                                 set: { newValue in
                                     if newValue.isEmpty {
-                                        profile.socialLinks.youtube = nil
+                                        profile.socialLinks?.youtube = nil
                                     } else {
-                                        profile.socialLinks.youtube = .init(username: newValue, followerCount: profile.socialLinks.youtube?.followerCount, isVerified: false)
+                                        profile.socialLinks?.youtube = .init(username: newValue, followerCount: profile.socialLinks?.youtube?.followerCount, isVerified: false)
                                     }
                                 }
                             )
@@ -513,12 +513,12 @@ struct EditProfileView: View {
                             platform: "Twitch",
                             icon: "gamecontroller",
                             username: Binding(
-                                get: { profile.socialLinks.twitch?.username ?? "" },
+                                get: { profile.socialLinks?.twitch?.username ?? "" },
                                 set: { newValue in
                                     if newValue.isEmpty {
-                                        profile.socialLinks.twitch = nil
+                                        profile.socialLinks?.twitch = nil
                                     } else {
-                                        profile.socialLinks.twitch = .init(username: newValue, followerCount: profile.socialLinks.twitch?.followerCount, isVerified: false)
+                                        profile.socialLinks?.twitch = .init(username: newValue, followerCount: profile.socialLinks?.twitch?.followerCount, isVerified: false)
                                     }
                                 }
                             )

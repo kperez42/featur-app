@@ -53,8 +53,26 @@ struct EnhancedDiscoverView: View {
                     
                     // Load More Indicator
                     if viewModel.canLoadMore {
-                        loadMoreButton
+                        Button {
+                            Task { await viewModel.loadMore() }
+                        } label: {
+                            if viewModel.isLoadingMore {
+                                ProgressView()
+                                    .tint(AppTheme.accent)
+                            } else {
+                                Text("Load More")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(AppTheme.accent)
+                            }
+                        }
+                        .disabled(viewModel.isLoadingMore)
+                        .opacity(viewModel.isLoadingMore ? 0.6 : 1)
+                        .frame(height: 44)
+                        .frame(maxWidth: .infinity)
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal)
                     }
+
                 }
                 .padding(.bottom, 80)
             }
@@ -345,24 +363,6 @@ struct EnhancedDiscoverView: View {
         .padding(.vertical, 60)
     }
     
-    private var loadMoreButton: some View {
-        Button {
-            Task { await viewModel.loadMore() }
-        } label: {
-            if viewModel.isLoadingMore {
-                ProgressView()
-                    .tint(AppTheme.accent)
-            } else {
-                Text("Load More")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AppTheme.accent)
-            }
-        }
-        .frame(height: 44)
-        .frame(maxWidth: .infinity)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal)
-    }
     
     // MARK: - Error Toast
     
@@ -397,7 +397,7 @@ struct DiscoverProfileCard: View {
         VStack(spacing: 0) {
             // Profile Image
             ZStack(alignment: .topTrailing) {
-                if let firstMediaURL = profile.mediaURLs.first {
+                if let firstMediaURL = (profile.mediaURLs ?? []).first {
                     AsyncImage(url: URL(string: firstMediaURL)) { phase in
                         switch phase {
                         case .success(let image):
@@ -413,7 +413,7 @@ struct DiscoverProfileCard: View {
                 }
                 
                 // Verified Badge
-                if profile.isVerified {
+                if profile.isVerified ?? false {
                     Image(systemName: "checkmark.seal.fill")
                         .foregroundStyle(.blue)
                         .background(Circle().fill(.white).padding(2))
@@ -806,48 +806,59 @@ final class DiscoverViewModel: ObservableObject {
     
     func loadProfiles() async {
         loadTask?.cancel()
-        
+
         loadTask = Task {
             guard !Task.isCancelled else { return }
-            
+
             isLoading = true
             errorMessage = nil
             currentPage = 0
-            
-            #if DEBUG
-            // 🧪 TEST DATA - Load immediately in debug mode
-            loadTestProfiles()
-            isLoading = false
-            return
-            #endif
-            
+
             do {
-                allProfiles = try await service.fetchDiscoverProfiles(limit: pageSize)
-                
+                //  Step 1: Get current user ID from Firebase Auth
+                guard let currentUserId = Auth.auth().currentUser?.uid else {
+                    print(" No logged-in user found")
+                    isLoading = false
+                    return
+                }
+
+                //  Step 2: Fetch the user's profile from Firestore
+                guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
+                    print(" Could not fetch current user profile")
+                    isLoading = false
+                    return
+                }
+
+                //  Step 3: Fetch discoverable profiles using that user
+                allProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: pageSize)
+
                 guard !Task.isCancelled else { return }
-                
+
+                // Step 4: Apply filters & finish
                 applyFilters()
                 isLoading = false
-                
+
             } catch {
                 guard !Task.isCancelled else { return }
-                
+
                 isLoading = false
                 allProfiles = []
                 filteredProfiles = []
-                
+
                 errorMessage = "Unable to load profiles. Please check your connection."
-                
+
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
                 if !Task.isCancelled {
                     errorMessage = nil
                 }
-                
+
                 print("❌ Error loading profiles: \(error.localizedDescription)")
             }
         }
     }
-    
+
+
+    /**
     #if DEBUG
     // MARK: - 🧪 TEST DATA
     func loadTestProfiles() {
@@ -1066,7 +1077,7 @@ final class DiscoverViewModel: ObservableObject {
         filteredProfiles = allProfiles
     }
     #endif
-    
+    */
     func loadMore() async {
         guard !isLoadingMore else { return }
         
@@ -1074,16 +1085,25 @@ final class DiscoverViewModel: ObservableObject {
         currentPage += 1
         
         do {
-            let newProfiles = try await service.fetchDiscoverProfiles(limit: pageSize)
+            // You can optionally pass the current user for consistency
+            guard let currentUserId = Auth.auth().currentUser?.uid,
+                  let currentUser = try await service.fetchProfile(uid: currentUserId) else {
+                print("⚠️ Missing current user while loading more profiles.")
+                isLoadingMore = false
+                return
+            }
+
+            // ✅ Fetch more profiles (real Firestore data)
+            let newProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: pageSize)
             allProfiles.append(contentsOf: newProfiles)
             applyFilters()
         } catch {
-            print("Error loading more: \(error)")
+            print("❌ Error loading more: \(error)")
         }
         
         isLoadingMore = false
     }
-    
+
     func refresh() async {
         await loadProfiles()
     }
@@ -1169,7 +1189,8 @@ final class DiscoverViewModel: ObservableObject {
         
         if !selectedCollabTypes.isEmpty {
             results = results.filter { profile in
-                !Set(profile.collaborationPreferences.lookingFor).isDisjoint(with: selectedCollabTypes)
+                !Set(profile.collaborationPreferences?.lookingFor ?? [])
+                    .isDisjoint(with: Set(selectedCollabTypes ?? []))
             }
         }
         
@@ -1177,12 +1198,14 @@ final class DiscoverViewModel: ObservableObject {
             results = results.filter { profile in
                 profile.displayName.localizedCaseInsensitiveContains(currentSearchQuery) ||
                 profile.bio?.localizedCaseInsensitiveContains(currentSearchQuery) == true ||
-                profile.interests.contains { $0.localizedCaseInsensitiveContains(currentSearchQuery) }
+                !currentSearchQuery.isEmpty && (profile.interests ?? []).contains {
+                    $0.localizedCaseInsensitiveContains(currentSearchQuery)
+                }
             }
         }
         
         if activeFilters.verifiedOnly {
-            results = results.filter { $0.isVerified }
+            results = results.filter { $0.isVerified ?? false }
         }
         
         if activeFilters.onlineOnly {
@@ -1206,7 +1229,7 @@ final class DiscoverViewModel: ObservableObject {
         case .distance:
             filteredProfiles.sort { ($0.location?.isNearby ?? false) && !($1.location?.isNearby ?? false) }
         case .followers:
-            filteredProfiles.sort { $0.followerCount > $1.followerCount }
+            filteredProfiles.sort { ($0.followerCount ?? 0) > ($1.followerCount ?? 0) }
         case .newest:
             filteredProfiles.sort { $0.createdAt > $1.createdAt }
         }

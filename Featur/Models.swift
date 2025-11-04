@@ -9,14 +9,14 @@ struct UserProfile: Identifiable, Codable {
     var age: Int?
     var bio: String?
     var location: Location?
-    var interests: [String]
+    var interests: [String]?
     var contentStyles: [ContentStyle]
-    var socialLinks: SocialLinks
-    var mediaURLs: [String]
+    var socialLinks: SocialLinks?
+    var mediaURLs: [String]?
     var profileImageURL: String?
-    var isVerified: Bool
-    var followerCount: Int
-    var collaborationPreferences: CollaborationPreferences
+    var isVerified: Bool?
+    var followerCount: Int?
+    var collaborationPreferences: CollaborationPreferences?
     var createdAt: Date
     var updatedAt: Date
     
