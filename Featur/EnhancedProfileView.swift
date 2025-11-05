@@ -156,6 +156,41 @@ private struct MainProfileContent: View {
                         .padding(.horizontal)
                         .padding(.top, 20)
                     
+                    // Collaboration History
+                    CollaborationHistorySection(profile: profile)
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
+                    // Creator Stats Dashboard
+                    CreatorStatsDashboard(profile: profile)
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
+                    // Content Calendar Preview
+                    ContentCalendarPreview()
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
+                    // Networking Score
+                    NetworkingScoreCard(profile: profile)
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
+                    // Profile Milestones
+                    ProfileMilestonesSection(profile: profile)
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
+                    // Recent Profile Visitors
+                    RecentVisitorsSection()
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
+                    // Creator Badges Collection
+                    CreatorBadgesSection(profile: profile)
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
                     // Bottom Padding
                     Color.clear.frame(height: 100)
                 }
@@ -170,6 +205,28 @@ private struct MainProfileContent: View {
                 SuccessBanner(message: "Profile updated!")
                     .padding(.top, 60)
                     .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            
+            // Floating Action Button
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    FloatingActionMenu(
+                        onNewPost: {
+                            Haptics.impact(.medium)
+                        },
+                        onMessage: {
+                            Haptics.impact(.medium)
+                        },
+                        onShare: {
+                            showShareSheet = true
+                            Haptics.impact(.medium)
+                        }
+                    )
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 20)
+                }
             }
         }
         .background(AppTheme.bg)
@@ -261,14 +318,23 @@ private struct ProfileHeroSection: View {
     }
     
     private var backgroundLayer: some View {
-        AnimatedGradientBackground(animate: animateGradient)
-            .frame(height: 320 + max(0, scrollOffset * 0.5))
-            .clipped()
-            .onAppear {
-                withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
-                    animateGradient = true
+        ZStack {
+            // Animated gradient base
+            AnimatedGradientBackground(animate: animateGradient)
+                .frame(height: 320 + max(0, scrollOffset * 0.5))
+                .clipped()
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
+                        animateGradient = true
+                    }
                 }
-            }
+            
+            // Animated mesh gradient overlay
+            MeshGradientOverlay()
+                .frame(height: 320 + max(0, scrollOffset * 0.5))
+                .opacity(0.6)
+                .blendMode(.overlay)
+        }
     }
     
     private var particlesLayer: some View {
@@ -2614,6 +2680,955 @@ private struct InitialsAvatar: View {
                 .foregroundStyle(.white)
         }
         .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+    }
+}
+
+private struct MeshGradientOverlay: View {
+    @State private var phase: CGFloat = 0
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                ForEach(0..<5) { i in
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color.white.opacity(0.15),
+                                    Color.white.opacity(0.05),
+                                    Color.clear
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 150
+                            )
+                        )
+                        .frame(width: 300, height: 300)
+                        .offset(
+                            x: cos(phase + Double(i) * 0.5) * 100,
+                            y: sin(phase + Double(i) * 0.7) * 80
+                        )
+                        .blur(radius: 30)
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
+                phase = .pi * 2
+            }
+        }
+    }
+}
+
+// MARK: - Collaboration History Section
+private struct CollaborationHistorySection: View {
+    let profile: UserProfile
+    
+    let collaborations = [
+        CollabItem(name: "Sarah J.", project: "Beauty Campaign", date: "2 weeks ago", image: nil, status: .completed),
+        CollabItem(name: "Marcus C.", project: "Gaming Stream", date: "1 month ago", image: nil, status: .completed),
+        CollabItem(name: "Alex R.", project: "Photography Series", date: "Ongoing", image: nil, status: .active)
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Collaboration History", systemImage: "person.2.fill")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Text("\(collaborations.count)")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.accent, in: Capsule())
+            }
+            
+            VStack(spacing: 12) {
+                ForEach(collaborations) { collab in
+                    CollabHistoryCard(collab: collab)
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+struct CollabItem: Identifiable {
+    let id = UUID()
+    let name: String
+    let project: String
+    let date: String
+    let image: String?
+    let status: CollabStatus
+    
+    enum CollabStatus {
+        case active, completed, pending
+        
+        var color: Color {
+            switch self {
+            case .active: return .green
+            case .completed: return .blue
+            case .pending: return .orange
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .active: return "checkmark.circle.fill"
+            case .completed: return "checkmark.seal.fill"
+            case .pending: return "clock.fill"
+            }
+        }
+    }
+}
+
+private struct CollabHistoryCard: View {
+    let collab: CollabItem
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Avatar
+            ZStack {
+                Circle()
+                    .fill(AppTheme.accent.opacity(0.3))
+                    .frame(width: 50, height: 50)
+                
+                Text(collab.name.prefix(1))
+                    .font(.title3.bold())
+                    .foregroundStyle(AppTheme.accent)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(collab.project)
+                    .font(.subheadline.bold())
+                
+                HStack(spacing: 6) {
+                    Text(collab.name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    Circle()
+                        .fill(Color.secondary)
+                        .frame(width: 2, height: 2)
+                    
+                    Text(collab.date)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 4) {
+                Image(systemName: collab.status.icon)
+                    .font(.caption)
+                Text(collab.status == .active ? "Active" : collab.status == .completed ? "Done" : "Pending")
+                    .font(.caption2.bold())
+            }
+            .foregroundStyle(collab.status.color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(collab.status.color.opacity(0.15), in: Capsule())
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Creator Stats Dashboard
+private struct CreatorStatsDashboard: View {
+    let profile: UserProfile
+    
+    @State private var selectedMetric: StatMetric = .engagement
+    
+    enum StatMetric: String, CaseIterable {
+        case engagement = "Engagement"
+        case reach = "Reach"
+        case growth = "Growth"
+        
+        var icon: String {
+            switch self {
+            case .engagement: return "chart.bar.fill"
+            case .reach: return "arrow.up.forward"
+            case .growth: return "chart.line.uptrend.xyaxis"
+            }
+        }
+        
+        var color: Color {
+            switch self {
+            case .engagement: return .blue
+            case .reach: return .purple
+            case .growth: return .green
+            }
+        }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Creator Dashboard")
+                .font(.headline)
+            
+            // Metric Selector
+            HStack(spacing: 8) {
+                ForEach(StatMetric.allCases, id: \.self) { metric in
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            selectedMetric = metric
+                        }
+                        Haptics.impact(.light)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: metric.icon)
+                                .font(.caption)
+                            Text(metric.rawValue)
+                                .font(.caption.bold())
+                        }
+                        .foregroundStyle(selectedMetric == metric ? .white : .primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            selectedMetric == metric ? metric.color : Color.gray.opacity(0.1),
+                            in: Capsule()
+                        )
+                    }
+                }
+            }
+            
+            // Metric Display
+            VStack(spacing: 16) {
+                HStack(alignment: .bottom, spacing: 8) {
+                    Text(metricValue)
+                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .foregroundStyle(selectedMetric.color)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up.right")
+                            Text("+12.5%")
+                        }
+                        .font(.caption.bold())
+                        .foregroundStyle(.green)
+                        
+                        Text("vs last week")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .offset(y: -8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // Bar Chart
+                HStack(alignment: .bottom, spacing: 8) {
+                    ForEach(0..<7, id: \.self) { index in
+                        VStack(spacing: 4) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [selectedMetric.color, selectedMetric.color.opacity(0.6)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: 32, height: CGFloat.random(in: 40...120))
+                            
+                            Text(dayLabel(for: index))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(selectedMetric.color.opacity(0.05))
+            )
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+    
+    var metricValue: String {
+        switch selectedMetric {
+        case .engagement: return "8.5%"
+        case .reach: return "12.3K"
+        case .growth: return "+847"
+        }
+    }
+    
+    func dayLabel(for index: Int) -> String {
+        let days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        return days[index]
+    }
+}
+
+// MARK: - Content Calendar Preview
+private struct ContentCalendarPreview: View {
+    @State private var selectedDate = Date()
+    
+    let scheduledPosts = [
+        ScheduledPost(date: Date(), title: "New Tutorial Video", type: .video),
+        ScheduledPost(date: Date().addingTimeInterval(86400), title: "Behind the Scenes", type: .photo),
+        ScheduledPost(date: Date().addingTimeInterval(86400 * 2), title: "Q&A Session", type: .live)
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Content Calendar", systemImage: "calendar")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Button("View All") {
+                    Haptics.impact(.light)
+                }
+                .font(.caption.bold())
+                .foregroundStyle(AppTheme.accent)
+            }
+            
+            // Week View
+            HStack(spacing: 8) {
+                ForEach(0..<7, id: \.self) { day in
+                    CalendarDayCell(
+                        day: day + 1,
+                        hasContent: [1, 3, 5].contains(day + 1),
+                        isSelected: day == 0
+                    )
+                }
+            }
+            
+            // Scheduled Posts
+            VStack(spacing: 10) {
+                ForEach(scheduledPosts.prefix(3)) { post in
+                    ScheduledPostRow(post: post)
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+struct ScheduledPost: Identifiable {
+    let id = UUID()
+    let date: Date
+    let title: String
+    let type: PostType
+    
+    enum PostType {
+        case video, photo, live
+        
+        var icon: String {
+            switch self {
+            case .video: return "video.fill"
+            case .photo: return "photo.fill"
+            case .live: return "waveform"
+            }
+        }
+        
+        var color: Color {
+            switch self {
+            case .video: return .red
+            case .photo: return .blue
+            case .live: return .purple
+            }
+        }
+    }
+}
+
+private struct CalendarDayCell: View {
+    let day: Int
+    let hasContent: Bool
+    let isSelected: Bool
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Text("\(day)")
+                .font(.caption.bold())
+                .foregroundStyle(isSelected ? .white : .primary)
+            
+            if hasContent {
+                Circle()
+                    .fill(isSelected ? .white : AppTheme.accent)
+                    .frame(width: 4, height: 4)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+            isSelected ? AppTheme.accent : Color.gray.opacity(0.1),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+    }
+}
+
+private struct ScheduledPostRow: View {
+    let post: ScheduledPost
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(post.type.color.opacity(0.2))
+                    .frame(width: 40, height: 40)
+                
+                Image(systemName: post.type.icon)
+                    .foregroundStyle(post.type.color)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(post.title)
+                    .font(.subheadline.bold())
+                
+                Text(post.date, style: .time)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Networking Score Card
+private struct NetworkingScoreCard: View {
+    let profile: UserProfile
+    
+    @State private var animateScore = false
+    
+    var networkingScore: Int {
+        var score = 50
+        if profile.isVerified { score += 20 }
+        if profile.followerCount > 1000 { score += 15 }
+        if !profile.contentStyles.isEmpty { score += 10 }
+        if profile.socialLinks.instagram != nil { score += 5 }
+        return min(score, 100)
+    }
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Networking Score")
+                        .font(.headline)
+                    
+                    Text("Based on profile activity and engagement")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+            }
+            
+            HStack(spacing: 32) {
+                // Score Ring
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 12)
+                        .frame(width: 120, height: 120)
+                    
+                    Circle()
+                        .trim(from: 0, to: animateScore ? Double(networkingScore) / 100 : 0)
+                        .stroke(
+                            AngularGradient(
+                                colors: [.green, .yellow, .orange, .red, .purple],
+                                center: .center
+                            ),
+                            style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                        )
+                        .frame(width: 120, height: 120)
+                        .rotationEffect(.degrees(-90))
+                    
+                    VStack(spacing: 4) {
+                        Text("\(networkingScore)")
+                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                        Text("Score")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                // Score Breakdown
+                VStack(alignment: .leading, spacing: 12) {
+                    ScoreFactorRow(icon: "checkmark.seal.fill", label: "Verified", value: profile.isVerified ? 20 : 0, maxValue: 20)
+                    ScoreFactorRow(icon: "person.3.fill", label: "Followers", value: profile.followerCount > 1000 ? 15 : 5, maxValue: 15)
+                    ScoreFactorRow(icon: "photo.fill", label: "Content", value: 10, maxValue: 10)
+                    ScoreFactorRow(icon: "link", label: "Socials", value: 5, maxValue: 5)
+                }
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(AppTheme.card)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            LinearGradient(
+                                colors: [AppTheme.accent.opacity(0.3), .purple.opacity(0.3)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 2
+                        )
+                )
+        )
+        .onAppear {
+            withAnimation(.spring(response: 1.5).delay(0.3)) {
+                animateScore = true
+            }
+        }
+    }
+}
+
+private struct ScoreFactorRow: View {
+    let icon: String
+    let label: String
+    let value: Int
+    let maxValue: Int
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(value > 0 ? .green : .secondary)
+                .frame(width: 20)
+            
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            Spacer()
+            
+            Text("+\(value)")
+                .font(.caption.bold())
+                .foregroundStyle(value > 0 ? .green : .secondary)
+        }
+    }
+}
+
+// MARK: - Profile Milestones Section
+private struct ProfileMilestonesSection: View {
+    let profile: UserProfile
+    
+    let milestones = [
+        Milestone(icon: "star.fill", title: "Reached 1K Followers", date: "2 weeks ago", color: .yellow, isAchieved: true),
+        Milestone(icon: "heart.fill", title: "100 Matches", date: "1 month ago", color: .pink, isAchieved: true),
+        Milestone(icon: "photo.fill", title: "Upload 50 Photos", date: "Next milestone", color: .blue, isAchieved: false),
+        Milestone(icon: "flame.fill", title: "30 Day Streak", date: "Coming soon", color: .orange, isAchieved: false)
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Milestones", systemImage: "flag.fill")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Text("\(milestones.filter { $0.isAchieved }.count)/\(milestones.count)")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.accent, in: Capsule())
+            }
+            
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                ForEach(milestones) { milestone in
+                    MilestoneCard(milestone: milestone)
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+struct Milestone: Identifiable {
+    let id = UUID()
+    let icon: String
+    let title: String
+    let date: String
+    let color: Color
+    let isAchieved: Bool
+}
+
+private struct MilestoneCard: View {
+    let milestone: Milestone
+    
+    @State private var bounce = false
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(milestone.isAchieved ? milestone.color.opacity(0.2) : Color.gray.opacity(0.1))
+                    .frame(width: 60, height: 60)
+                
+                Image(systemName: milestone.icon)
+                    .font(.title2)
+                    .foregroundStyle(milestone.isAchieved ? milestone.color : .gray)
+                    .scaleEffect(bounce ? 1.1 : 1.0)
+                
+                if !milestone.isAchieved {
+                    Image(systemName: "lock.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.gray)
+                        .offset(x: 20, y: 20)
+                        .background(
+                            Circle()
+                                .fill(.white)
+                                .frame(width: 18, height: 18)
+                        )
+                }
+            }
+            .onAppear {
+                if milestone.isAchieved {
+                    withAnimation(.spring(response: 0.5).repeatForever(autoreverses: true)) {
+                        bounce = true
+                    }
+                }
+            }
+            
+            VStack(spacing: 4) {
+                Text(milestone.title)
+                    .font(.caption.bold())
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                
+                Text(milestone.date)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.gray.opacity(0.05))
+        )
+        .opacity(milestone.isAchieved ? 1.0 : 0.6)
+    }
+}
+
+// MARK: - Recent Visitors Section
+private struct RecentVisitorsSection: View {
+    @State private var visitors = generateVisitors()
+    @State private var showAll = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Recent Visitors", systemImage: "eye.fill")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Button(showAll ? "Show Less" : "Show All") {
+                    withAnimation(.spring()) {
+                        showAll.toggle()
+                    }
+                    Haptics.impact(.light)
+                }
+                .font(.caption.bold())
+                .foregroundStyle(AppTheme.accent)
+            }
+            
+            VStack(spacing: 10) {
+                ForEach(Array(visitors.prefix(showAll ? 10 : 3).enumerated()), id: \.offset) { index, visitor in
+                    VisitorRow(visitor: visitor)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .leading).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+    
+    static func generateVisitors() -> [Visitor] {
+        let names = ["Emma Wilson", "James Lee", "Sofia Garcia", "Noah Kim", "Olivia Brown", "Liam Chen", "Ava Martinez", "Mason Taylor"]
+        let times = ["2 min ago", "15 min ago", "1 hour ago", "3 hours ago", "5 hours ago", "1 day ago", "2 days ago", "3 days ago"]
+        
+        return zip(names, times).map { name, time in
+            Visitor(name: name, time: time, isVerified: Bool.random())
+        }
+    }
+}
+
+struct Visitor: Identifiable {
+    let id = UUID()
+    let name: String
+    let time: String
+    let isVerified: Bool
+}
+
+private struct VisitorRow: View {
+    let visitor: Visitor
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Avatar
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [AppTheme.accent, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 44, height: 44)
+                
+                Text(visitor.name.prefix(1))
+                    .font(.headline)
+                    .foregroundStyle(.white)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(visitor.name)
+                        .font(.subheadline.bold())
+                    
+                    if visitor.isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.blue)
+                    }
+                }
+                
+                Text(visitor.time)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            Button {
+                Haptics.impact(.light)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Creator Badges Section
+private struct CreatorBadgesSection: View {
+    let profile: UserProfile
+    
+    let badges = [
+        CreatorBadge(icon: "star.fill", title: "Top Creator", description: "Top 5% this month", color: .yellow),
+        CreatorBadge(icon: "flame.fill", title: "Hot Streak", description: "30 days active", color: .orange),
+        CreatorBadge(icon: "bolt.fill", title: "Quick Responder", description: "Fast reply time", color: .blue),
+        CreatorBadge(icon: "heart.fill", title: "Community Favorite", description: "Highly rated", color: .pink),
+        CreatorBadge(icon: "trophy.fill", title: "Rising Star", description: "Fastest growing", color: .purple),
+        CreatorBadge(icon: "sparkles", title: "Quality Content", description: "High engagement", color: .cyan)
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Creator Badges", systemImage: "rosette")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Text("\(badges.count)")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.accent, in: Capsule())
+            }
+            
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                ForEach(badges) { badge in
+                    CreatorBadgeCard(badge: badge)
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+struct CreatorBadge: Identifiable {
+    let id = UUID()
+    let icon: String
+    let title: String
+    let description: String
+    let color: Color
+}
+
+private struct CreatorBadgeCard: View {
+    let badge: CreatorBadge
+    
+    @State private var shimmer = false
+    
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                // Background with shimmer
+                Circle()
+                    .fill(badge.color.opacity(0.2))
+                    .frame(width: 60, height: 60)
+                
+                // Shimmer overlay
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.clear, .white.opacity(0.5), .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 60, height: 60)
+                    .offset(x: shimmer ? 100 : -100)
+                    .mask(Circle())
+                
+                Image(systemName: badge.icon)
+                    .font(.title3)
+                    .foregroundStyle(badge.color)
+            }
+            .onAppear {
+                withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+                    shimmer = true
+                }
+            }
+            
+            VStack(spacing: 2) {
+                Text(badge.title)
+                    .font(.caption.bold())
+                    .multilineTextAlignment(.center)
+                
+                Text(badge.description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: [badge.color.opacity(0.05), badge.color.opacity(0.02)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(badge.color.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Floating Action Menu
+private struct FloatingActionMenu: View {
+    let onNewPost: () -> Void
+    let onMessage: () -> Void
+    let onShare: () -> Void
+    
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            if isExpanded {
+                FloatingActionButton(
+                    icon: "square.and.pencil.fill",
+                    color: .blue,
+                    size: 50
+                ) {
+                    onNewPost()
+                    withAnimation(.spring()) { isExpanded = false }
+                }
+                .transition(.scale.combined(with: .opacity))
+                
+                FloatingActionButton(
+                    icon: "paperplane.fill",
+                    color: .green,
+                    size: 50
+                ) {
+                    onMessage()
+                    withAnimation(.spring()) { isExpanded = false }
+                }
+                .transition(.scale.combined(with: .opacity))
+                
+                FloatingActionButton(
+                    icon: "square.and.arrow.up.fill",
+                    color: .orange,
+                    size: 50
+                ) {
+                    onShare()
+                    withAnimation(.spring()) { isExpanded = false }
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+            
+            // Main FAB
+            FloatingActionButton(
+                icon: isExpanded ? "xmark" : "plus",
+                color: AppTheme.accent,
+                size: 60
+            ) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    isExpanded.toggle()
+                }
+                Haptics.impact(.medium)
+            }
+        }
+    }
+}
+
+private struct FloatingActionButton: View {
+    let icon: String
+    let color: Color
+    let size: CGFloat
+    let action: () -> Void
+    
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(color)
+                    .frame(width: size, height: size)
+                    .shadow(color: color.opacity(0.4), radius: 10, y: 5)
+                
+                Image(systemName: icon)
+                    .font(.system(size: size * 0.4, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .scaleEffect(isPressed ? 0.9 : 1.0)
+        .onLongPressGesture(minimumDuration: .infinity, maximumDistance: .infinity, pressing: { pressing in
+            withAnimation(.spring(response: 0.3)) {
+                isPressed = pressing
+            }
+        }, perform: {})
     }
 }
 
