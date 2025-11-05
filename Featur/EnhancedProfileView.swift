@@ -165,124 +165,316 @@ private struct ProfileHeroSection: View {
     let onShare: () -> Void
     let onQR: () -> Void
     
+    @State private var animateGradient = false
+    @State private var showingBadgeAnimation = false
+    
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Gradient Background with Parallax
-            AppTheme.gradient
+            // Animated Gradient Background with Parallax
+            AnimatedGradientBackground(animate: animateGradient)
                 .frame(height: 300 + max(0, scrollOffset))
                 .clipped()
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
+                        animateGradient = true
+                    }
+                }
+            
+            // Decorative Elements
+            GeometryReader { geo in
+                ZStack {
+                    // Floating circles
+                    Circle()
+                        .fill(.white.opacity(0.1))
+                        .frame(width: 100, height: 100)
+                        .offset(x: -20, y: 40)
+                        .blur(radius: 20)
+                    
+                    Circle()
+                        .fill(.white.opacity(0.08))
+                        .frame(width: 150, height: 150)
+                        .offset(x: geo.size.width - 80, y: 100)
+                        .blur(radius: 25)
+                }
+            }
             
             // Content
             VStack(spacing: 16) {
-                // Profile Image with Ring
+                // Profile Image with Premium Ring
                 ZStack(alignment: .bottomTrailing) {
-                    if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 140, height: 140)
-                                    .clipShape(Circle())
-                            default:
-                                InitialsAvatar(name: profile.displayName, size: 140)
-                            }
-                        }
-                    } else {
-                        InitialsAvatar(name: profile.displayName, size: 140)
-                    }
+                    // Outer glow ring
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.3), .white.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 152, height: 152)
+                        .blur(radius: 8)
                     
-                    // Verification Badge
+                    // Profile Image
+                    Group {
+                        if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 140, height: 140)
+                                        .clipShape(Circle())
+                                case .failure(_):
+                                    InitialsAvatar(name: profile.displayName, size: 140)
+                                default:
+                                    ZStack {
+                                        Circle()
+                                            .fill(.white.opacity(0.2))
+                                            .frame(width: 140, height: 140)
+                                        ProgressView()
+                                            .tint(.white)
+                                    }
+                                }
+                            }
+                        } else {
+                            InitialsAvatar(name: profile.displayName, size: 140)
+                        }
+                    }
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.8), .white.opacity(0.4)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 4
+                            )
+                    )
+                    
+                    // Verification Badge with Animation
                     if profile.isVerified {
                         ZStack {
                             Circle()
                                 .fill(.white)
-                                .frame(width: 36, height: 36)
+                                .frame(width: 40, height: 40)
+                                .shadow(color: .blue.opacity(0.3), radius: 8, y: 2)
+                            
                             Image(systemName: "checkmark.seal.fill")
-                                .font(.title2)
+                                .font(.system(size: 24))
                                 .foregroundStyle(.blue)
+                                .scaleEffect(showingBadgeAnimation ? 1.1 : 1.0)
+                                .onAppear {
+                                    withAnimation(.spring(response: 0.6, dampingFraction: 0.5).repeatForever()) {
+                                        showingBadgeAnimation = true
+                                    }
+                                }
                         }
                         .offset(x: -4, y: -4)
                     }
                     
-                    // Online Indicator
+                    // Animated Online Indicator
                     if profile.isOnline {
-                        Circle()
-                            .fill(.green)
-                            .frame(width: 24, height: 24)
-                            .overlay(Circle().stroke(.white, lineWidth: 3))
+                        OnlinePulseIndicator()
+                            .offset(x: 4, y: 4)
                     }
                 }
-                .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+                .shadow(color: .black.opacity(0.4), radius: 25, y: 15)
                 
-                // Name & Info
-                VStack(spacing: 6) {
-                    Text(profile.displayName)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundStyle(.white)
-                    
-                    if let age = profile.age {
-                        HStack(spacing: 12) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "calendar")
-                                Text("\(age) years old")
-                            }
-                            
-                            if let location = profile.location, let city = location.city {
-                                Text("•")
-                                HStack(spacing: 4) {
-                                    Image(systemName: "mappin.circle")
-                                    Text(city)
-                                }
-                            }
+                // Name & Info with Social Proof
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text(profile.displayName)
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                        
+                        if profile.isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundStyle(.blue)
+                                .font(.title2)
+                                .shadow(color: .blue.opacity(0.5), radius: 4)
                         }
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.9))
                     }
+                    
+                    // Enhanced Info Row
+                    HStack(spacing: 16) {
+                        if let age = profile.age {
+                            InfoPill(icon: "calendar", text: "\(age) years")
+                        }
+                        
+                        if let location = profile.location, let city = location.city {
+                            InfoPill(icon: "mappin.circle", text: city)
+                        }
+                        
+                        // Follower Badge
+                        if profile.followerCount >= 1000 {
+                            InfoPill(
+                                icon: "person.3.fill",
+                                text: formatNumber(profile.followerCount),
+                                color: .yellow
+                            )
+                        }
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.95))
                 }
                 
-                // Bio
+                // Enhanced Bio with Read More
                 if let bio = profile.bio, !bio.isEmpty {
                     Text(bio)
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.95))
                         .multilineTextAlignment(.center)
                         .lineLimit(3)
-                        .padding(.horizontal, 40)
+                        .padding(.horizontal, 32)
+                        .shadow(color: .black.opacity(0.2), radius: 2)
                 }
                 
-                // Quick Actions
-                HStack(spacing: 16) {
-                    QuickActionBtn(icon: "pencil", label: "Edit", action: onEdit)
-                    QuickActionBtn(icon: "qrcode", label: "QR", action: onQR)
-                    QuickActionBtn(icon: "square.and.arrow.up", label: "Share", action: onShare)
+                // Premium Quick Actions with Icons
+                HStack(spacing: 12) {
+                    PremiumActionButton(
+                        icon: "pencil.circle.fill",
+                        label: "Edit",
+                        gradient: [.blue, .cyan],
+                        action: onEdit
+                    )
+                    PremiumActionButton(
+                        icon: "qrcode",
+                        label: "QR",
+                        gradient: [.purple, .pink],
+                        action: onQR
+                    )
+                    PremiumActionButton(
+                        icon: "square.and.arrow.up.circle.fill",
+                        label: "Share",
+                        gradient: [.green, .mint],
+                        action: onShare
+                    )
                 }
-                .padding(.top, 12)
+                .padding(.top, 8)
             }
             .padding(.bottom, 40)
         }
     }
 }
 
-private struct QuickActionBtn: View {
-    let icon: String
-    let label: String
-    let action: () -> Void
+// MARK: - Animated Gradient Background
+private struct AnimatedGradientBackground: View {
+    let animate: Bool
     
     var body: some View {
-        Button(action: action) {
+        LinearGradient(
+            colors: [
+                Color(red: 0.4, green: 0.3, blue: 0.9),
+                Color(red: 0.6, green: 0.4, blue: 1.0),
+                Color(red: 0.5, green: 0.35, blue: 0.95)
+            ],
+            startPoint: animate ? .topLeading : .bottomLeading,
+            endPoint: animate ? .bottomTrailing : .topTrailing
+        )
+    }
+}
+
+// MARK: - Online Pulse Indicator
+private struct OnlinePulseIndicator: View {
+    @State private var isPulsing = false
+    
+    var body: some View {
+        ZStack {
+            // Pulse ring
+            Circle()
+                .fill(.green.opacity(0.3))
+                .frame(width: 32, height: 32)
+                .scaleEffect(isPulsing ? 1.3 : 1.0)
+                .opacity(isPulsing ? 0 : 1)
+            
+            // Solid indicator
+            Circle()
+                .fill(.green)
+                .frame(width: 24, height: 24)
+                .overlay(Circle().stroke(.white, lineWidth: 3))
+                .shadow(color: .green.opacity(0.5), radius: 4)
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
+                isPulsing = true
+            }
+        }
+    }
+}
+
+// MARK: - Info Pill
+private struct InfoPill: View {
+    let icon: String
+    let text: String
+    var color: Color = .white
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption)
+            Text(text)
+                .font(.caption.weight(.medium))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.white.opacity(0.25), in: Capsule())
+        .foregroundStyle(color)
+        .shadow(color: .black.opacity(0.2), radius: 4)
+    }
+}
+
+// MARK: - Premium Action Button
+private struct PremiumActionButton: View {
+    let icon: String
+    let label: String
+    let gradient: [Color]
+    let action: () -> Void
+    
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: {
+            Haptics.impact(.medium)
+            action()
+        }) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 18))
+                    .font(.system(size: 20, weight: .semibold))
                 Text(label)
-                    .font(.caption)
+                    .font(.caption.weight(.semibold))
             }
-            .frame(width: 80)
-            .padding(.vertical, 10)
-            .background(.white.opacity(0.25), in: RoundedRectangle(cornerRadius: 14))
+            .frame(width: 85)
+            .padding(.vertical, 12)
+            .background(
+                LinearGradient(
+                    colors: gradient.map { $0.opacity(0.9) },
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 16)
+            )
             .foregroundStyle(.white)
+            .shadow(color: gradient[0].opacity(0.4), radius: 8, y: 4)
+            .scaleEffect(isPressed ? 0.95 : 1.0)
         }
+        .buttonStyle(PressableButtonStyle(isPressed: $isPressed))
+    }
+}
+
+// MARK: - Pressable Button Style
+private struct PressableButtonStyle: ButtonStyle {
+    @Binding var isPressed: Bool
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .onChange(of: configuration.isPressed) { _, newValue in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    isPressed = newValue
+                }
+            }
     }
 }
 
@@ -291,80 +483,195 @@ private struct ProfileStatsGrid: View {
     let profile: UserProfile
     let onTapStats: () -> Void
     
+    @State private var showStats = false
+    
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
+            // Primary Stats Row
             HStack(spacing: 12) {
-                StatCard(
+                PremiumStatCard(
                     icon: "person.3.fill",
                     value: formatNumber(profile.followerCount),
                     label: "Followers",
-                    gradient: [.blue, .cyan]
+                    gradient: [Color(red: 0.2, green: 0.5, blue: 1.0), Color(red: 0.4, green: 0.7, blue: 1.0)],
+                    delay: 0.0
                 )
+                .opacity(showStats ? 1 : 0)
+                .offset(y: showStats ? 0 : 20)
                 
-                StatCard(
+                PremiumStatCard(
                     icon: "heart.fill",
                     value: "\(Int.random(in: 1000...10000))",
                     label: "Likes",
-                    gradient: [.pink, .red]
+                    gradient: [Color(red: 1.0, green: 0.3, blue: 0.5), Color(red: 1.0, green: 0.5, blue: 0.7)],
+                    delay: 0.1
                 )
+                .opacity(showStats ? 1 : 0)
+                .offset(y: showStats ? 0 : 20)
             }
             
+            // Secondary Stats Row
             HStack(spacing: 12) {
-                StatCard(
+                PremiumStatCard(
                     icon: "eye.fill",
                     value: formatNumber(Int.random(in: 10000...500000)),
                     label: "Views",
-                    gradient: [.purple, .indigo]
+                    gradient: [Color(red: 0.6, green: 0.3, blue: 1.0), Color(red: 0.8, green: 0.5, blue: 1.0)],
+                    delay: 0.2
                 )
+                .opacity(showStats ? 1 : 0)
+                .offset(y: showStats ? 0 : 20)
                 
-                StatCard(
+                PremiumStatCard(
                     icon: "arrow.up.right",
                     value: "+\(Int.random(in: 10...50))%",
                     label: "Growth",
-                    gradient: [.green, .mint]
+                    gradient: [Color(red: 0.2, green: 0.8, blue: 0.5), Color(red: 0.4, green: 1.0, blue: 0.7)],
+                    delay: 0.3
                 )
+                .opacity(showStats ? 1 : 0)
+                .offset(y: showStats ? 0 : 20)
             }
             
-            Button(action: onTapStats) {
-                HStack {
+            // View Analytics Button
+            Button(action: {
+                Haptics.impact(.medium)
+                onTapStats()
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.subheadline.weight(.semibold))
                     Text("View Detailed Analytics")
                         .font(.subheadline.weight(.semibold))
                     Spacer()
                     Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
                 }
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [AppTheme.accent, AppTheme.accent.opacity(0.8)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
                 .padding()
-                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                .background(
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(AppTheme.card)
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    colors: [AppTheme.accent.opacity(0.1), .clear],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    }
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            LinearGradient(
+                                colors: [AppTheme.accent.opacity(0.3), .clear],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+            }
+            .opacity(showStats ? 1 : 0)
+            .offset(y: showStats ? 0 : 20)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                showStats = true
             }
         }
     }
 }
 
-private struct StatCard: View {
+// MARK: - Premium Stat Card
+private struct PremiumStatCard: View {
     let icon: String
     let value: String
     let label: String
     let gradient: [Color]
+    let delay: Double
+    
+    @State private var isAnimating = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(
-                    LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
+        VStack(alignment: .leading, spacing: 12) {
+            // Icon with gradient background
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: gradient.map { $0.opacity(0.2) },
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 48, height: 48)
+                
+                Image(systemName: icon)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: gradient,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
             
-            Text(value)
-                .font(.title2.bold())
-            
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(value)
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                
+                Text(label)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-        .shadow(color: gradient[0].opacity(0.2), radius: 8, y: 4)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(AppTheme.card)
+                    .shadow(color: gradient[0].opacity(0.15), radius: 12, y: 6)
+                
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            colors: [gradient[0].opacity(0.05), .clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(
+                    LinearGradient(
+                        colors: [gradient[0].opacity(0.2), .clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .scaleEffect(isAnimating ? 1.0 : 0.9)
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(delay)) {
+                isAnimating = true
+            }
+        }
     }
 }
 
@@ -372,35 +679,101 @@ private struct StatCard: View {
 private struct AchievementBadgeRow: View {
     let profile: UserProfile
     
+    @State private var showBadges = false
+    
     var achievements: [Achievement] {
         var list: [Achievement] = []
         if profile.isVerified {
-            list.append(.init(icon: "checkmark.seal.fill", title: "Verified", color: .blue))
+            list.append(.init(
+                icon: "checkmark.seal.fill",
+                title: "Verified Creator",
+                color: .blue,
+                gradient: [Color(red: 0.2, green: 0.5, blue: 1.0), Color(red: 0.4, green: 0.7, blue: 1.0)]
+            ))
         }
         if profile.followerCount >= 100000 {
-            list.append(.init(icon: "crown.fill", title: "Top Creator", color: .yellow))
+            list.append(.init(
+                icon: "crown.fill",
+                title: "Top Creator",
+                color: .yellow,
+                gradient: [Color(red: 1.0, green: 0.8, blue: 0.0), Color(red: 1.0, green: 0.9, blue: 0.2)]
+            ))
         }
         if profile.followerCount >= 10000 {
-            list.append(.init(icon: "star.fill", title: "Rising Star", color: .orange))
+            list.append(.init(
+                icon: "star.fill",
+                title: "Rising Star",
+                color: .orange,
+                gradient: [Color(red: 1.0, green: 0.5, blue: 0.0), Color(red: 1.0, green: 0.7, blue: 0.2)]
+            ))
         }
         if profile.followerCount >= 1000 {
-            list.append(.init(icon: "flame.fill", title: "Popular", color: .red))
+            list.append(.init(
+                icon: "flame.fill",
+                title: "Popular",
+                color: .red,
+                gradient: [Color(red: 1.0, green: 0.2, blue: 0.3), Color(red: 1.0, green: 0.4, blue: 0.5)]
+            ))
+        }
+        // New achievements
+        if !profile.contentStyles.isEmpty && profile.contentStyles.count >= 3 {
+            list.append(.init(
+                icon: "sparkles",
+                title: "Multi-Talented",
+                color: .purple,
+                gradient: [Color(red: 0.6, green: 0.3, blue: 1.0), Color(red: 0.8, green: 0.5, blue: 1.0)]
+            ))
+        }
+        if profile.socialLinks.instagram != nil && profile.socialLinks.tiktok != nil {
+            list.append(.init(
+                icon: "link.circle.fill",
+                title: "Connected",
+                color: .cyan,
+                gradient: [Color(red: 0.2, green: 0.8, blue: 1.0), Color(red: 0.4, green: 0.9, blue: 1.0)]
+            ))
         }
         return list
     }
     
     var body: some View {
         if !achievements.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Achievements")
-                    .font(.headline)
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "trophy.fill")
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.yellow, .orange],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Text("Achievements")
+                        .font(.headline)
+                    
+                    Spacer()
+                    
+                    Text("\(achievements.count)")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(AppTheme.accent, in: Capsule())
+                }
                 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(achievements) { achievement in
-                            AchievementBadge(achievement: achievement)
+                        ForEach(Array(achievements.enumerated()), id: \.offset) { index, achievement in
+                            PremiumAchievementBadge(achievement: achievement)
+                                .opacity(showBadges ? 1 : 0)
+                                .scaleEffect(showBadges ? 1 : 0.8)
+                                .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(Double(index) * 0.1), value: showBadges)
                         }
                     }
+                }
+            }
+            .onAppear {
+                withAnimation {
+                    showBadges = true
                 }
             }
         }
@@ -412,22 +785,80 @@ private struct Achievement: Identifiable {
     let icon: String
     let title: String
     let color: Color
+    let gradient: [Color]
 }
 
-private struct AchievementBadge: View {
+// MARK: - Premium Achievement Badge
+private struct PremiumAchievementBadge: View {
     let achievement: Achievement
     
+    @State private var isGlowing = false
+    
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: achievement.icon)
-                .foregroundStyle(achievement.color)
+        VStack(spacing: 8) {
+            ZStack {
+                // Glow effect
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [achievement.color.opacity(0.3), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 30
+                        )
+                    )
+                    .frame(width: 60, height: 60)
+                    .scaleEffect(isGlowing ? 1.2 : 1.0)
+                    .opacity(isGlowing ? 0.5 : 0.8)
+                
+                // Badge background
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: achievement.gradient,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 52, height: 52)
+                    .shadow(color: achievement.color.opacity(0.4), radius: 8, y: 4)
+                
+                // Icon
+                Image(systemName: achievement.icon)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.3), radius: 2)
+            }
+            
             Text(achievement.title)
-                .font(.subheadline.weight(.semibold))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .frame(width: 90)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(achievement.color.opacity(0.15), in: Capsule())
-        .overlay(Capsule().stroke(achievement.color.opacity(0.3), lineWidth: 1))
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(AppTheme.card)
+                .shadow(color: achievement.color.opacity(0.15), radius: 8, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    LinearGradient(
+                        colors: [achievement.color.opacity(0.3), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
+                isGlowing = true
+            }
+        }
     }
 }
 
@@ -435,58 +866,219 @@ private struct AchievementBadge: View {
 private struct ProfileCompletionCard: View {
     let profile: UserProfile
     
-    var completion: Double {
+    @State private var animatedProgress: CGFloat = 0
+    
+    var completionData: (score: Double, total: Double, missing: [String]) {
         var score: Double = 0
         let total: Double = 7
+        var missing: [String] = []
         
-        if profile.profileImageURL != nil { score += 1 }
-        if profile.bio != nil && !profile.bio!.isEmpty { score += 1 }
-        if !profile.mediaURLs.isEmpty { score += 1 }
-        if profile.location != nil { score += 1 }
-        if !profile.contentStyles.isEmpty { score += 1 }
-        if profile.socialLinks.instagram != nil || profile.socialLinks.tiktok != nil { score += 1 }
-        if !profile.interests.isEmpty { score += 1 }
+        if profile.profileImageURL != nil {
+            score += 1
+        } else {
+            missing.append("Profile photo")
+        }
         
-        return score / total
+        if profile.bio != nil && !profile.bio!.isEmpty {
+            score += 1
+        } else {
+            missing.append("Bio")
+        }
+        
+        if !profile.mediaURLs.isEmpty {
+            score += 1
+        } else {
+            missing.append("Content media")
+        }
+        
+        if profile.location != nil {
+            score += 1
+        } else {
+            missing.append("Location")
+        }
+        
+        if !profile.contentStyles.isEmpty {
+            score += 1
+        } else {
+            missing.append("Content styles")
+        }
+        
+        if profile.socialLinks.instagram != nil || profile.socialLinks.tiktok != nil {
+            score += 1
+        } else {
+            missing.append("Social links")
+        }
+        
+        if !profile.interests.isEmpty {
+            score += 1
+        } else {
+            missing.append("Interests")
+        }
+        
+        return (score, total, missing)
+    }
+    
+    var completion: Double {
+        completionData.score / completionData.total
+    }
+    
+    var completionColor: Color {
+        switch completion {
+        case 0..<0.4: return .red
+        case 0.4..<0.7: return .orange
+        case 0.7..<0.9: return .blue
+        default: return .green
+        }
     }
     
     var body: some View {
         if completion < 1.0 {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Text("Profile Strength")
-                        .font(.headline)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Profile Strength")
+                            .font(.headline)
+                        
+                        Text(completionMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
                     Spacer()
-                    Text("\(Int(completion * 100))%")
-                        .font(.headline)
-                        .foregroundStyle(AppTheme.accent)
+                    
+                    // Circular Progress Indicator
+                    ZStack {
+                        Circle()
+                            .stroke(completionColor.opacity(0.2), lineWidth: 6)
+                            .frame(width: 60, height: 60)
+                        
+                        Circle()
+                            .trim(from: 0, to: animatedProgress)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [completionColor, completionColor.opacity(0.7)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                            )
+                            .frame(width: 60, height: 60)
+                            .rotationEffect(.degrees(-90))
+                            .animation(.spring(response: 1, dampingFraction: 0.7), value: animatedProgress)
+                        
+                        VStack(spacing: 0) {
+                            Text("\(Int(completion * 100))")
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                            Text("%")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .foregroundStyle(completionColor)
+                    }
                 }
                 
+                // Progress Bar
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
+                        // Background
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 8)
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(height: 10)
                         
+                        // Progress with gradient
                         RoundedRectangle(cornerRadius: 8)
                             .fill(
                                 LinearGradient(
-                                    colors: [AppTheme.accent, .green],
+                                    colors: [completionColor, completionColor.opacity(0.8)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
-                            .frame(width: geo.size.width * completion, height: 8)
+                            .frame(width: geo.size.width * animatedProgress, height: 10)
+                            .shadow(color: completionColor.opacity(0.4), radius: 4, y: 2)
+                        
+                        // Milestone markers
+                        HStack(spacing: 0) {
+                            ForEach([0.25, 0.5, 0.75, 1.0], id: \.self) { milestone in
+                                Circle()
+                                    .fill(animatedProgress >= CGFloat(milestone) ? completionColor : Color.gray.opacity(0.3))
+                                    .frame(width: 12, height: 12)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white, lineWidth: 2)
+                                    )
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding(.horizontal, -6)
                     }
                 }
-                .frame(height: 8)
+                .frame(height: 10)
                 
-                Text("Complete your profile to get more matches!")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                // Missing Items
+                if !completionData.missing.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Complete your profile:")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        
+                        FlowLayout(spacing: 8) {
+                            ForEach(completionData.missing.prefix(3), id: \.self) { item in
+                                HStack(spacing: 4) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.caption2)
+                                    Text(item)
+                                        .font(.caption)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(completionColor.opacity(0.1), in: Capsule())
+                                .foregroundStyle(completionColor)
+                            }
+                        }
+                    }
+                }
             }
             .padding()
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(AppTheme.card)
+                    
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(
+                            LinearGradient(
+                                colors: [completionColor.opacity(0.05), .clear],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(
+                        LinearGradient(
+                            colors: [completionColor.opacity(0.2), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .onAppear {
+                withAnimation(.easeOut(duration: 1.2).delay(0.3)) {
+                    animatedProgress = CGFloat(completion)
+                }
+            }
+        }
+    }
+    
+    private var completionMessage: String {
+        switch completion {
+        case 0..<0.4: return "Let's get started!"
+        case 0.4..<0.7: return "You're making progress!"
+        case 0.7..<0.9: return "Almost there!"
+        default: return "Looking good!"
         }
     }
 }
