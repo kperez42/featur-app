@@ -1,4 +1,4 @@
-// EnhancedProfileView.swift - PREMIUM PROFILE PAGE
+// EnhancedProfileView.swift - PREMIUM PROFILE PAGE v2.0
 import SwiftUI
 import FirebaseAuth
 import PhotosUI
@@ -55,56 +55,98 @@ private struct MainProfileContent: View {
     @EnvironmentObject var auth: AuthViewModel
     
     @State private var selectedTab = 0
+    @State private var showSuccessBanner = false
+    @State private var showProfilePreview = false
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Hero Header with Parallax
-                ProfileHeroSection(
-                    profile: profile,
-                    scrollOffset: scrollOffset,
-                    onEdit: { showEditSheet = true },
-                    onShare: { showShareSheet = true },
-                    onQR: { showQRSheet = true }
-                )
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetKey.self,
-                            value: geo.frame(in: .named("scroll")).minY
-                        )
-                    }
-                )
-                
-                // Stats Cards
-                ProfileStatsGrid(profile: profile, onTapStats: { showStatsSheet = true })
+        ZStack(alignment: .top) {
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Enhanced Hero with 3D Effect
+                    ProfileHeroSection(
+                        profile: profile,
+                        scrollOffset: scrollOffset,
+                        onEdit: { showEditSheet = true },
+                        onShare: { showShareSheet = true },
+                        onQR: { showQRSheet = true },
+                        onPreview: { showProfilePreview = true }
+                    )
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: ScrollOffsetKey.self,
+                                value: geo.frame(in: .named("scroll")).minY
+                            )
+                        }
+                    )
+                    
+                    // Quick Actions Bar
+                    QuickActionsBar(
+                        onEditProfile: { showEditSheet = true },
+                        onViewStats: { showStatsSheet = true },
+                        onShareProfile: { showShareSheet = true }
+                    )
                     .padding(.horizontal)
-                    .padding(.top, -30)
-                
-                // Achievement Badges
-                AchievementBadgeRow(profile: profile)
-                    .padding(.horizontal)
-                    .padding(.top, 16)
-                
-                // Profile Completion
-                ProfileCompletionCard(profile: profile)
-                    .padding(.horizontal)
-                    .padding(.top, 16)
-                
-                // Tab Selector
-                CustomTabBar(selectedTab: $selectedTab)
-                    .padding(.top, 24)
-                
-                // Tab Content
-                TabContent(selectedTab: selectedTab, profile: profile)
+                    .padding(.top, -20)
+                    .zIndex(1)
+                    
+                    // Stats Cards with Animation
+                    EnhancedStatsGrid(
+                        profile: profile,
+                        onTapStats: { showStatsSheet = true }
+                    )
                     .padding(.horizontal)
                     .padding(.top, 20)
-                    .padding(.bottom, 100)
+                    
+                    // Profile Strength Indicator
+                    ProfileStrengthCard(profile: profile)
+                        .padding(.horizontal)
+                        .padding(.top, 16)
+                    
+                    // Achievement Showcase
+                    AchievementShowcase(profile: profile)
+                        .padding(.horizontal)
+                        .padding(.top, 16)
+                    
+                    // Content Preview Section
+                    ContentPreviewSection(profile: profile)
+                        .padding(.top, 20)
+                    
+                    // Bio & Info Section
+                    BioInfoSection(profile: profile)
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
+                    // Social Links Grid
+                    SocialLinksSection(profile: profile)
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
+                    // Collaboration Details
+                    CollaborationDetailsCard(preferences: profile.collaborationPreferences)
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
+                    // Activity Timeline
+                    ActivityTimelineSection()
+                        .padding(.horizontal)
+                        .padding(.top, 20)
+                    
+                    // Bottom Padding
+                    Color.clear.frame(height: 100)
+                }
             }
-        }
-        .coordinateSpace(name: "scroll")
-        .onPreferenceChange(ScrollOffsetKey.self) { value in
-            scrollOffset = value
+            .coordinateSpace(name: "scroll")
+            .onPreferenceChange(ScrollOffsetKey.self) { value in
+                scrollOffset = value
+            }
+            
+            // Success Banner
+            if showSuccessBanner {
+                SuccessBanner(message: "Profile updated!")
+                    .padding(.top, 60)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         .background(AppTheme.bg)
         .navigationBarTitleDisplayMode(.inline)
@@ -113,12 +155,16 @@ private struct MainProfileContent: View {
                 Text(profile.displayName)
                     .font(.headline)
                     .opacity(scrollOffset < -100 ? 1 : 0)
+                    .animation(.easeInOut, value: scrollOffset)
             }
             
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { showEditSheet = true } label: {
                         Label("Edit Profile", systemImage: "pencil")
+                    }
+                    Button { showProfilePreview = true } label: {
+                        Label("Preview Profile", systemImage: "eye")
                     }
                     Button { showQRSheet = true } label: {
                         Label("QR Code", systemImage: "qrcode")
@@ -127,9 +173,13 @@ private struct MainProfileContent: View {
                         Label("Share Profile", systemImage: "square.and.arrow.up")
                     }
                     Divider()
+                    Button { showStatsSheet = true } label: {
+                        Label("Analytics", systemImage: "chart.bar")
+                    }
                     Button { showSettingsSheet = true } label: {
                         Label("Settings", systemImage: "gear")
                     }
+                    Divider()
                     Button(role: .destructive) {
                         Task { await auth.signOut() }
                     } label: {
@@ -137,300 +187,232 @@ private struct MainProfileContent: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle.fill")
-                        .foregroundStyle(AppTheme.accent)
                         .font(.title3)
+                        .foregroundStyle(AppTheme.accent)
+                        .symbolEffect(.bounce, value: showEditSheet)
                 }
             }
         }
         .sheet(isPresented: $showEditSheet) {
-            EditProfileSheet(profile: profile, viewModel: viewModel)
+            EnhancedEditProfileSheet(profile: profile, viewModel: viewModel) {
+                showSuccessBanner = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    withAnimation { showSuccessBanner = false }
+                }
+            }
         }
         .sheet(isPresented: $showSettingsSheet) {
             SettingsSheet()
         }
         .sheet(isPresented: $showQRSheet) {
-            QRCodeSheet(profile: profile)
+            EnhancedQRCodeSheet(profile: profile)
         }
         .sheet(isPresented: $showStatsSheet) {
-            DetailedStatsSheet(profile: profile)
+            EnhancedStatsSheet(profile: profile)
+        }
+        .fullScreenCover(isPresented: $showProfilePreview) {
+            ProfilePreviewView(profile: profile)
         }
     }
 }
 
-// MARK: - Hero Section
+// MARK: - Enhanced Hero Section
 private struct ProfileHeroSection: View {
     let profile: UserProfile
     let scrollOffset: CGFloat
     let onEdit: () -> Void
     let onShare: () -> Void
     let onQR: () -> Void
+    let onPreview: () -> Void
     
     @State private var animateGradient = false
-    @State private var showingBadgeAnimation = false
+    @State private var showSparkles = false
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Animated Gradient Background with Parallax
-            AnimatedGradientBackground(animate: animateGradient)
-                .frame(height: 300 + max(0, scrollOffset))
-                .clipped()
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
-                        animateGradient = true
-                    }
-                }
-            
-            // Decorative Elements
-            GeometryReader { geo in
-                ZStack {
-                    // Floating circles
-                    Circle()
-                        .fill(.white.opacity(0.1))
-                        .frame(width: 100, height: 100)
-                        .offset(x: -20, y: 40)
-                        .blur(radius: 20)
-                    
-                    Circle()
-                        .fill(.white.opacity(0.08))
-                        .frame(width: 150, height: 150)
-                        .offset(x: geo.size.width - 80, y: 100)
-                        .blur(radius: 25)
-                }
-            }
-            
-            // Content
-            VStack(spacing: 16) {
-                // Profile Image with Premium Ring
-                ZStack(alignment: .bottomTrailing) {
-                    // Outer glow ring
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.white.opacity(0.3), .white.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 152, height: 152)
-                        .blur(radius: 8)
-                    
-                    // Profile Image
-                    Group {
-                        if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 140, height: 140)
-                                        .clipShape(Circle())
-                                case .failure(_):
-                                    InitialsAvatar(name: profile.displayName, size: 140)
-                                default:
-                                    ZStack {
-                                        Circle()
-                                            .fill(.white.opacity(0.2))
-                                            .frame(width: 140, height: 140)
-                                        ProgressView()
-                                            .tint(.white)
-                                    }
-                                }
-                            }
-                        } else {
-                            InitialsAvatar(name: profile.displayName, size: 140)
-                        }
-                    }
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.8), .white.opacity(0.4)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 4
-                            )
-                    )
-                    
-                    // Verification Badge with Animation
-                    if profile.isVerified {
-                        ZStack {
-                            Circle()
-                                .fill(.white)
-                                .frame(width: 40, height: 40)
-                                .shadow(color: .blue.opacity(0.3), radius: 8, y: 2)
-                            
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.blue)
-                                .scaleEffect(showingBadgeAnimation ? 1.1 : 1.0)
-                                .onAppear {
-                                    withAnimation(.spring(response: 0.6, dampingFraction: 0.5).repeatForever()) {
-                                        showingBadgeAnimation = true
-                                    }
-                                }
-                        }
-                        .offset(x: -4, y: -4)
-                    }
-                    
-                    // Animated Online Indicator
-                    if profile.isOnline {
-                        OnlinePulseIndicator()
-                            .offset(x: 4, y: 4)
-                    }
-                }
-                .shadow(color: .black.opacity(0.4), radius: 25, y: 15)
-                
-                // Name & Info with Social Proof
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        Text(profile.displayName)
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-                        
-                        if profile.isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundStyle(.blue)
-                                .font(.title2)
-                                .shadow(color: .blue.opacity(0.5), radius: 4)
-                        }
-                    }
-                    
-                    // Enhanced Info Row
-                    HStack(spacing: 16) {
-                        if let age = profile.age {
-                            InfoPill(icon: "calendar", text: "\(age) years")
-                        }
-                        
-                        if let location = profile.location, let city = location.city {
-                            InfoPill(icon: "mappin.circle", text: city)
-                        }
-                        
-                        // Follower Badge
-                        if profile.followerCount >= 1000 {
-                            InfoPill(
-                                icon: "person.3.fill",
-                                text: formatNumber(profile.followerCount),
-                                color: .yellow
-                            )
-                        }
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.95))
-                }
-                
-                // Enhanced Bio with Read More
-                if let bio = profile.bio, !bio.isEmpty {
-                    Text(bio)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.95))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                        .padding(.horizontal, 32)
-                        .shadow(color: .black.opacity(0.2), radius: 2)
-                }
-                
-                // Premium Quick Actions with Icons
-                HStack(spacing: 12) {
-                    PremiumActionButton(
-                        icon: "pencil.circle.fill",
-                        label: "Edit",
-                        gradient: [.blue, .cyan],
-                        action: onEdit
-                    )
-                    PremiumActionButton(
-                        icon: "qrcode",
-                        label: "QR",
-                        gradient: [.purple, .pink],
-                        action: onQR
-                    )
-                    PremiumActionButton(
-                        icon: "square.and.arrow.up.circle.fill",
-                        label: "Share",
-                        gradient: [.green, .mint],
-                        action: onShare
-                    )
-                }
-                .padding(.top, 8)
-            }
-            .padding(.bottom, 40)
+            backgroundLayer
+            particlesLayer
+            profileContentLayer
         }
     }
-}
-
-// MARK: - Animated Gradient Background
-private struct AnimatedGradientBackground: View {
-    let animate: Bool
     
-    var body: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.4, green: 0.3, blue: 0.9),
-                Color(red: 0.6, green: 0.4, blue: 1.0),
-                Color(red: 0.5, green: 0.35, blue: 0.95)
-            ],
-            startPoint: animate ? .topLeading : .bottomLeading,
-            endPoint: animate ? .bottomTrailing : .topTrailing
-        )
+    private var backgroundLayer: some View {
+        AnimatedGradientBackground(animate: animateGradient)
+            .frame(height: 320 + max(0, scrollOffset * 0.5))
+            .clipped()
+            .onAppear {
+                withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
+                    animateGradient = true
+                }
+            }
     }
-}
-
-// MARK: - Online Pulse Indicator
-private struct OnlinePulseIndicator: View {
-    @State private var isPulsing = false
     
-    var body: some View {
+    private var particlesLayer: some View {
+        ParticleEffectView()
+            .frame(height: 320)
+            .opacity(0.3)
+    }
+    
+    private var profileContentLayer: some View {
+        VStack(spacing: 20) {
+            profileImageSection
+            nameAndStatusSection
+        }
+        .padding(.bottom, 30)
+    }
+    
+    private var profileImageSection: some View {
         ZStack {
-            // Pulse ring
-            Circle()
-                .fill(.green.opacity(0.3))
-                .frame(width: 32, height: 32)
-                .scaleEffect(isPulsing ? 1.3 : 1.0)
-                .opacity(isPulsing ? 0 : 1)
-            
-            // Solid indicator
-            Circle()
-                .fill(.green)
-                .frame(width: 24, height: 24)
-                .overlay(Circle().stroke(.white, lineWidth: 3))
-                .shadow(color: .green.opacity(0.5), radius: 4)
+            glowRings
+            profileImage
+            if profile.isVerified {
+                verifiedBadge
+            }
         }
+        .scaleEffect(scrollOffset < 0 ? 1 - (scrollOffset / -1000) : 1)
+    }
+    
+    private var glowRings: some View {
+        ForEach(0..<3) { i in
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.3 - Double(i) * 0.1), .clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 2
+                )
+                .frame(width: 160 + CGFloat(i * 8), height: 160 + CGFloat(i * 8))
+                .blur(radius: 4)
+                .opacity(animateGradient ? 0.8 : 0.4)
+        }
+    }
+    
+    private var profileImage: some View {
+        Group {
+            if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .empty:
+                        ProgressView()
+                            .tint(.white)
+                    case .failure:
+                        InitialsAvatar(name: profile.displayName, size: 140)
+                    @unknown default:
+                        InitialsAvatar(name: profile.displayName, size: 140)
+                    }
+                }
+            } else {
+                InitialsAvatar(name: profile.displayName, size: 140)
+            }
+        }
+        .frame(width: 140, height: 140)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.white, lineWidth: 4))
+        .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+    }
+    
+    private var verifiedBadge: some View {
+        ZStack {
+            Circle()
+                .fill(.white)
+                .frame(width: 36, height: 36)
+            
+            Image(systemName: "checkmark.seal.fill")
+                .font(.title2)
+                .foregroundStyle(.blue)
+                .symbolEffect(.bounce, value: showSparkles)
+        }
+        .offset(x: 50, y: 50)
+        .shadow(radius: 5)
         .onAppear {
-            withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
-                isPulsing = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                withAnimation(.spring()) { showSparkles = true }
             }
         }
     }
-}
-
-// MARK: - Info Pill
-private struct InfoPill: View {
-    let icon: String
-    let text: String
-    var color: Color = .white
     
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption)
-            Text(text)
-                .font(.caption.weight(.medium))
+    private var nameAndStatusSection: some View {
+        VStack(spacing: 8) {
+            nameRow
+            if let location = profile.location, let city = location.city {
+                locationBadge(city: city, state: location.state)
+            }
         }
+        .shadow(radius: 10)
+    }
+    
+    private var nameRow: some View {
+        HStack(spacing: 8) {
+            Text(profile.displayName)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+            
+            if let age = profile.age {
+                Text("\(age)")
+                    .font(.title3)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+    }
+    
+    private func locationBadge(city: String, state: String?) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "mappin.circle.fill")
+            Text("\(city), \(state ?? "")")
+        }
+        .font(.subheadline)
+        .foregroundStyle(.white.opacity(0.9))
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(.white.opacity(0.25), in: Capsule())
-        .foregroundStyle(color)
-        .shadow(color: .black.opacity(0.2), radius: 4)
+        .background(.white.opacity(0.2), in: Capsule())
     }
 }
 
-// MARK: - Premium Action Button
-private struct PremiumActionButton: View {
+// MARK: - Quick Actions Bar
+private struct QuickActionsBar: View {
+    let onEditProfile: () -> Void
+    let onViewStats: () -> Void
+    let onShareProfile: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            QuickActionButton(
+                icon: "pencil.circle.fill",
+                label: "Edit",
+                color: AppTheme.accent,
+                action: onEditProfile
+            )
+            
+            QuickActionButton(
+                icon: "chart.bar.fill",
+                label: "Stats",
+                color: .blue,
+                action: onViewStats
+            )
+            
+            QuickActionButton(
+                icon: "square.and.arrow.up.fill",
+                label: "Share",
+                color: .green,
+                action: onShareProfile
+            )
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.1), radius: 10, y: 5)
+    }
+}
+
+private struct QuickActionButton: View {
     let icon: String
     let label: String
-    let gradient: [Color]
+    let color: Color
     let action: () -> Void
     
     @State private var isPressed = false
@@ -438,719 +420,434 @@ private struct PremiumActionButton: View {
     var body: some View {
         Button(action: {
             Haptics.impact(.medium)
+            withAnimation(.spring(response: 0.3)) {
+                isPressed = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isPressed = false
+            }
             action()
         }) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
-                Text(label)
-                    .font(.caption.weight(.semibold))
-            }
-            .frame(width: 85)
-            .padding(.vertical, 12)
-            .background(
-                LinearGradient(
-                    colors: gradient.map { $0.opacity(0.9) },
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: 16)
-            )
-            .foregroundStyle(.white)
-            .shadow(color: gradient[0].opacity(0.4), radius: 8, y: 4)
-            .scaleEffect(isPressed ? 0.95 : 1.0)
-        }
-        .buttonStyle(PressableButtonStyle(isPressed: $isPressed))
-    }
-}
-
-// MARK: - Pressable Button Style
-private struct PressableButtonStyle: ButtonStyle {
-    @Binding var isPressed: Bool
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .onChange(of: configuration.isPressed) { _, newValue in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                    isPressed = newValue
-                }
-            }
-    }
-}
-
-// MARK: - Stats Grid
-private struct ProfileStatsGrid: View {
-    let profile: UserProfile
-    let onTapStats: () -> Void
-    
-    @State private var showStats = false
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            // Primary Stats Row
-            HStack(spacing: 12) {
-                PremiumStatCard(
-                    icon: "person.3.fill",
-                    value: formatNumber(profile.followerCount),
-                    label: "Followers",
-                    gradient: [Color(red: 0.2, green: 0.5, blue: 1.0), Color(red: 0.4, green: 0.7, blue: 1.0)],
-                    delay: 0.0
-                )
-                .opacity(showStats ? 1 : 0)
-                .offset(y: showStats ? 0 : 20)
-                
-                PremiumStatCard(
-                    icon: "heart.fill",
-                    value: "\(Int.random(in: 1000...10000))",
-                    label: "Likes",
-                    gradient: [Color(red: 1.0, green: 0.3, blue: 0.5), Color(red: 1.0, green: 0.5, blue: 0.7)],
-                    delay: 0.1
-                )
-                .opacity(showStats ? 1 : 0)
-                .offset(y: showStats ? 0 : 20)
-            }
-            
-            // Secondary Stats Row
-            HStack(spacing: 12) {
-                PremiumStatCard(
-                    icon: "eye.fill",
-                    value: formatNumber(Int.random(in: 10000...500000)),
-                    label: "Views",
-                    gradient: [Color(red: 0.6, green: 0.3, blue: 1.0), Color(red: 0.8, green: 0.5, blue: 1.0)],
-                    delay: 0.2
-                )
-                .opacity(showStats ? 1 : 0)
-                .offset(y: showStats ? 0 : 20)
-                
-                PremiumStatCard(
-                    icon: "arrow.up.right",
-                    value: "+\(Int.random(in: 10...50))%",
-                    label: "Growth",
-                    gradient: [Color(red: 0.2, green: 0.8, blue: 0.5), Color(red: 0.4, green: 1.0, blue: 0.7)],
-                    delay: 0.3
-                )
-                .opacity(showStats ? 1 : 0)
-                .offset(y: showStats ? 0 : 20)
-            }
-            
-            // View Analytics Button
-            Button(action: {
-                Haptics.impact(.medium)
-                onTapStats()
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "chart.bar.xaxis")
-                        .font(.subheadline.weight(.semibold))
-                    Text("View Detailed Analytics")
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
-                }
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [AppTheme.accent, AppTheme.accent.opacity(0.8)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .padding()
-                .background(
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(AppTheme.card)
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(
-                                LinearGradient(
-                                    colors: [AppTheme.accent.opacity(0.1), .clear],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    }
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            LinearGradient(
-                                colors: [AppTheme.accent.opacity(0.3), .clear],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            lineWidth: 1
-                        )
-                )
-            }
-            .opacity(showStats ? 1 : 0)
-            .offset(y: showStats ? 0 : 20)
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                showStats = true
-            }
-        }
-    }
-}
-
-// MARK: - Premium Stat Card
-private struct PremiumStatCard: View {
-    let icon: String
-    let value: String
-    let label: String
-    let gradient: [Color]
-    let delay: Double
-    
-    @State private var isAnimating = false
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Icon with gradient background
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: gradient.map { $0.opacity(0.2) },
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 48, height: 48)
-                
-                Image(systemName: icon)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: gradient,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(value)
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    .font(.title2)
+                    .foregroundStyle(color)
                 
                 Text(label)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(AppTheme.card)
-                    .shadow(color: gradient[0].opacity(0.15), radius: 12, y: 6)
-                
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: [gradient[0].opacity(0.05), .clear],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(
-                    LinearGradient(
-                        colors: [gradient[0].opacity(0.2), .clear],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .scaleEffect(isAnimating ? 1.0 : 0.9)
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(delay)) {
-                isAnimating = true
-            }
-        }
+        .scaleEffect(isPressed ? 0.9 : 1.0)
     }
 }
 
-// MARK: - Achievement Badges
-private struct AchievementBadgeRow: View {
+// MARK: - Enhanced Stats Grid
+private struct EnhancedStatsGrid: View {
+    let profile: UserProfile
+    let onTapStats: () -> Void
+    
+    @State private var animateNumbers = false
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                AnimatedStatCard(
+                    title: "Followers",
+                    value: profile.followerCount,
+                    icon: "person.3.fill",
+                    color: .purple,
+                    animate: animateNumbers
+                )
+                
+                AnimatedStatCard(
+                    title: "Matches",
+                    value: Int.random(in: 20...100),
+                    icon: "heart.fill",
+                    color: .pink,
+                    animate: animateNumbers
+                )
+            }
+            
+            HStack(spacing: 12) {
+                AnimatedStatCard(
+                    title: "Profile Views",
+                    value: Int.random(in: 500...2000),
+                    icon: "eye.fill",
+                    color: .blue,
+                    animate: animateNumbers
+                )
+                
+                AnimatedStatCard(
+                    title: "Collabs",
+                    value: Int.random(in: 5...30),
+                    icon: "star.fill",
+                    color: .orange,
+                    animate: animateNumbers
+                )
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.spring()) {
+                    animateNumbers = true
+                }
+            }
+        }
+        .onTapGesture(perform: onTapStats)
+    }
+}
+
+private struct AnimatedStatCard: View {
+    let title: String
+    let value: Int
+    let icon: String
+    let color: Color
+    let animate: Bool
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundStyle(color)
+                
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Text(formatNumber(animate ? value : 0))
+                .font(.title2.bold())
+                .foregroundStyle(.primary)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(color.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Profile Strength Card
+private struct ProfileStrengthCard: View {
     let profile: UserProfile
     
-    @State private var showBadges = false
-    
-    var achievements: [Achievement] {
-        var list: [Achievement] = []
-        if profile.isVerified {
-            list.append(.init(
-                icon: "checkmark.seal.fill",
-                title: "Verified Creator",
-                color: .blue,
-                gradient: [Color(red: 0.2, green: 0.5, blue: 1.0), Color(red: 0.4, green: 0.7, blue: 1.0)]
-            ))
-        }
-        if profile.followerCount >= 100000 {
-            list.append(.init(
-                icon: "crown.fill",
-                title: "Top Creator",
-                color: .yellow,
-                gradient: [Color(red: 1.0, green: 0.8, blue: 0.0), Color(red: 1.0, green: 0.9, blue: 0.2)]
-            ))
-        }
-        if profile.followerCount >= 10000 {
-            list.append(.init(
-                icon: "star.fill",
-                title: "Rising Star",
-                color: .orange,
-                gradient: [Color(red: 1.0, green: 0.5, blue: 0.0), Color(red: 1.0, green: 0.7, blue: 0.2)]
-            ))
-        }
-        if profile.followerCount >= 1000 {
-            list.append(.init(
-                icon: "flame.fill",
-                title: "Popular",
-                color: .red,
-                gradient: [Color(red: 1.0, green: 0.2, blue: 0.3), Color(red: 1.0, green: 0.4, blue: 0.5)]
-            ))
-        }
-        // New achievements
-        if !profile.contentStyles.isEmpty && profile.contentStyles.count >= 3 {
-            list.append(.init(
-                icon: "sparkles",
-                title: "Multi-Talented",
-                color: .purple,
-                gradient: [Color(red: 0.6, green: 0.3, blue: 1.0), Color(red: 0.8, green: 0.5, blue: 1.0)]
-            ))
-        }
-        if profile.socialLinks.instagram != nil && profile.socialLinks.tiktok != nil {
-            list.append(.init(
-                icon: "link.circle.fill",
-                title: "Connected",
-                color: .cyan,
-                gradient: [Color(red: 0.2, green: 0.8, blue: 1.0), Color(red: 0.4, green: 0.9, blue: 1.0)]
-            ))
-        }
-        return list
+    var completionPercentage: Double {
+        var score = 0.0
+        if profile.profileImageURL != nil { score += 20 }
+        if profile.bio != nil && !profile.bio!.isEmpty { score += 15 }
+        if !profile.contentStyles.isEmpty { score += 15 }
+        if !profile.mediaURLs.isEmpty { score += 15 }
+        if profile.location != nil { score += 10 }
+        if !profile.interests.isEmpty { score += 10 }
+        if profile.socialLinks.instagram != nil || profile.socialLinks.tiktok != nil { score += 15 }
+        return score
     }
     
     var body: some View {
-        if !achievements.isEmpty {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Image(systemName: "trophy.fill")
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.yellow, .orange],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    Text("Achievements")
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Profile Strength")
                         .font(.headline)
                     
-                    Spacer()
-                    
-                    Text("\(achievements.count)")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(AppTheme.accent, in: Capsule())
+                    Text(strengthLevel)
+                        .font(.subheadline)
+                        .foregroundStyle(strengthColor)
                 }
                 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(Array(achievements.enumerated()), id: \.offset) { index, achievement in
-                            PremiumAchievementBadge(achievement: achievement)
-                                .opacity(showBadges ? 1 : 0)
-                                .scaleEffect(showBadges ? 1 : 0.8)
-                                .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(Double(index) * 0.1), value: showBadges)
+                Spacer()
+                
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 8)
+                        .frame(width: 60, height: 60)
+                    
+                    Circle()
+                        .trim(from: 0, to: completionPercentage / 100)
+                        .stroke(strengthColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .frame(width: 60, height: 60)
+                        .rotationEffect(.degrees(-90))
+                    
+                    Text("\(Int(completionPercentage))%")
+                        .font(.caption.bold())
+                }
+            }
+            
+            // Suggestions
+            if completionPercentage < 100 {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(suggestions, id: \.self) { suggestion in
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle")
+                                .foregroundStyle(.green)
+                            Text(suggestion)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
-            }
-            .onAppear {
-                withAnimation {
-                    showBadges = true
-                }
+                .padding(.top, 8)
             }
         }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+    
+    var strengthLevel: String {
+        switch completionPercentage {
+        case 90...100: return "Excellent!"
+        case 70..<90: return "Very Good"
+        case 50..<70: return "Good"
+        default: return "Needs Improvement"
+        }
+    }
+    
+    var strengthColor: Color {
+        switch completionPercentage {
+        case 90...100: return .green
+        case 70..<90: return .blue
+        case 50..<70: return .orange
+        default: return .red
+        }
+    }
+    
+    var suggestions: [String] {
+        var tips: [String] = []
+        if profile.bio == nil || profile.bio!.isEmpty { tips.append("Add a bio") }
+        if profile.mediaURLs.isEmpty { tips.append("Upload content") }
+        if profile.socialLinks.instagram == nil && profile.socialLinks.tiktok == nil {
+            tips.append("Connect social accounts")
+        }
+        return Array(tips.prefix(3))
     }
 }
 
-private struct Achievement: Identifiable {
-    let id = UUID()
-    let icon: String
-    let title: String
-    let color: Color
-    let gradient: [Color]
+// MARK: - Achievement Showcase
+private struct AchievementShowcase: View {
+    let profile: UserProfile
+    
+    @State private var selectedAchievement: Achievement?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Achievements")
+                .font(.headline)
+                .padding(.horizontal)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(achievements) { achievement in
+                        AchievementBadge(achievement: achievement, isUnlocked: achievement.isUnlocked(for: profile))
+                            .onTapGesture {
+                                selectedAchievement = achievement
+                                Haptics.impact(.light)
+                            }
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+        .sheet(item: $selectedAchievement) { achievement in
+            AchievementDetailSheet(achievement: achievement, profile: profile)
+        }
+    }
+    
+    var achievements: [Achievement] {
+        [
+            Achievement(
+                id: "first_match",
+                icon: "heart.fill",
+                title: "First Match",
+                description: "Got your first match!",
+                color: .pink,
+                requirement: { $0.followerCount > 0 }
+            ),
+            Achievement(
+                id: "popular",
+                icon: "star.fill",
+                title: "Popular Creator",
+                description: "Reached 1K followers",
+                color: .orange,
+                requirement: { $0.followerCount >= 1000 }
+            ),
+            Achievement(
+                id: "verified",
+                icon: "checkmark.seal.fill",
+                title: "Verified",
+                description: "Got verified status",
+                color: .blue,
+                requirement: { $0.isVerified }
+            ),
+            Achievement(
+                id: "content_king",
+                icon: "photo.stack.fill",
+                title: "Content King",
+                description: "Uploaded 10+ photos",
+                color: .purple,
+                requirement: { $0.mediaURLs.count >= 10 }
+            )
+        ]
+    }
 }
 
-// MARK: - Premium Achievement Badge
-private struct PremiumAchievementBadge: View {
+private struct AchievementBadge: View {
     let achievement: Achievement
-    
-    @State private var isGlowing = false
+    let isUnlocked: Bool
     
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
-                // Glow effect
                 Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [achievement.color.opacity(0.3), .clear],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 30
-                        )
-                    )
+                    .fill(isUnlocked ? achievement.color.opacity(0.2) : Color.gray.opacity(0.2))
                     .frame(width: 60, height: 60)
-                    .scaleEffect(isGlowing ? 1.2 : 1.0)
-                    .opacity(isGlowing ? 0.5 : 0.8)
                 
-                // Badge background
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: achievement.gradient,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 52, height: 52)
-                    .shadow(color: achievement.color.opacity(0.4), radius: 8, y: 4)
-                
-                // Icon
                 Image(systemName: achievement.icon)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.3), radius: 2)
+                    .font(.title2)
+                    .foregroundStyle(isUnlocked ? achievement.color : .gray)
             }
             
             Text(achievement.title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.primary)
+                .font(.caption.bold())
                 .multilineTextAlignment(.center)
-                .frame(width: 90)
+                .frame(width: 80)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(AppTheme.card)
-                .shadow(color: achievement.color.opacity(0.15), radius: 8, y: 4)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    LinearGradient(
-                        colors: [achievement.color.opacity(0.3), .clear],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-                isGlowing = true
-            }
-        }
+        .opacity(isUnlocked ? 1.0 : 0.5)
+        .scaleEffect(isUnlocked ? 1.0 : 0.95)
     }
 }
 
-// MARK: - Profile Completion
-private struct ProfileCompletionCard: View {
+struct Achievement: Identifiable {
+    let id: String
+    let icon: String
+    let title: String
+    let description: String
+    let color: Color
+    let requirement: (UserProfile) -> Bool
+    
+    func isUnlocked(for profile: UserProfile) -> Bool {
+        requirement(profile)
+    }
+}
+
+// MARK: - Content Preview Section
+private struct ContentPreviewSection: View {
     let profile: UserProfile
     
-    @State private var animatedProgress: CGFloat = 0
-    
-    var completionData: (score: Double, total: Double, missing: [String]) {
-        var score: Double = 0
-        let total: Double = 7
-        var missing: [String] = []
-        
-        if profile.profileImageURL != nil {
-            score += 1
-        } else {
-            missing.append("Profile photo")
-        }
-        
-        if profile.bio != nil && !profile.bio!.isEmpty {
-            score += 1
-        } else {
-            missing.append("Bio")
-        }
-        
-        if !profile.mediaURLs.isEmpty {
-            score += 1
-        } else {
-            missing.append("Content media")
-        }
-        
-        if profile.location != nil {
-            score += 1
-        } else {
-            missing.append("Location")
-        }
-        
-        if !profile.contentStyles.isEmpty {
-            score += 1
-        } else {
-            missing.append("Content styles")
-        }
-        
-        if profile.socialLinks.instagram != nil || profile.socialLinks.tiktok != nil {
-            score += 1
-        } else {
-            missing.append("Social links")
-        }
-        
-        if !profile.interests.isEmpty {
-            score += 1
-        } else {
-            missing.append("Interests")
-        }
-        
-        return (score, total, missing)
-    }
-    
-    var completion: Double {
-        completionData.score / completionData.total
-    }
-    
-    var completionColor: Color {
-        switch completion {
-        case 0..<0.4: return .red
-        case 0.4..<0.7: return .orange
-        case 0.7..<0.9: return .blue
-        default: return .green
-        }
-    }
-    
     var body: some View {
-        if completion < 1.0 {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Profile Strength")
-                            .font(.headline)
-                        
-                        Text(completionMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    // Circular Progress Indicator
-                    ZStack {
-                        Circle()
-                            .stroke(completionColor.opacity(0.2), lineWidth: 6)
-                            .frame(width: 60, height: 60)
-                        
-                        Circle()
-                            .trim(from: 0, to: animatedProgress)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [completionColor, completionColor.opacity(0.7)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                            )
-                            .frame(width: 60, height: 60)
-                            .rotationEffect(.degrees(-90))
-                            .animation(.spring(response: 1, dampingFraction: 0.7), value: animatedProgress)
-                        
-                        VStack(spacing: 0) {
-                            Text("\(Int(completion * 100))")
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                            Text("%")
-                                .font(.caption2.weight(.semibold))
-                        }
-                        .foregroundStyle(completionColor)
-                    }
-                }
-                
-                // Progress Bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        // Background
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.gray.opacity(0.15))
-                            .frame(height: 10)
-                        
-                        // Progress with gradient
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(
-                                LinearGradient(
-                                    colors: [completionColor, completionColor.opacity(0.8)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: geo.size.width * animatedProgress, height: 10)
-                            .shadow(color: completionColor.opacity(0.4), radius: 4, y: 2)
-                        
-                        // Milestone markers
-                        HStack(spacing: 0) {
-                            ForEach([0.25, 0.5, 0.75, 1.0], id: \.self) { milestone in
-                                Circle()
-                                    .fill(animatedProgress >= CGFloat(milestone) ? completionColor : Color.gray.opacity(0.3))
-                                    .frame(width: 12, height: 12)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.white, lineWidth: 2)
-                                    )
-                                    .frame(maxWidth: .infinity)
-                            }
-                        }
-                        .padding(.horizontal, -6)
-                    }
-                }
-                .frame(height: 10)
-                
-                // Missing Items
-                if !completionData.missing.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Complete your profile:")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        
-                        FlowLayout(spacing: 8) {
-                            ForEach(completionData.missing.prefix(3), id: \.self) { item in
-                                HStack(spacing: 4) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.caption2)
-                                    Text(item)
-                                        .font(.caption)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Content")
+                .font(.headline)
+                .padding(.horizontal)
+            
+            if !profile.mediaURLs.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(profile.mediaURLs.prefix(6), id: \.self) { url in
+                            AsyncImage(url: URL(string: url)) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 120, height: 160)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                case .empty:
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.gray.opacity(0.2))
+                                        .frame(width: 120, height: 160)
+                                        .overlay(ProgressView())
+                                default:
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.gray.opacity(0.2))
+                                        .frame(width: 120, height: 160)
                                 }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(completionColor.opacity(0.1), in: Capsule())
-                                .foregroundStyle(completionColor)
                             }
                         }
                     }
+                    .padding(.horizontal)
                 }
+            } else {
+                EmptyContentPlaceholder()
+                    .padding(.horizontal)
             }
-            .padding()
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(AppTheme.card)
+        }
+    }
+}
+
+private struct EmptyContentPlaceholder: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 50))
+                .foregroundStyle(.secondary)
+            
+            Text("No content yet")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            
+            Text("Upload photos to showcase your work")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 160)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Bio & Info Section
+private struct BioInfoSection: View {
+    let profile: UserProfile
+    
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Bio
+            if let bio = profile.bio, !bio.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("About")
+                        .font(.headline)
                     
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                colors: [completionColor.opacity(0.05), .clear],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(
-                        LinearGradient(
-                            colors: [completionColor.opacity(0.2), .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .onAppear {
-                withAnimation(.easeOut(duration: 1.2).delay(0.3)) {
-                    animatedProgress = CGFloat(completion)
-                }
-            }
-        }
-    }
-    
-    private var completionMessage: String {
-        switch completion {
-        case 0..<0.4: return "Let's get started!"
-        case 0.4..<0.7: return "You're making progress!"
-        case 0.7..<0.9: return "Almost there!"
-        default: return "Looking good!"
-        }
-    }
-}
-
-// MARK: - Custom Tab Bar
-private struct CustomTabBar: View {
-    @Binding var selectedTab: Int
-    let tabs = ["Overview", "Content", "Stats", "Activity"]
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 20) {
-                ForEach(0..<tabs.count, id: \.self) { index in
-                    Button {
-                        withAnimation(.spring(response: 0.3)) {
-                            selectedTab = index
+                    Text(bio)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(isExpanded ? nil : 3)
+                    
+                    if bio.count > 100 {
+                        Button(isExpanded ? "Show Less" : "Show More") {
+                            withAnimation { isExpanded.toggle() }
                         }
-                    } label: {
-                        VStack(spacing: 8) {
-                            Text(tabs[index])
-                                .font(.subheadline.weight(selectedTab == index ? .bold : .regular))
-                                .foregroundStyle(selectedTab == index ? AppTheme.accent : .secondary)
-                            
-                            if selectedTab == index {
-                                Capsule()
-                                    .fill(AppTheme.accent)
-                                    .frame(height: 3)
-                                    .transition(.scale)
-                            } else {
-                                Capsule()
-                                    .fill(Color.clear)
-                                    .frame(height: 3)
-                            }
-                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.accent)
                     }
                 }
             }
-            .padding(.horizontal)
-        }
-    }
-}
-
-// MARK: - Tab Content
-private struct TabContent: View {
-    let selectedTab: Int
-    let profile: UserProfile
-    
-    var body: some View {
-        Group {
-            switch selectedTab {
-            case 0: OverviewTab(profile: profile)
-            case 1: ContentTab(profile: profile)
-            case 2: StatsTab(profile: profile)
-            case 3: ActivityTab(profile: profile)
-            default: OverviewTab(profile: profile)
-            }
-        }
-    }
-}
-
-// MARK: - Overview Tab
-private struct OverviewTab: View {
-    let profile: UserProfile
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+            
             // Content Styles
             if !profile.contentStyles.isEmpty {
-                SectionCard(title: "Content Styles", icon: "square.grid.3x3") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Content Styles")
+                        .font(.headline)
+                    
                     FlowLayout(spacing: 8) {
                         ForEach(profile.contentStyles, id: \.self) { style in
-                            TagChip(title: style.rawValue, active: false)
+                            HStack(spacing: 4) {
+                                Image(systemName: style.icon)
+                                Text(style.rawValue)
+                            }
+                            .font(.caption)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                            .foregroundStyle(AppTheme.accent)
                         }
                     }
                 }
@@ -1158,54 +855,418 @@ private struct OverviewTab: View {
             
             // Interests
             if !profile.interests.isEmpty {
-                SectionCard(title: "Interests", icon: "heart.fill") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Interests")
+                        .font(.headline)
+                    
                     FlowLayout(spacing: 8) {
                         ForEach(profile.interests, id: \.self) { interest in
                             Text(interest)
                                 .font(.caption)
-                                .padding(.horizontal, 12)
+                                .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(AppTheme.card, in: Capsule())
                         }
                     }
                 }
             }
-            
-            // Social Links
-            SocialLinksSection(profile: profile)
-            
-            // Collaboration Preferences
-            CollabPreferencesSection(profile: profile)
         }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
-// MARK: - Content Tab
-private struct ContentTab: View {
+// MARK: - Social Links Section
+private struct SocialLinksSection: View {
     let profile: UserProfile
     
     var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Social Links")
+                .font(.headline)
+            
+            VStack(spacing: 10) {
+                if let instagram = profile.socialLinks.instagram {
+                    SocialLinkRow(
+                        platform: "Instagram",
+                        username: instagram.username,
+                        followers: instagram.followerCount,
+                        isVerified: instagram.isVerified,
+                        icon: "camera.fill",
+                        color: Color(red: 0.8, green: 0.3, blue: 0.6)
+                    )
+                }
+                
+                if let tiktok = profile.socialLinks.tiktok {
+                    SocialLinkRow(
+                        platform: "TikTok",
+                        username: tiktok.username,
+                        followers: tiktok.followerCount,
+                        isVerified: tiktok.isVerified,
+                        icon: "music.note",
+                        color: .black
+                    )
+                }
+                
+                if let youtube = profile.socialLinks.youtube {
+                    SocialLinkRow(
+                        platform: "YouTube",
+                        username: youtube.username,
+                        followers: youtube.followerCount,
+                        isVerified: youtube.isVerified,
+                        icon: "play.rectangle.fill",
+                        color: .red
+                    )
+                }
+                
+                if let twitch = profile.socialLinks.twitch {
+                    SocialLinkRow(
+                        platform: "Twitch",
+                        username: twitch.username,
+                        followers: twitch.followerCount,
+                        isVerified: twitch.isVerified,
+                        icon: "videoprojector.fill",
+                        color: Color(red: 0.6, green: 0.4, blue: 0.9)
+                    )
+                }
+            }
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+private struct SocialLinkRow: View {
+    let platform: String
+    let username: String
+    let followers: Int?
+    let isVerified: Bool
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(color)
+                .frame(width: 32)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(platform)
+                        .font(.subheadline.weight(.semibold))
+                    
+                    if isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                    }
+                }
+                
+                Text("@\(username)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            if let followers = followers {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(formatNumber(followers))
+                        .font(.caption.bold())
+                    Text("followers")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Collaboration Details Card
+private struct CollaborationDetailsCard: View {
+    let preferences: UserProfile.CollaborationPreferences
+    
+    var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if profile.mediaURLs.isEmpty {
-                EmptyContentState()
-            } else {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(profile.mediaURLs, id: \.self) { url in
-                        AsyncImage(url: URL(string: url)) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(height: 120)
-                                    .clipped()
-                                    .cornerRadius(12)
-                            default:
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(AppTheme.card)
-                                    .frame(height: 120)
+            Text("Collaboration Details")
+                .font(.headline)
+            
+            // Looking For
+            if !preferences.lookingFor.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Looking For", systemImage: "magnifyingglass")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    
+                    FlowLayout(spacing: 8) {
+                        ForEach(preferences.lookingFor, id: \.self) { type in
+                            Text(type.rawValue)
+                                .font(.caption)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.blue.opacity(0.15), in: Capsule())
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                }
+            }
+            
+            // Availability
+            if !preferences.availability.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Availability", systemImage: "calendar")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    
+                    HStack(spacing: 8) {
+                        ForEach(preferences.availability, id: \.self) { avail in
+                            Text(avail.rawValue.capitalized)
+                                .font(.caption)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.green.opacity(0.15), in: Capsule())
+                                .foregroundStyle(.green)
+                        }
+                    }
+                }
+            }
+            
+            // Response Time
+            HStack(spacing: 8) {
+                Image(systemName: "clock.fill")
+                    .foregroundStyle(.orange)
+                Text(preferences.responseTime.rawValue)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.orange.opacity(0.15), in: Capsule())
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - Activity Timeline Section
+private struct ActivityTimelineSection: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recent Activity")
+                .font(.headline)
+            
+            VStack(spacing: 12) {
+                ActivityTimelineItem(
+                    icon: "heart.fill",
+                    title: "New Match",
+                    subtitle: "Matched with Sarah J.",
+                    time: "2h ago",
+                    color: .pink
+                )
+                
+                ActivityTimelineItem(
+                    icon: "photo.fill",
+                    title: "Content Uploaded",
+                    subtitle: "Added 3 new photos",
+                    time: "5h ago",
+                    color: .blue
+                )
+                
+                ActivityTimelineItem(
+                    icon: "message.fill",
+                    title: "New Message",
+                    subtitle: "From Marcus C.",
+                    time: "1d ago",
+                    color: .green
+                )
+            }
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+private struct ActivityTimelineItem: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let time: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.2))
+                    .frame(width: 40, height: 40)
+                
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundStyle(color)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            Text(time)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Enhanced Edit Profile Sheet
+struct EnhancedEditProfileSheet: View {
+    let profile: UserProfile
+    @ObservedObject var viewModel: ProfileViewModel
+    let onSave: () -> Void
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var displayName: String
+    @State private var bio: String
+    @State private var selectedInterests: Set<String>
+    @State private var selectedContentStyles: Set<UserProfile.ContentStyle>
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isUploading = false
+    
+    let availableInterests = ["Music", "Art", "Gaming", "Fitness", "Travel", "Food", "Tech", "Fashion", "Sports", "Photography"]
+    
+    init(profile: UserProfile, viewModel: ProfileViewModel, onSave: @escaping () -> Void) {
+        self.profile = profile
+        self.viewModel = viewModel
+        self.onSave = onSave
+        _displayName = State(initialValue: profile.displayName)
+        _bio = State(initialValue: profile.bio ?? "")
+        _selectedInterests = State(initialValue: Set(profile.interests))
+        _selectedContentStyles = State(initialValue: Set(profile.contentStyles))
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Profile Photo") {
+                    HStack {
+                        if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
+                            AsyncImage(url: url) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Color.gray
+                            }
+                            .frame(width: 80, height: 80)
+                            .clipShape(Circle())
+                        } else {
+                            InitialsAvatar(name: profile.displayName, size: 80)
+                        }
+                        
+                        Spacer()
+                        
+                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                            Text("Change Photo")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                    }
+                    
+                    if isUploading {
+                        ProgressView("Uploading...")
+                    }
+                }
+                
+                Section("Basic Info") {
+                    TextField("Display Name", text: $displayName)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Bio")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextEditor(text: $bio)
+                            .frame(height: 100)
+                    }
+                }
+                
+                Section("Content Styles") {
+                    ForEach(UserProfile.ContentStyle.allCases, id: \.self) { style in
+                        Toggle(isOn: Binding(
+                            get: { selectedContentStyles.contains(style) },
+                            set: { isOn in
+                                if isOn {
+                                    selectedContentStyles.insert(style)
+                                } else {
+                                    selectedContentStyles.remove(style)
+                                }
+                            }
+                        )) {
+                            HStack {
+                                Image(systemName: style.icon)
+                                Text(style.rawValue)
                             }
                         }
+                        .tint(AppTheme.accent)
+                    }
+                }
+                
+                Section("Interests") {
+                    ForEach(availableInterests, id: \.self) { interest in
+                        Toggle(interest, isOn: Binding(
+                            get: { selectedInterests.contains(interest) },
+                            set: { isOn in
+                                if isOn {
+                                    selectedInterests.insert(interest)
+                                } else {
+                                    selectedInterests.remove(interest)
+                                }
+                            }
+                        ))
+                        .tint(AppTheme.accent)
+                    }
+                }
+            }
+            .navigationTitle("Edit Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            var updated = profile
+                            updated.displayName = displayName
+                            updated.bio = bio.isEmpty ? nil : bio
+                            updated.interests = Array(selectedInterests)
+                            updated.contentStyles = Array(selectedContentStyles)
+                            await viewModel.updateProfile(updated)
+                            Haptics.notify(.success)
+                            onSave()
+                            dismiss()
+                        }
+                    }
+                    .fontWeight(.bold)
+                    .disabled(displayName.isEmpty)
+                }
+            }
+            .onChange(of: selectedPhoto) { _, newValue in
+                guard let newValue else { return }
+                Task {
+                    isUploading = true
+                    defer { isUploading = false }
+                    
+                    if let data = try? await newValue.loadTransferable(type: Data.self),
+                       let compressed = UIImage(data: data)?.jpegData(compressionQuality: 0.7),
+                       let uid = Auth.auth().currentUser?.uid {
+                        await viewModel.updateProfilePhoto(userId: uid, imageData: compressed)
                     }
                 }
             }
@@ -1213,116 +1274,241 @@ private struct ContentTab: View {
     }
 }
 
-private struct EmptyContentState: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "photo.stack")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-            
-            Text("No content yet")
-                .font(.headline)
-            
-            Text("Add photos and videos to showcase your work")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
-    }
-}
-
-// MARK: - Stats Tab
-private struct StatsTab: View {
+// MARK: - Enhanced QR Code Sheet
+struct EnhancedQRCodeSheet: View {
     let profile: UserProfile
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var showShareSheet = false
+    @State private var qrImage: UIImage?
     
     var body: some View {
-        VStack(spacing: 16) {
-            // Engagement Stats
-            SectionCard(title: "Engagement", icon: "chart.line.uptrend.xyaxis") {
-                VStack(spacing: 12) {
-                    StatRow(label: "Avg. Likes", value: "\(Int.random(in: 100...1000))")
-                    StatRow(label: "Avg. Comments", value: "\(Int.random(in: 20...200))")
-                    StatRow(label: "Avg. Shares", value: "\(Int.random(in: 10...100))")
-                    StatRow(label: "Engagement Rate", value: "\(Int.random(in: 5...15))%")
+        NavigationStack {
+            VStack(spacing: 32) {
+                Spacer()
+                
+                Text("Scan to Connect")
+                    .font(.title.bold())
+                
+                // QR Code
+                ZStack {
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(red: 0.4, green: 0.3, blue: 0.8), Color(red: 0.6, green: 0.4, blue: 0.9)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 280, height: 280)
+                        .shadow(color: AppTheme.accent.opacity(0.3), radius: 20, y: 10)
+                    
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(.white)
+                        .frame(width: 240, height: 240)
+                    
+                    Image(systemName: "qrcode")
+                        .font(.system(size: 120))
+                        .foregroundStyle(.black)
                 }
+                
+                VStack(spacing: 8) {
+                    if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Color.gray
+                        }
+                        .frame(width: 60, height: 60)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(.white, lineWidth: 3))
+                        .shadow(radius: 5)
+                    }
+                    
+                    Text(profile.displayName)
+                        .font(.headline)
+                    
+                    Text("@\(profile.uid)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                HStack(spacing: 16) {
+                    Button {
+                        // Download QR
+                        Haptics.impact(.medium)
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("Save")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    
+                    Button {
+                        showShareSheet = true
+                        Haptics.impact(.medium)
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Share")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(AppTheme.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppTheme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+                    }
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 20)
             }
-            
-            // Growth Stats
-            SectionCard(title: "Growth", icon: "arrow.up.right") {
-                VStack(spacing: 12) {
-                    StatRow(label: "This Week", value: "+\(Int.random(in: 50...500))")
-                    StatRow(label: "This Month", value: "+\(Int.random(in: 500...5000))")
-                    StatRow(label: "All Time", value: formatNumber(profile.followerCount))
+            .navigationTitle("QR Code")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
                 }
             }
         }
     }
 }
 
-private struct StatRow: View {
-    let label: String
-    let value: String
-    
-    var body: some View {
-        HStack {
-            Text(label)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .fontWeight(.semibold)
-        }
-        .font(.subheadline)
-    }
-}
-
-// MARK: - Activity Tab
-private struct ActivityTab: View {
+// MARK: - Enhanced Stats Sheet
+struct EnhancedStatsSheet: View {
     let profile: UserProfile
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var selectedPeriod: StatsPeriod = .week
+    
+    enum StatsPeriod: String, CaseIterable {
+        case week = "Week"
+        case month = "Month"
+        case year = "Year"
+        case allTime = "All Time"
+    }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionCard(title: "Recent Activity", icon: "clock.fill") {
-                VStack(spacing: 16) {
-                    ActivityItem(icon: "person.badge.plus", text: "Gained 25 new followers", time: "2h ago")
-                    ActivityItem(icon: "heart.fill", text: "Post received 150 likes", time: "5h ago")
-                    ActivityItem(icon: "message.fill", text: "New collaboration request", time: "1d ago")
-                    ActivityItem(icon: "star.fill", text: "Profile was featured", time: "3d ago")
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Period Selector
+                    Picker("Period", selection: $selectedPeriod) {
+                        ForEach(StatsPeriod.allCases, id: \.self) { period in
+                            Text(period.rawValue).tag(period)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    
+                    // Engagement Stats
+                    StatsSection(title: "Engagement", icon: "chart.line.uptrend.xyaxis") {
+                        VStack(spacing: 12) {
+                            DetailedStatRow(
+                                label: "Profile Views",
+                                value: "\(Int.random(in: 500...5000))",
+                                change: "+12%",
+                                isPositive: true
+                            )
+                            DetailedStatRow(
+                                label: "New Followers",
+                                value: "+\(Int.random(in: 50...500))",
+                                change: "+8%",
+                                isPositive: true
+                            )
+                            DetailedStatRow(
+                                label: "Likes Received",
+                                value: "\(Int.random(in: 100...1000))",
+                                change: "+15%",
+                                isPositive: true
+                            )
+                        }
+                    }
+                    
+                    // Match Stats
+                    StatsSection(title: "Matches", icon: "heart.fill") {
+                        VStack(spacing: 12) {
+                            DetailedStatRow(
+                                label: "Total Matches",
+                                value: "\(Int.random(in: 10...100))",
+                                change: "+5%",
+                                isPositive: true
+                            )
+                            DetailedStatRow(
+                                label: "Match Rate",
+                                value: "24%",
+                                change: "+3%",
+                                isPositive: true
+                            )
+                            DetailedStatRow(
+                                label: "Messages Sent",
+                                value: "\(Int.random(in: 50...500))",
+                                change: "+10%",
+                                isPositive: true
+                            )
+                        }
+                    }
+                    
+                    // Content Stats
+                    StatsSection(title: "Content", icon: "photo.stack.fill") {
+                        VStack(spacing: 12) {
+                            DetailedStatRow(
+                                label: "Total Photos",
+                                value: "\(profile.mediaURLs.count)",
+                                change: "+2",
+                                isPositive: true
+                            )
+                            DetailedStatRow(
+                                label: "Avg. Likes per Photo",
+                                value: "\(Int.random(in: 50...200))",
+                                change: "+18%",
+                                isPositive: true
+                            )
+                        }
+                    }
+                    
+                    // Growth Chart Placeholder
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Growth Overview")
+                            .font(.headline)
+                        
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(AppTheme.gradient.opacity(0.3))
+                            .frame(height: 200)
+                            .overlay(
+                                VStack {
+                                    Image(systemName: "chart.bar.fill")
+                                        .font(.system(size: 50))
+                                        .foregroundStyle(.white)
+                                    Text("Chart Coming Soon")
+                                        .font(.caption)
+                                        .foregroundStyle(.white)
+                                }
+                            )
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical)
+            }
+            .background(AppTheme.bg)
+            .navigationTitle("Analytics")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
                 }
             }
         }
     }
 }
 
-private struct ActivityItem: View {
-    let icon: String
-    let text: String
-    let time: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(AppTheme.accent)
-                .frame(width: 40, height: 40)
-                .background(AppTheme.accent.opacity(0.15), in: Circle())
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(text)
-                    .font(.subheadline)
-                Text(time)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-        }
-    }
-}
-
-// MARK: - Section Components
-private struct SectionCard<Content: View>: View {
+private struct StatsSection<Content: View>: View {
     let title: String
     let icon: String
     let content: Content
@@ -1334,138 +1520,173 @@ private struct SectionCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .foregroundStyle(AppTheme.accent)
-                Text(title)
-                    .font(.headline)
-            }
+        VStack(alignment: .leading, spacing: 16) {
+            Label(title, systemImage: icon)
+                .font(.headline)
+                .foregroundStyle(AppTheme.accent)
             
             content
         }
         .padding()
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal)
     }
 }
 
-private struct SocialLinksSection: View {
-    let profile: UserProfile
+private struct DetailedStatRow: View {
+    let label: String
+    let value: String
+    let change: String
+    let isPositive: Bool
     
     var body: some View {
-        SectionCard(title: "Social Links", icon: "link") {
-            VStack(spacing: 12) {
-                if let ig = profile.socialLinks.instagram {
-                    SocialLinkRow(platform: "Instagram", username: ig.username, icon: "camera", verified: ig.isVerified)
-                }
-                if let tt = profile.socialLinks.tiktok {
-                    SocialLinkRow(platform: "TikTok", username: tt.username, icon: "music.note", verified: tt.isVerified)
-                }
-                if let yt = profile.socialLinks.youtube {
-                    SocialLinkRow(platform: "YouTube", username: yt.username, icon: "play.rectangle", verified: yt.isVerified)
-                }
-                if let tw = profile.socialLinks.twitch {
-                    SocialLinkRow(platform: "Twitch", username: tw.username, icon: "gamecontroller", verified: tw.isVerified)
-                }
-            }
-        }
-    }
-}
-
-private struct SocialLinkRow: View {
-    let platform: String
-    let username: String
-    let icon: String
-    let verified: Bool
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(AppTheme.accent)
-                .frame(width: 24)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(platform)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 4) {
-                    Text("@\(username)")
-                        .font(.subheadline)
-                    if verified {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                    }
-                }
-            }
+        HStack {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             
             Spacer()
             
-            Button {
-                // Open social link
-            } label: {
-                Image(systemName: "arrow.up.right")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(value)
+                    .font(.headline)
+                
+                HStack(spacing: 2) {
+                    Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
+                        .font(.caption2)
+                    Text(change)
+                        .font(.caption2)
+                }
+                .foregroundStyle(isPositive ? .green : .red)
             }
         }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
-private struct CollabPreferencesSection: View {
+// MARK: - Profile Preview View
+struct ProfilePreviewView: View {
     let profile: UserProfile
+    @Environment(\.dismiss) var dismiss
     
     var body: some View {
-        SectionCard(title: "Collaboration", icon: "person.2.fill") {
-            VStack(alignment: .leading, spacing: 12) {
-                if !profile.collaborationPreferences.lookingFor.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Looking For")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        FlowLayout(spacing: 8) {
-                            ForEach(profile.collaborationPreferences.lookingFor, id: \.self) { type in
-                                Text(type.rawValue)
-                                    .font(.caption)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(AppTheme.accent.opacity(0.15), in: Capsule())
-                                    .foregroundStyle(AppTheme.accent)
-                            }
+        NavigationStack {
+            ProfileDetailView(profile: profile)
+                .navigationTitle("Preview")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Done") {
+                            dismiss()
                         }
                     }
                 }
-                
-                HStack {
-                    Image(systemName: "clock")
-                        .foregroundStyle(.secondary)
-                    Text(profile.collaborationPreferences.responseTime.rawValue)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
         }
     }
 }
 
-// MARK: - Loading & Guest Views
-private struct LoadingProfileScreen: View {
-    var body: some View {
-        VStack(spacing: 20) {
-            ProgressView()
-                .scaleEffect(1.5)
-                .tint(AppTheme.accent)
-            Text("Loading profile...")
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppTheme.bg)
-    }
-}
-
-private struct PremiumGuestView: View {
-    @EnvironmentObject var auth: AuthViewModel
+// MARK: - Achievement Detail Sheet
+struct AchievementDetailSheet: View {
+    let achievement: Achievement
+    let profile: UserProfile
+    @Environment(\.dismiss) var dismiss
     
+    var isUnlocked: Bool {
+        achievement.isUnlocked(for: profile)
+    }
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 32) {
+                Spacer()
+                
+                ZStack {
+                    Circle()
+                        .fill(isUnlocked ? achievement.color.opacity(0.2) : Color.gray.opacity(0.2))
+                        .frame(width: 150, height: 150)
+                    
+                    Image(systemName: achievement.icon)
+                        .font(.system(size: 60))
+                        .foregroundStyle(isUnlocked ? achievement.color : .gray)
+                        .symbolEffect(.bounce, value: isUnlocked)
+                }
+                
+                VStack(spacing: 12) {
+                    Text(achievement.title)
+                        .font(.title.bold())
+                    
+                    Text(achievement.description)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                
+                if isUnlocked {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text("Unlocked!")
+                            .font(.headline)
+                            .foregroundStyle(.green)
+                    }
+                    .padding()
+                    .background(Color.green.opacity(0.15), in: Capsule())
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.fill")
+                            .foregroundStyle(.gray)
+                        Text("Not Yet Unlocked")
+                            .font(.headline)
+                            .foregroundStyle(.gray)
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.15), in: Capsule())
+                }
+                
+                Spacer()
+                
+                Button("Close") {
+                    dismiss()
+                }
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 32)
+                .padding(.bottom, 20)
+            }
+            .navigationTitle("Achievement")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+// MARK: - Success Banner
+struct SuccessBanner: View {
+    let message: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            
+            Text(message)
+                .font(.subheadline.weight(.semibold))
+            
+            Spacer()
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(radius: 10)
+        .padding(.horizontal)
+    }
+}
+
+// MARK: - Guest View
+private struct PremiumGuestView: View {
     var body: some View {
         ZStack {
             AppTheme.gradient.ignoresSafeArea()
@@ -1473,29 +1694,30 @@ private struct PremiumGuestView: View {
             VStack(spacing: 32) {
                 Spacer()
                 
-                VStack(spacing: 16) {
-                    Image(systemName: "person.circle.fill")
+                VStack(spacing: 20) {
+                    Image(systemName: "person.crop.circle.fill")
                         .font(.system(size: 100))
                         .foregroundStyle(.white)
                         .shadow(radius: 20)
                     
-                    VStack(spacing: 8) {
-                        Text("Join FEATUR")
-                            .font(.largeTitle.bold())
-                            .foregroundStyle(.white)
-                        
-                        Text("Connect with creators, collaborate, and grow")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.9))
-                            .multilineTextAlignment(.center)
-                    }
+                    Text("Welcome to FEATUR")
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    
+                    Text("Connect with creators and grow your network")
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
                 }
                 
+                Spacer()
+                
                 VStack(spacing: 16) {
-                    FeatureRow(icon: "person.3.fill", text: "Match with creators")
-                    FeatureRow(icon: "message.fill", text: "Direct messaging")
-                    FeatureRow(icon: "star.fill", text: "Get featured")
-                    FeatureRow(icon: "chart.line.uptrend.xyaxis", text: "Track your growth")
+                    FeatureRow(icon: "heart.fill", text: "Match with creators like you")
+                    FeatureRow(icon: "bubble.left.and.bubble.right.fill", text: "Collaborate on projects")
+                    FeatureRow(icon: "star.fill", text: "Grow your following")
+                    FeatureRow(icon: "chart.line.uptrend.xyaxis", text: "Track your progress")
                 }
                 .padding(.horizontal, 40)
                 
@@ -1504,7 +1726,7 @@ private struct PremiumGuestView: View {
                 NavigationLink {
                     LoginView(navigationPath: .constant(NavigationPath()))
                 } label: {
-                    Text("Sign In")
+                    Text("Get Started")
                         .font(.headline)
                         .foregroundStyle(AppTheme.accent)
                         .frame(maxWidth: .infinity)
@@ -1535,6 +1757,25 @@ private struct FeatureRow: View {
     }
 }
 
+// MARK: - Loading Screen
+private struct LoadingProfileScreen: View {
+    var body: some View {
+        ZStack {
+            AppTheme.bg.ignoresSafeArea()
+            
+            VStack(spacing: 20) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(AppTheme.accent)
+                
+                Text("Loading Profile...")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
 // MARK: - Helper Views
 private struct InitialsAvatar: View {
     let name: String
@@ -1543,7 +1784,7 @@ private struct InitialsAvatar: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [.purple, .pink],
+                colors: [AppTheme.accent, .purple],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -1554,156 +1795,73 @@ private struct InitialsAvatar: View {
                 .font(.system(size: size * 0.4, weight: .bold))
                 .foregroundStyle(.white)
         }
-        .overlay(Circle().stroke(.white, lineWidth: 4))
         .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
     }
 }
 
-// MARK: - Sheets
-struct EditProfileSheet: View {
-    let profile: UserProfile
-    @ObservedObject var viewModel: ProfileViewModel
-    @Environment(\.dismiss) var dismiss
-    @State private var displayName: String
-    @State private var bio: String
-    @State private var selectedPhoto: PhotosPickerItem?
+private struct AnimatedGradientBackground: View {
+    let animate: Bool
     
-    init(profile: UserProfile, viewModel: ProfileViewModel) {
-        self.profile = profile
-        self.viewModel = viewModel
-        _displayName = State(initialValue: profile.displayName)
-        _bio = State(initialValue: profile.bio ?? "")
+    var body: some View {
+        LinearGradient(
+            colors: [
+                Color(red: animate ? 0.4 : 0.5, green: 0.3, blue: animate ? 0.8 : 0.7),
+                Color(red: animate ? 0.6 : 0.5, green: 0.4, blue: animate ? 0.9 : 1.0)
+            ],
+            startPoint: animate ? .topLeading : .bottomLeading,
+            endPoint: animate ? .bottomTrailing : .topTrailing
+        )
+    }
+}
+
+private struct ParticleEffectView: View {
+    @State private var particles: [Particle] = []
+    
+    struct Particle: Identifiable {
+        let id = UUID()
+        var x: CGFloat
+        var y: CGFloat
+        var size: CGFloat
+        var opacity: Double
     }
     
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Basic Info") {
-                    TextField("Display Name", text: $displayName)
-                    TextField("Bio", text: $bio, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-                
-                Section("Profile Photo") {
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        HStack {
-                            if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
-                                AsyncImage(url: url) { image in
-                                    image.resizable().scaledToFill()
-                                } placeholder: {
-                                    Color.gray
-                                }
-                                .frame(width: 60, height: 60)
-                                .clipShape(Circle())
-                            }
-                            Text("Change Photo")
-                        }
-                    }
+        GeometryReader { geo in
+            ZStack {
+                ForEach(particles) { particle in
+                    Circle()
+                        .fill(.white.opacity(particle.opacity))
+                        .frame(width: particle.size, height: particle.size)
+                        .position(x: particle.x, y: particle.y)
+                        .blur(radius: 2)
                 }
             }
-            .navigationTitle("Edit Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task {
-                            var updated = profile
-                            updated.displayName = displayName
-                            updated.bio = bio
-                            await viewModel.updateProfile(updated)
-                            dismiss()
-                        }
-                    }
-                }
+            .onAppear {
+                generateParticles(in: geo.size)
             }
+        }
+    }
+    
+    func generateParticles(in size: CGSize) {
+        particles = (0..<20).map { _ in
+            Particle(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height),
+                size: CGFloat.random(in: 2...6),
+                opacity: Double.random(in: 0.1...0.3)
+            )
         }
     }
 }
 
-struct QRCodeSheet: View {
-    let profile: UserProfile
-    @Environment(\.dismiss) var dismiss
+private struct BlurView: UIViewRepresentable {
+    let style: UIBlurEffect.Style
     
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 32) {
-                Text("Scan to connect")
-                    .font(.title2.bold())
-                
-                // Placeholder QR Code
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(AppTheme.gradient)
-                    .frame(width: 250, height: 250)
-                    .overlay(
-                        Image(systemName: "qrcode")
-                            .font(.system(size: 100))
-                            .foregroundStyle(.white)
-                    )
-                
-                Text(profile.displayName)
-                    .font(.headline)
-                
-                Button("Share QR Code") {
-                    // Share functionality
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(AppTheme.accent)
-            }
-            .padding()
-            .navigationTitle("QR Code")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        UIVisualEffectView(effect: UIBlurEffect(style: style))
     }
-}
-
-struct DetailedStatsSheet: View {
-    let profile: UserProfile
-    @Environment(\.dismiss) var dismiss
     
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Monthly Stats
-                    SectionCard(title: "This Month", icon: "calendar") {
-                        VStack(spacing: 12) {
-                            StatRow(label: "New Followers", value: "+\(Int.random(in: 100...1000))")
-                            StatRow(label: "Total Likes", value: "\(Int.random(in: 1000...10000))")
-                            StatRow(label: "Profile Views", value: "\(Int.random(in: 500...5000))")
-                            StatRow(label: "Matches", value: "\(Int.random(in: 5...50))")
-                        }
-                    }
-                    
-                    // All Time Stats
-                    SectionCard(title: "All Time", icon: "infinity") {
-                        VStack(spacing: 12) {
-                            StatRow(label: "Total Followers", value: formatNumber(profile.followerCount))
-                            StatRow(label: "Total Matches", value: "\(Int.random(in: 50...500))")
-                            StatRow(label: "Messages Sent", value: "\(Int.random(in: 100...1000))")
-                            StatRow(label: "Collaborations", value: "\(Int.random(in: 5...50))")
-                        }
-                    }
-                }
-                .padding()
-            }
-            .background(AppTheme.bg)
-            .navigationTitle("Analytics")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
+    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
 }
 
 // MARK: - Scroll Offset Key
