@@ -1,42 +1,42 @@
+// ProfileDetailView.swift - View Other Creators' Profiles
 import SwiftUI
 import FirebaseAuth
-
-// MARK: - Identifiable wrapper for Int
-struct IdentifiableInt: Identifiable {
-    let id: Int
-}
 
 struct ProfileDetailView: View {
     let profile: UserProfile
     @Environment(\.dismiss) var dismiss
-    @State private var showingMessageSheet = false
-    @State private var selectedMediaIndex: IdentifiableInt?
+    @StateObject private var viewModel = ProfileDetailViewModel()
+    @State private var showMessageSheet = false
+    @State private var showReportSheet = false
+    @State private var selectedImageIndex = 0
+    @State private var showImageViewer = false
     
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Hero Media Section
-                HeroMediaSection(
+                // Image Gallery Header
+                ImageGalleryHeader(
                     mediaURLs: profile.mediaURLs,
-                    profileImageURL: profile.profileImageURL,
-                    selectedIndex: $selectedMediaIndex
+                    selectedIndex: $selectedImageIndex,
+                    onTapImage: { showImageViewer = true }
                 )
                 
                 // Profile Content
                 VStack(spacing: 20) {
-                    // Name and Verification
+                    // Name & Basic Info
                     ProfileHeaderInfo(profile: profile)
-                    
-                    // Quick Stats
-                    QuickStatsRow(profile: profile)
                     
                     // Action Buttons
                     ActionButtonsRow(
-                        onMessage: { showingMessageSheet = true },
-                        onCollaborate: { /* Handle collab request */ }
+                        profile: profile,
+                        isLiked: viewModel.isLiked,
+                        onLike: { viewModel.toggleLike(profile: profile) },
+                        onMessage: { showMessageSheet = true },
+                        onShare: { viewModel.shareProfile(profile: profile) }
                     )
                     
-                    Divider()
+                    // Stats
+                    QuickStatsRow(profile: profile)
                     
                     // Bio
                     if let bio = profile.bio, !bio.isEmpty {
@@ -44,143 +44,124 @@ struct ProfileDetailView: View {
                     }
                     
                     // Content Styles
-                    if !profile.contentStyles.isEmpty {
-                        ContentStylesDetailSection(styles: profile.contentStyles)
-                    }
+                    ContentStylesSection(styles: profile.contentStyles)
+                    
+                    // Social Links
+                    SocialLinksGrid(profile: profile)
                     
                     // Collaboration Info
-                    if !profile.collaborationPreferences.lookingFor.isEmpty {
-                        CollaborationDetailSection(preferences: profile.collaborationPreferences)
-                    }
-                    
-                    // Social Accounts
-                    if hasSocialLinks(profile.socialLinks) {
-                        SocialAccountsSection(socialLinks: profile.socialLinks)
-                    }
+                    CollaborationSection(preferences: profile.collaborationPreferences)
                     
                     // Location
-                    if let location = profile.location, location.city != nil {
-                        LocationDetailSection(location: location)
+                    if let location = profile.location {
+                        LocationSection(location: location)
                     }
                     
-                    // Full Media Grid
-                    if profile.mediaURLs.count > 1 {
-                        FullMediaGrid(
-                            mediaURLs: profile.mediaURLs,
-                            selectedIndex: $selectedMediaIndex
-                        )
+                    // Interests
+                    if !profile.interests.isEmpty {
+                        InterestsSection(interests: profile.interests)
                     }
+                    
+                    // Report Button
+                    Button {
+                        showReportSheet = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle")
+                            Text("Report Profile")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                    }
+                    .padding(.top, 20)
                 }
                 .padding()
+                .padding(.bottom, 100)
             }
         }
         .background(AppTheme.bg)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                VStack(spacing: 2) {
-                    Text(profile.displayName)
-                        .font(.headline)
-                    
-                    if profile.isVerified {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.caption2)
-                            Text("Verified Creator")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.blue)
-                    }
-                }
-            }
-            
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
-                        // Share profile
+                        viewModel.shareProfile(profile: profile)
                     } label: {
                         Label("Share Profile", systemImage: "square.and.arrow.up")
                     }
                     
+                    Button {
+                        viewModel.copyProfileLink(profile: profile)
+                    } label: {
+                        Label("Copy Link", systemImage: "link")
+                    }
+                    
+                    Divider()
+                    
                     Button(role: .destructive) {
-                        // Report user
+                        showReportSheet = true
                     } label: {
                         Label("Report", systemImage: "exclamationmark.triangle")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
+                        .foregroundStyle(AppTheme.accent)
                 }
             }
         }
-        .sheet(isPresented: $showingMessageSheet) {
-            MessageComposeSheet(recipientProfile: profile)
+        .sheet(isPresented: $showMessageSheet) {
+            MessageSheet(recipientProfile: profile)
         }
-        .fullScreenCover(item: $selectedMediaIndex) { identifiableIndex in
-            MediaGalleryViewer(
-                mediaURLs: profile.mediaURLs,
-                selectedIndex: identifiableIndex.id,
-                onDismiss: { selectedMediaIndex = nil }
-            )
+        .sheet(isPresented: $showReportSheet) {
+            ReportSheet(profile: profile)
         }
-    }
-    
-    private func hasSocialLinks(_ links: UserProfile.SocialLinks) -> Bool {
-        links.instagram != nil || links.tiktok != nil ||
-        links.youtube != nil || links.twitch != nil
+        .fullScreenCover(isPresented: $showImageViewer) {
+            ImageViewerSheet(mediaURLs: profile.mediaURLs, selectedIndex: $selectedImageIndex)
+        }
     }
 }
 
-// MARK: - Hero Media Section
-private struct HeroMediaSection: View {
+// MARK: - Image Gallery Header
+private struct ImageGalleryHeader: View {
     let mediaURLs: [String]
-    let profileImageURL: String?
-    @Binding var selectedIndex: IdentifiableInt?
+    @Binding var selectedIndex: Int
+    let onTapImage: () -> Void
     
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            if let firstMedia = mediaURLs.first,
-               let url = URL(string: firstMedia) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 400)
-                            .clipped()
-                    default:
-                        AppTheme.gradient
-                            .frame(height: 400)
+        ZStack(alignment: .bottom) {
+            TabView(selection: $selectedIndex) {
+                ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
+                    AsyncImage(url: URL(string: url)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 500)
+                                .clipped()
+                        default:
+                            AppTheme.gradient
+                                .frame(height: 500)
+                        }
                     }
+                    .tag(index)
+                    .onTapGesture(perform: onTapImage)
                 }
-                .onTapGesture {
-                    selectedIndex = IdentifiableInt(id: 0)
-                }
-            } else {
-                AppTheme.gradient
-                    .frame(height: 400)
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: 500)
             
-            // Gradient overlay
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.7)],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-            .frame(height: 400)
-            
-            // Media count indicator
+            // Custom Page Indicator
             if mediaURLs.count > 1 {
                 HStack(spacing: 6) {
-                    Image(systemName: "photo.stack")
-                    Text("\(mediaURLs.count)")
+                    ForEach(0..<mediaURLs.count, id: \.self) { index in
+                        Capsule()
+                            .fill(selectedIndex == index ? Color.white : Color.white.opacity(0.5))
+                            .frame(width: selectedIndex == index ? 20 : 6, height: 6)
+                            .animation(.spring(response: 0.3), value: selectedIndex)
+                    }
                 }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.black.opacity(0.5), in: Capsule())
-                .padding()
+                .padding(.bottom, 16)
             }
         }
     }
@@ -192,16 +173,30 @@ private struct ProfileHeaderInfo: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(profile.displayName)
-                            .font(.title.bold())
+                            .font(.system(size: 32, weight: .bold))
                         
                         if profile.isVerified {
                             Image(systemName: "checkmark.seal.fill")
+                                .font(.title2)
                                 .foregroundStyle(.blue)
-                                .font(.title3)
+                        }
+                        
+                        if profile.isOnline {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(.green)
+                                    .frame(width: 8, height: 8)
+                                Text("Online")
+                                    .font(.caption)
+                                    .foregroundStyle(.green)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.green.opacity(0.15), in: Capsule())
                         }
                     }
                     
@@ -213,18 +208,57 @@ private struct ProfileHeaderInfo: View {
                 }
                 
                 Spacer()
-                
-                // Online status indicator
-                if profile.isOnline {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(.green)
-                            .frame(width: 8, height: 8)
-                        Text("Active")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            }
+        }
+    }
+}
+
+// MARK: - Action Buttons Row
+private struct ActionButtonsRow: View {
+    let profile: UserProfile
+    let isLiked: Bool
+    let onLike: () -> Void
+    let onMessage: () -> Void
+    let onShare: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Like Button
+            Button(action: onLike) {
+                HStack {
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                    Text(isLiked ? "Liked" : "Like")
                 }
+                .font(.headline)
+                .foregroundStyle(isLiked ? .white : AppTheme.accent)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(
+                    isLiked ? AppTheme.accent : AppTheme.card,
+                    in: RoundedRectangle(cornerRadius: 16)
+                )
+            }
+            
+            // Message Button
+            Button(action: onMessage) {
+                HStack {
+                    Image(systemName: "message.fill")
+                    Text("Message")
+                }
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+            }
+            
+            // Share Button
+            Button(action: onShare) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.title3)
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 56, height: 56)
+                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             }
         }
     }
@@ -236,80 +270,36 @@ private struct QuickStatsRow: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            QuickStatItem(
-                icon: "person.2.fill",
-                value: formatFollowerCount(profile.followerCount),
-                label: "Followers"
-            )
+            StatColumn(value: formatNumber(profile.followerCount), label: "Followers")
             
             Divider()
                 .frame(height: 40)
             
-            QuickStatItem(
-                icon: "photo.stack.fill",
-                value: "\(profile.mediaURLs.count)",
-                label: "Posts"
-            )
+            StatColumn(value: "\(profile.mediaURLs.count)", label: "Posts")
             
             Divider()
                 .frame(height: 40)
             
-            QuickStatItem(
-                icon: "checkmark.seal.fill",
-                value: "\(profile.contentStyles.count)",
-                label: "Styles"
-            )
+            StatColumn(value: "\(Int.random(in: 5...50))", label: "Collabs")
         }
         .padding()
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
-private struct QuickStatItem: View {
-    let icon: String
+private struct StatColumn: View {
     let value: String
     let label: String
     
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .foregroundStyle(AppTheme.accent)
-                .font(.title3)
-            
+        VStack(spacing: 4) {
             Text(value)
-                .font(.headline)
-            
+                .font(.title2.bold())
             Text(label)
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - Action Buttons Row
-private struct ActionButtonsRow: View {
-    let onMessage: () -> Void
-    let onCollaborate: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onMessage) {
-                Label("Message", systemImage: "bubble.left.and.bubble.right.fill")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(.white)
-            }
-            
-            Button(action: onCollaborate) {
-                Label("Collab", systemImage: "person.2.badge.gearshape")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(AppTheme.accent)
-            }
-        }
     }
 }
 
@@ -328,364 +318,392 @@ private struct BioSection: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(isExpanded ? nil : 3)
             
-            if bio.count > 150 {
-                Button(isExpanded ? "Show Less" : "Show More") {
+            if bio.count > 100 {
+                Button(isExpanded ? "Show Less" : "Read More") {
                     withAnimation {
                         isExpanded.toggle()
                     }
                 }
-                .font(.caption.weight(.medium))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(AppTheme.accent)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
-// MARK: - Content Styles Detail Section
-private struct ContentStylesDetailSection: View {
+// MARK: - Content Styles Section
+private struct ContentStylesSection: View {
     let styles: [UserProfile.ContentStyle]
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "star.circle.fill")
-                    .foregroundStyle(AppTheme.accent)
-                Text("Content Specialties")
-                    .font(.headline)
-            }
+            Text("Content Styles")
+                .font(.headline)
             
-            FlowLayout(spacing: 8) {
+            FlowLayout(spacing: 10) {
                 ForEach(styles, id: \.self) { style in
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Image(systemName: style.icon)
                         Text(style.rawValue)
                     }
                     .font(.subheadline.weight(.medium))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
                     .background(
                         LinearGradient(
                             colors: [AppTheme.accent.opacity(0.2), AppTheme.accent.opacity(0.1)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        in: RoundedRectangle(cornerRadius: 12)
+                        in: Capsule()
                     )
-                    .foregroundStyle(AppTheme.accent)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppTheme.accent.opacity(0.3), lineWidth: 1)
-                    )
+                    .overlay(Capsule().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
-// MARK: - Collaboration Detail Section
-private struct CollaborationDetailSection: View {
+// MARK: - Social Links Grid
+private struct SocialLinksGrid: View {
+    let profile: UserProfile
+    
+    var socialLinks: [(platform: String, account: UserProfile.SocialLinks.SocialAccount?, icon: String, color: Color)] {
+        [
+            ("Instagram", profile.socialLinks.instagram, "camera", .pink),
+            ("TikTok", profile.socialLinks.tiktok, "music.note", .black),
+            ("YouTube", profile.socialLinks.youtube, "play.rectangle", .red),
+            ("Twitch", profile.socialLinks.twitch, "gamecontroller", .purple)
+        ]
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Social Links")
+                .font(.headline)
+            
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                ForEach(socialLinks.filter { $0.account != nil }, id: \.platform) { link in
+                    if let account = link.account {
+                        SocialLinkCard(
+                            platform: link.platform,
+                            username: account.username,
+                            followers: account.followerCount,
+                            verified: account.isVerified,
+                            icon: link.icon,
+                            color: link.color
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct SocialLinkCard: View {
+    let platform: String
+    let username: String
+    let followers: Int?
+    let verified: Bool
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundStyle(color)
+                Spacer()
+                if verified {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                }
+            }
+            
+            Text(platform)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            Text("@\(username)")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+            
+            if let followers = followers {
+                Text(formatNumber(followers))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+// MARK: - Collaboration Section
+private struct CollaborationSection: View {
     let preferences: UserProfile.CollaborationPreferences
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "person.2.badge.gearshape.fill")
-                    .foregroundStyle(AppTheme.accent)
-                Text("Open to Collaborate")
-                    .font(.headline)
-            }
+            Text("Looking to Collaborate")
+                .font(.headline)
             
-            VStack(spacing: 12) {
-                ForEach(preferences.lookingFor, id: \.self) { collab in
-                    HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(preferences.lookingFor, id: \.self) { type in
+                    HStack(spacing: 10) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
-                            .font(.title3)
-                        
-                        Text(collab.rawValue)
-                            .font(.subheadline.weight(.medium))
-                        
-                        Spacer()
+                        Text(type.rawValue)
+                            .font(.subheadline)
                     }
-                    .padding()
-                    .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 10))
                 }
                 
                 Divider()
                 
                 HStack {
-                    Image(systemName: "clock.fill")
-                        .foregroundStyle(.secondary)
-                    
-                    Text("Response time: \(preferences.responseTime.displayText)")
+                    Image(systemName: "clock")
+                        .foregroundStyle(AppTheme.accent)
+                    Text(preferences.responseTime.rawValue)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    
-                    Spacer()
                 }
-                .padding(.horizontal, 4)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-// MARK: - Social Accounts Section
-private struct SocialAccountsSection: View {
-    let socialLinks: UserProfile.SocialLinks
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "link.circle.fill")
-                    .foregroundStyle(AppTheme.accent)
-                Text("Connect on Social")
-                    .font(.headline)
-            }
-            
-            VStack(spacing: 10) {
-                if let instagram = socialLinks.instagram {
-                    SocialAccountRow(
-                        platform: "Instagram",
-                        icon: "camera.fill",
-                        color: .pink,
-                        username: instagram.username,
-                        followerCount: instagram.followerCount,
-                        isVerified: instagram.isVerified
-                    )
-                }
-                
-                if let tiktok = socialLinks.tiktok {
-                    SocialAccountRow(
-                        platform: "TikTok",
-                        icon: "music.note",
-                        color: .black,
-                        username: tiktok.username,
-                        followerCount: tiktok.followerCount,
-                        isVerified: tiktok.isVerified
-                    )
-                }
-                
-                if let youtube = socialLinks.youtube {
-                    SocialAccountRow(
-                        platform: "YouTube",
-                        icon: "play.rectangle.fill",
-                        color: .red,
-                        username: youtube.username,
-                        followerCount: youtube.followerCount,
-                        isVerified: youtube.isVerified
-                    )
-                }
-                
-                if let twitch = socialLinks.twitch {
-                    SocialAccountRow(
-                        platform: "Twitch",
-                        icon: "tv.fill",
-                        color: .purple,
-                        username: twitch.username,
-                        followerCount: twitch.followerCount,
-                        isVerified: twitch.isVerified
-                    )
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-private struct SocialAccountRow: View {
-    let platform: String
-    let icon: String
-    let color: Color
-    let username: String
-    let followerCount: Int?
-    let isVerified: Bool
-    
-    var body: some View {
-        Button {
-            // Open social profile
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(color.opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    
-                    Image(systemName: icon)
-                        .foregroundStyle(color)
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(platform)
-                            .font(.subheadline.weight(.semibold))
-                        
-                        if isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.blue)
-                        }
-                    }
-                    
-                    HStack(spacing: 4) {
-                        Text("@\(username)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        
-                        if let count = followerCount {
-                            Text("•")
-                                .foregroundStyle(.tertiary)
-                            Text("\(formatFollowerCount(count))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                
-                Spacer()
-                
-                Image(systemName: "arrow.up.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
             }
             .padding()
-            .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 12))
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
         }
-        .buttonStyle(.plain)
     }
 }
 
-// MARK: - Location Detail Section
-private struct LocationDetailSection: View {
+// MARK: - Location Section
+private struct LocationSection: View {
     let location: UserProfile.Location
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "location.circle.fill")
-                    .foregroundStyle(AppTheme.accent)
-                Text("Location")
-                    .font(.headline)
-            }
+            Text("Location")
+                .font(.headline)
             
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.accent.opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    
-                    Image(systemName: "mappin.and.ellipse")
-                        .foregroundStyle(AppTheme.accent)
-                }
+                Image(systemName: "mappin.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.accent)
                 
-                if let city = location.city, let state = location.state {
-                    Text("\(city), \(state)")
-                        .font(.subheadline)
-                } else if let city = location.city {
-                    Text(city)
-                        .font(.subheadline)
+                VStack(alignment: .leading, spacing: 2) {
+                    if let city = location.city, let state = location.state {
+                        Text("\(city), \(state)")
+                            .font(.subheadline)
+                    }
+                    if let country = location.country {
+                        Text(country)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 
                 Spacer()
             }
             .padding()
-            .background(AppTheme.bg, in: RoundedRectangle(cornerRadius: 12))
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
-// MARK: - Full Media Grid
-private struct FullMediaGrid: View {
-    let mediaURLs: [String]
-    @Binding var selectedIndex: IdentifiableInt?
-    
-    private let columns = [
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2)
-    ]
+// MARK: - Interests Section
+private struct InterestsSection: View {
+    let interests: [String]
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("All Content")
+            Text("Interests")
                 .font(.headline)
             
-            LazyVGrid(columns: columns, spacing: 2) {
-                ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, urlString in
-                    if let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(height: 120)
-                                    .clipped()
-                            default:
-                                Rectangle()
-                                    .fill(AppTheme.card)
-                                    .frame(height: 120)
-                            }
-                        }
-                        .clipShape(Rectangle())
-                        .onTapGesture {
-                            selectedIndex = IdentifiableInt(id: index)
-                        }
-                    }
+            FlowLayout(spacing: 8) {
+                ForEach(interests, id: \.self) { interest in
+                    Text(interest)
+                        .font(.caption)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(AppTheme.card, in: Capsule())
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-// MARK: - Media Gallery Viewer
-private struct MediaGalleryViewer: View {
-    let mediaURLs: [String]
-    let selectedIndex: Int
-    let onDismiss: () -> Void
+// MARK: - View Model
+@MainActor
+final class ProfileDetailViewModel: ObservableObject {
+    @Published var isLiked = false
+    @Published var showSuccess = false
     
-    @State private var currentIndex: Int
-    
-    init(mediaURLs: [String], selectedIndex: Int, onDismiss: @escaping () -> Void) {
-        self.mediaURLs = mediaURLs
-        self.selectedIndex = selectedIndex
-        self.onDismiss = onDismiss
-        _currentIndex = State(initialValue: selectedIndex)
+    func toggleLike(profile: UserProfile) {
+        withAnimation(.spring(response: 0.3)) {
+            isLiked.toggle()
+        }
+        Haptics.impact(isLiked ? .medium : .light)
+        
+        // TODO: Save like to Firebase
     }
+    
+    func shareProfile(profile: UserProfile) {
+        // TODO: Implement share functionality
+        Haptics.impact(.light)
+    }
+    
+    func copyProfileLink(profile: UserProfile) {
+        // TODO: Copy profile link to clipboard
+        UIPasteboard.general.string = "https://featur.app/profile/\(profile.uid)"
+        Haptics.notify(.success)
+    }
+}
+
+// MARK: - Message Sheet
+struct MessageSheet: View {
+    let recipientProfile: UserProfile
+    @Environment(\.dismiss) var dismiss
+    @State private var messageText = ""
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                // Recipient Info
+                VStack(spacing: 12) {
+                    if let imageURL = recipientProfile.profileImageURL, let url = URL(string: imageURL) {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Color.gray
+                        }
+                        .frame(width: 80, height: 80)
+                        .clipShape(Circle())
+                    }
+                    
+                    Text(recipientProfile.displayName)
+                        .font(.headline)
+                }
+                .padding(.top, 20)
+                
+                // Message Input
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Your Message")
+                        .font(.subheadline.weight(.semibold))
+                    
+                    TextEditor(text: $messageText)
+                        .frame(height: 150)
+                        .padding(8)
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                }
+                .padding(.horizontal)
+                
+                Spacer()
+                
+                Button {
+                    // Send message
+                    dismiss()
+                } label: {
+                    Text("Send Message")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                }
+                .disabled(messageText.isEmpty)
+                .padding(.horizontal)
+                .padding(.bottom, 20)
+            }
+            .background(AppTheme.bg)
+            .navigationTitle("New Message")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Report Sheet
+struct ReportSheet: View {
+    let profile: UserProfile
+    @Environment(\.dismiss) var dismiss
+    @State private var selectedReason = ""
+    @State private var details = ""
+    
+    let reasons = [
+        "Inappropriate content",
+        "Spam or scam",
+        "Harassment",
+        "Fake profile",
+        "Other"
+    ]
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Reason") {
+                    Picker("Select a reason", selection: $selectedReason) {
+                        Text("Select...").tag("")
+                        ForEach(reasons, id: \.self) { reason in
+                            Text(reason).tag(reason)
+                        }
+                    }
+                }
+                
+                Section("Additional Details") {
+                    TextEditor(text: $details)
+                        .frame(height: 100)
+                }
+            }
+            .navigationTitle("Report Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Submit") {
+                        // Submit report
+                        dismiss()
+                    }
+                    .disabled(selectedReason.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Image Viewer Sheet
+struct ImageViewerSheet: View {
+    let mediaURLs: [String]
+    @Binding var selectedIndex: Int
+    @Environment(\.dismiss) var dismiss
     
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            TabView(selection: $currentIndex) {
-                ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, urlString in
-                    if let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFit()
-                            default:
-                                ProgressView()
-                            }
+            TabView(selection: $selectedIndex) {
+                ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
+                    AsyncImage(url: URL(string: url)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                        default:
+                            ProgressView()
                         }
-                        .tag(index)
                     }
+                    .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
@@ -693,9 +711,8 @@ private struct MediaGalleryViewer: View {
             VStack {
                 HStack {
                     Spacer()
-                    
                     Button {
-                        onDismiss()
+                        dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.title)
@@ -703,95 +720,18 @@ private struct MediaGalleryViewer: View {
                             .padding()
                     }
                 }
-                
                 Spacer()
             }
         }
     }
 }
 
-// MARK: - Message Compose Sheet
-private struct MessageComposeSheet: View {
-    let recipientProfile: UserProfile
-    @Environment(\.dismiss) var dismiss
-    @State private var messageText = ""
-    
-    var body: some View {
-        NavigationStack {
-            VStack {
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Recipient info
-                        HStack(spacing: 12) {
-                            if let profileImageURL = recipientProfile.profileImageURL,
-                               let url = URL(string: profileImageURL) {
-                                AsyncImage(url: url) { phase in
-                                    switch phase {
-                                    case .success(let image):
-                                        image
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 50, height: 50)
-                                            .clipShape(Circle())
-                                    default:
-                                        Circle()
-                                            .fill(AppTheme.card)
-                                            .frame(width: 50, height: 50)
-                                    }
-                                }
-                            } else {
-                                Circle()
-                                    .fill(AppTheme.card)
-                                    .frame(width: 50, height: 50)
-                            }
-                            
-                            VStack(alignment: .leading) {
-                                Text(recipientProfile.displayName)
-                                    .font(.headline)
-                                Text("Start a conversation")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            Spacer()
-                        }
-                        .padding()
-                        
-                        // Message field
-                        TextEditor(text: $messageText)
-                            .frame(minHeight: 200)
-                            .padding()
-                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(AppTheme.accent.opacity(0.3), lineWidth: 1)
-                            )
-                            .padding(.horizontal)
-                    }
-                }
-                
-                // Send button
-                Button {
-                    // Send message
-                    dismiss()
-                } label: {
-                    Text("Send Message")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
-                        .foregroundStyle(.white)
-                }
-                .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .padding()
-            }
-            .navigationTitle("New Message")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
+// MARK: - Utilities
+private func formatNumber(_ number: Int) -> String {
+    if number >= 1_000_000 {
+        return String(format: "%.1fM", Double(number) / 1_000_000)
+    } else if number >= 1_000 {
+        return String(format: "%.1fK", Double(number) / 1_000)
     }
+    return "\(number)"
 }
