@@ -147,14 +147,18 @@ private struct SignedInProfile: View {
         }
         .background(AppTheme.bg.ignoresSafeArea())
         .refreshable {
-            await profileViewModel.refreshProfile()
+            if let uid = auth.user?.uid {
+                await profileViewModel.loadProfile(uid: uid)
+            }
         }
         .onAppear {
             loadUser()
         }
         .sheet(isPresented: $showSettings) {
-            SettingsSheet()
-                .environmentObject(auth)
+            if let _ = profileViewModel.profile {
+                Text("Settings Coming Soon")
+                    .padding()
+            }
         }
         .sheet(isPresented: $showEditProfile) {
             if let profile = profileViewModel.profile {
@@ -471,7 +475,7 @@ private struct SignedInProfile: View {
                         HStack(spacing: 4) {
                             Image(systemName: "clock")
                                 .font(.caption)
-                            Text("Responds \(profile.collaborationPreferences.responseTime.displayText)")
+                            Text("Responds \(responseTimeText(profile.collaborationPreferences.responseTime))")
                                 .font(.caption)
                         }
                         .foregroundStyle(.secondary)
@@ -675,7 +679,14 @@ private struct SignedInProfile: View {
 
         do {
             if let data = try await item.loadTransferable(type: Data.self) {
-                await profileViewModel.updateProfilePhoto(userId: uid, imageData: data)
+                let url = try await profileViewModel.uploadImageToStorage(userId: uid, data: data)
+
+                // Update profile with new photo URL
+                if var currentProfile = profileViewModel.profile {
+                    currentProfile.profileImageURL = url
+                    await profileViewModel.updateProfile(currentProfile)
+                }
+
                 Haptics.notify(.success)
             }
         } catch {
@@ -685,6 +696,24 @@ private struct SignedInProfile: View {
 
         isUploadingPhoto = false
         selectedPhoto = nil
+    }
+
+    private func formatFollowerCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        } else {
+            return "\(count)"
+        }
+    }
+
+    private func responseTimeText(_ responseTime: UserProfile.CollaborationPreferences.ResponseTime) -> String {
+        switch responseTime {
+        case .fast: return "within hours"
+        case .moderate: return "within a day"
+        case .slow: return "within a week"
+        }
     }
 }
 
