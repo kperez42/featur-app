@@ -34,11 +34,13 @@ private struct PerfectProfileContent: View {
     let profile: UserProfile
     @ObservedObject var viewModel: ProfileViewModel
     @EnvironmentObject var auth: AuthViewModel
-    
+
     @State private var scrollOffset: CGFloat = 0
     @State private var showEditSheet = false
     @State private var showSettingsSheet = false
     @State private var showStatsSheet = false
+    @State private var showQRSheet = false
+    @State private var showShareSheet = false
     @State private var showSuccess = false
     
     var body: some View {
@@ -139,21 +141,35 @@ private struct PerfectProfileContent: View {
                     } label: {
                         Label("Edit Profile", systemImage: "pencil")
                     }
-                    
+
+                    Button {
+                        showQRSheet = true
+                    } label: {
+                        Label("QR Code", systemImage: "qrcode")
+                    }
+
+                    Button {
+                        showShareSheet = true
+                    } label: {
+                        Label("Share Profile", systemImage: "square.and.arrow.up")
+                    }
+
+                    Divider()
+
                     Button {
                         showStatsSheet = true
                     } label: {
                         Label("View Analytics", systemImage: "chart.bar")
                     }
-                    
-                    Divider()
-                    
+
                     Button {
                         showSettingsSheet = true
                     } label: {
                         Label("Settings", systemImage: "gear")
                     }
-                    
+
+                    Divider()
+
                     Button(role: .destructive) {
                         Task { await auth.signOut() }
                     } label: {
@@ -179,6 +195,12 @@ private struct PerfectProfileContent: View {
         }
         .sheet(isPresented: $showStatsSheet) {
             BeautifulStatsSheet(profile: profile)
+        }
+        .sheet(isPresented: $showQRSheet) {
+            QRCodeSheet(profile: profile)
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareProfileSheet(profile: profile)
         }
     }
     
@@ -943,39 +965,142 @@ struct CleanEditSheet: View {
 struct BeautifulStatsSheet: View {
     let profile: UserProfile
     @Environment(\.dismiss) var dismiss
-    
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     // Overview
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Overview")
-                            .font(.title2.bold())
-                        
+                        HStack {
+                            Image(systemName: "chart.bar.fill")
+                                .foregroundStyle(AppTheme.accent)
+                            Text("Overview")
+                                .font(.title2.bold())
+                        }
+
                         VStack(spacing: 12) {
-                            StatDetailRow(label: "Total Followers", value: formatNumber(profile.followerCount))
-                            StatDetailRow(label: "Total Posts", value: "\(profile.mediaURLs.count)")
-                            StatDetailRow(label: "Engagement Rate", value: "8.5%")
-                            StatDetailRow(label: "Profile Views", value: "\(Int.random(in: 1000...5000))")
+                            StatDetailRow(label: "Total Followers", value: formatNumber(profile.followerCount), icon: "person.3.fill", color: .purple)
+                            StatDetailRow(label: "Total Posts", value: "\(profile.mediaURLs.count)", icon: "photo.fill", color: .blue)
+                            StatDetailRow(label: "Engagement Rate", value: "8.5%", icon: "heart.fill", color: .pink)
+                            StatDetailRow(label: "Profile Views", value: "\(Int.random(in: 1000...5000))", icon: "eye.fill", color: .green)
                         }
                     }
                     .padding()
                     .background(.white, in: RoundedRectangle(cornerRadius: 16))
-                    
-                    // Growth
+                    .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+
+                    // Growth This Month
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("This Month")
-                            .font(.title2.bold())
-                        
+                        HStack {
+                            Image(systemName: "arrow.up.right.circle.fill")
+                                .foregroundStyle(.green)
+                            Text("This Month")
+                                .font(.title2.bold())
+                        }
+
                         VStack(spacing: 12) {
-                            StatDetailRow(label: "New Followers", value: "+\(Int.random(in: 50...200))")
-                            StatDetailRow(label: "New Matches", value: "+\(Int.random(in: 5...20))")
-                            StatDetailRow(label: "Messages Sent", value: "\(Int.random(in: 20...100))")
+                            StatDetailRow(label: "New Followers", value: "+\(Int.random(in: 50...200))", icon: "plus.circle.fill", color: .green)
+                            StatDetailRow(label: "New Matches", value: "+\(Int.random(in: 5...20))", icon: "heart.circle.fill", color: .pink)
+                            StatDetailRow(label: "Messages Sent", value: "\(Int.random(in: 20...100))", icon: "message.fill", color: .blue)
+                            StatDetailRow(label: "Profile Visits", value: "+\(Int.random(in: 100...500))", icon: "person.fill", color: .orange)
                         }
                     }
                     .padding()
                     .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+
+                    // Content Performance
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "star.fill")
+                                .foregroundStyle(.orange)
+                            Text("Content Performance")
+                                .font(.title2.bold())
+                        }
+
+                        VStack(spacing: 12) {
+                            StatDetailRow(label: "Avg. Likes per Post", value: "\(Int.random(in: 100...500))", icon: "hand.thumbsup.fill", color: .blue)
+                            StatDetailRow(label: "Total Shares", value: "\(Int.random(in: 50...200))", icon: "square.and.arrow.up", color: .green)
+                            StatDetailRow(label: "Comments", value: "\(Int.random(in: 30...150))", icon: "bubble.left.fill", color: .purple)
+                            StatDetailRow(label: "Saves", value: "\(Int.random(in: 20...100))", icon: "bookmark.fill", color: .orange)
+                        }
+                    }
+                    .padding()
+                    .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+
+                    // Top Content Styles
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(.yellow)
+                            Text("Top Content Styles")
+                                .font(.title2.bold())
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(profile.contentStyles.prefix(3), id: \.self) { style in
+                                HStack {
+                                    Image(systemName: style.icon)
+                                        .foregroundStyle(AppTheme.accent)
+                                    Text(style.rawValue)
+                                        .font(.body)
+                                    Spacer()
+                                    Text("\(Int.random(in: 50...100))%")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding()
+                                .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+
+                    // Social Media Breakdown
+                    if profile.socialLinks.instagram != nil || profile.socialLinks.tiktok != nil {
+                        VStack(alignment: .leading, spacing: 16) {
+                            HStack {
+                                Image(systemName: "link.circle.fill")
+                                    .foregroundStyle(.blue)
+                                Text("Social Media Stats")
+                                    .font(.title2.bold())
+                            }
+
+                            VStack(spacing: 12) {
+                                if let instagram = profile.socialLinks.instagram {
+                                    StatDetailRow(
+                                        label: "Instagram",
+                                        value: formatNumber(instagram.followerCount ?? 0),
+                                        icon: "camera.fill",
+                                        color: Color(red: 0.8, green: 0.3, blue: 0.6)
+                                    )
+                                }
+                                if let tiktok = profile.socialLinks.tiktok {
+                                    StatDetailRow(
+                                        label: "TikTok",
+                                        value: formatNumber(tiktok.followerCount ?? 0),
+                                        icon: "music.note",
+                                        color: .black
+                                    )
+                                }
+                                if let youtube = profile.socialLinks.youtube {
+                                    StatDetailRow(
+                                        label: "YouTube",
+                                        value: formatNumber(youtube.followerCount ?? 0),
+                                        icon: "play.rectangle.fill",
+                                        color: .red
+                                    )
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+                    }
                 }
                 .padding()
             }
@@ -994,17 +1119,27 @@ struct BeautifulStatsSheet: View {
 private struct StatDetailRow: View {
     let label: String
     let value: String
-    
+    var icon: String? = nil
+    var color: Color = .blue
+
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            if let icon = icon {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(color)
+                    .frame(width: 32)
+            }
+
             Text(label)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            
+
             Spacer()
-            
+
             Text(value)
-                .font(.headline)
+                .font(.headline.bold())
+                .foregroundStyle(color)
         }
         .padding()
         .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
@@ -1127,6 +1262,226 @@ struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+// MARK: - QR Code Sheet
+struct QRCodeSheet: View {
+    let profile: UserProfile
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 32) {
+                Spacer()
+
+                Text("Scan to Connect")
+                    .font(.title.bold())
+
+                // QR Code Display
+                ZStack {
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(AppTheme.gradient)
+                        .frame(width: 280, height: 280)
+                        .shadow(color: AppTheme.accent.opacity(0.3), radius: 20, y: 10)
+
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(.white)
+                        .frame(width: 240, height: 240)
+
+                    Image(systemName: "qrcode")
+                        .font(.system(size: 120))
+                        .foregroundStyle(.black)
+                }
+
+                // Profile Info
+                VStack(spacing: 8) {
+                    if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Color.gray
+                        }
+                        .frame(width: 60, height: 60)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(.white, lineWidth: 3))
+                        .shadow(radius: 5)
+                    }
+
+                    Text(profile.displayName)
+                        .font(.headline)
+
+                    Text("@\(profile.uid.prefix(8))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                // Action Buttons
+                HStack(spacing: 16) {
+                    Button {
+                        // Save QR functionality
+                        Haptics.impact(.medium)
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("Save")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                    }
+
+                    Button {
+                        // Share functionality
+                        Haptics.impact(.medium)
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Share")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(AppTheme.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppTheme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+                    }
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 20)
+            }
+            .navigationTitle("QR Code")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Share Profile Sheet
+struct ShareProfileSheet: View {
+    let profile: UserProfile
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Spacer()
+
+                // Profile Preview
+                VStack(spacing: 16) {
+                    if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            ProgressView()
+                        }
+                        .frame(width: 100, height: 100)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(.white, lineWidth: 4))
+                        .shadow(radius: 10)
+                    } else {
+                        Circle()
+                            .fill(AppTheme.gradient)
+                            .frame(width: 100, height: 100)
+                            .overlay(
+                                Text(profile.displayName.prefix(1))
+                                    .font(.system(size: 42, weight: .bold))
+                                    .foregroundStyle(.white)
+                            )
+                            .shadow(radius: 10)
+                    }
+
+                    VStack(spacing: 4) {
+                        Text(profile.displayName)
+                            .font(.title2.bold())
+
+                        if let bio = profile.bio {
+                            Text(bio)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .padding(.horizontal)
+                        }
+                    }
+                }
+
+                // Share Link
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("featur.app/\(profile.uid.prefix(8))")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            .padding()
+                            .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+
+                        Button {
+                            UIPasteboard.general.string = "featur.app/\(profile.uid)"
+                            Haptics.impact(.light)
+                        } label: {
+                            Image(systemName: "doc.on.doc")
+                                .font(.title3)
+                                .foregroundStyle(AppTheme.accent)
+                                .padding(12)
+                                .background(AppTheme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+
+                Spacer()
+
+                // Share Buttons
+                VStack(spacing: 12) {
+                    Button {
+                        // Share via system share sheet
+                        Haptics.impact(.medium)
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Share Profile")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                    }
+
+                    Button {
+                        // Copy link
+                        UIPasteboard.general.string = "featur.app/\(profile.uid)"
+                        Haptics.notify(.success)
+                    } label: {
+                        HStack {
+                            Image(systemName: "link")
+                            Text("Copy Link")
+                        }
+                        .font(.headline)
+                        .foregroundStyle(AppTheme.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppTheme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+                    }
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 32)
+            }
+            .navigationTitle("Share Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
     }
 }
 
