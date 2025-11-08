@@ -106,7 +106,22 @@ private struct PerfectProfileContent: View {
                         // Collaboration Preferences
                         CollaborationCard(preferences: profile.collaborationPreferences)
                             .padding(.horizontal)
-                        
+
+                        // Creator Reviews/Testimonials
+                        CreatorReviewsCard()
+                            .padding(.horizontal)
+                            .padding(.top, 4)
+
+                        // Achievement Badges
+                        AchievementBadgesCard(profile: profile)
+                            .padding(.horizontal)
+                            .padding(.top, 4)
+
+                        // Creator Stats Showcase
+                        CreatorStatsShowcase(profile: profile)
+                            .padding(.horizontal)
+                            .padding(.top, 4)
+
                         // Bottom spacing
                         Color.clear.frame(height: 100)
                     }
@@ -862,13 +877,399 @@ private struct CollaborationCard: View {
     }
 }
 
+// MARK: - Creator Reviews Card
+private struct CreatorReviewsCard: View {
+    let reviews = [
+        Review(
+            creatorName: "Sarah Martinez",
+            creatorHandle: "@sarahcreates",
+            rating: 5,
+            comment: "Amazing collaboration! Super professional and creative. Would definitely work together again!",
+            date: "2 days ago",
+            verified: true
+        ),
+        Review(
+            creatorName: "Mike Chen",
+            creatorHandle: "@mikefilms",
+            rating: 5,
+            comment: "One of the best creators I've worked with. Great communication and excellent content quality.",
+            date: "1 week ago",
+            verified: true
+        ),
+        Review(
+            creatorName: "Emma Davis",
+            creatorHandle: "@emmastyle",
+            rating: 4,
+            comment: "Really enjoyed our collaboration! Very creative and easy to work with.",
+            date: "2 weeks ago",
+            verified: false
+        )
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "star.bubble.fill")
+                    .foregroundStyle(.yellow)
+                Text("Creator Reviews")
+                    .font(.headline)
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Image(systemName: "star.fill")
+                        .foregroundStyle(.yellow)
+                    Text("4.8")
+                        .font(.subheadline.bold())
+                    Text("(\(reviews.count))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            VStack(spacing: 12) {
+                ForEach(reviews) { review in
+                    ReviewRow(review: review)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        )
+    }
+}
+
+private struct ReviewRow: View {
+    let review: Review
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(AppTheme.gradient)
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Text(review.creatorName.prefix(1))
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(review.creatorName)
+                            .font(.subheadline.bold())
+
+                        if review.verified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.blue)
+                        }
+                    }
+
+                    Text(review.creatorHandle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 2) {
+                        ForEach(0..<review.rating, id: \.self) { _ in
+                            Image(systemName: "star.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.yellow)
+                        }
+                    }
+
+                    Text(review.date)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Text(review.comment)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .padding(12)
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct Review: Identifiable {
+    let id = UUID()
+    let creatorName: String
+    let creatorHandle: String
+    let rating: Int
+    let comment: String
+    let date: String
+    let verified: Bool
+}
+
+// MARK: - Achievement Badges Card
+private struct AchievementBadgesCard: View {
+    let profile: UserProfile
+
+    var badges: [Badge] {
+        var result: [Badge] = []
+
+        if profile.followerCount >= 1000 {
+            result.append(Badge(
+                icon: "crown.fill",
+                title: "1K Followers",
+                color: .purple,
+                description: "Reached 1,000 followers"
+            ))
+        }
+
+        if profile.isVerified {
+            result.append(Badge(
+                icon: "checkmark.seal.fill",
+                title: "Verified",
+                color: .blue,
+                description: "Verified creator"
+            ))
+        }
+
+        if profile.mediaURLs.count >= 10 {
+            result.append(Badge(
+                icon: "photo.stack.fill",
+                title: "Content Creator",
+                color: .orange,
+                description: "Posted 10+ media items"
+            ))
+        }
+
+        if !profile.contentStyles.isEmpty && profile.contentStyles.count >= 3 {
+            result.append(Badge(
+                icon: "sparkles",
+                title: "Multi-Talented",
+                color: .pink,
+                description: "Master of multiple styles"
+            ))
+        }
+
+        result.append(Badge(
+            icon: "flame.fill",
+            title: "On Fire",
+            color: .red,
+            description: "7-day posting streak"
+        ))
+
+        result.append(Badge(
+            icon: "heart.fill",
+            title: "Community Favorite",
+            color: .pink,
+            description: "High engagement rate"
+        ))
+
+        return result
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "rosette")
+                    .foregroundStyle(AppTheme.accent)
+                Text("Achievements")
+                    .font(.headline)
+
+                Spacer()
+
+                Text("\(badges.count)")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.accent, in: Capsule())
+            }
+
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 12) {
+                ForEach(badges) { badge in
+                    BadgeItem(badge: badge)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        )
+    }
+}
+
+private struct BadgeItem: View {
+    let badge: Badge
+    @State private var animate = false
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(badge.color.opacity(0.15))
+                    .frame(width: 56, height: 56)
+
+                Image(systemName: badge.icon)
+                    .font(.title3)
+                    .foregroundStyle(badge.color)
+            }
+            .scaleEffect(animate ? 1 : 0.8)
+            .onAppear {
+                withAnimation(.spring(response: 0.6).delay(Double.random(in: 0...0.3))) {
+                    animate = true
+                }
+            }
+
+            Text(badge.title)
+                .font(.caption2.bold())
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+struct Badge: Identifiable {
+    let id = UUID()
+    let icon: String
+    let title: String
+    let color: Color
+    let description: String
+}
+
+// MARK: - Creator Stats Showcase
+private struct CreatorStatsShowcase: View {
+    let profile: UserProfile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "chart.pie.fill")
+                    .foregroundStyle(.green)
+                Text("Creator Impact")
+                    .font(.headline)
+            }
+
+            VStack(spacing: 12) {
+                StatShowcaseRow(
+                    icon: "eye.fill",
+                    label: "Total Reach",
+                    value: "\(Int.random(in: 50...200))K",
+                    color: .blue,
+                    showTrend: true,
+                    trendUp: true
+                )
+
+                StatShowcaseRow(
+                    icon: "hand.thumbsup.fill",
+                    label: "Total Engagement",
+                    value: "\(Int.random(in: 10...50))K",
+                    color: .purple,
+                    showTrend: true,
+                    trendUp: true
+                )
+
+                StatShowcaseRow(
+                    icon: "person.2.fill",
+                    label: "Collaborations",
+                    value: "\(Int.random(in: 5...20))",
+                    color: .orange,
+                    showTrend: false,
+                    trendUp: false
+                )
+
+                StatShowcaseRow(
+                    icon: "sparkles",
+                    label: "Content Score",
+                    value: "\(Int.random(in: 85...99))/100",
+                    color: .pink,
+                    showTrend: true,
+                    trendUp: true
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+        )
+    }
+}
+
+private struct StatShowcaseRow: View {
+    let icon: String
+    let label: String
+    let value: String
+    let color: Color
+    let showTrend: Bool
+    let trendUp: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.15))
+                    .frame(width: 44, height: 44)
+
+                Image(systemName: icon)
+                    .font(.body)
+                    .foregroundStyle(color)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Text(value)
+                    .font(.headline.bold())
+                    .foregroundStyle(color)
+            }
+
+            Spacer()
+
+            if showTrend {
+                HStack(spacing: 2) {
+                    Image(systemName: trendUp ? "arrow.up.right" : "arrow.down.right")
+                        .font(.caption2)
+                    Text("+\(Int.random(in: 5...25))%")
+                        .font(.caption2.bold())
+                }
+                .foregroundStyle(trendUp ? .green : .red)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(
+                    (trendUp ? Color.green : Color.red).opacity(0.1),
+                    in: Capsule()
+                )
+            }
+        }
+        .padding(12)
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 // MARK: - Clean Edit Sheet
 struct CleanEditSheet: View {
     let profile: UserProfile
     @ObservedObject var viewModel: ProfileViewModel
     let onSave: () -> Void
     @Environment(\.dismiss) var dismiss
-    
+
     @State private var displayName: String
     @State private var bio: String
     @State private var selectedPhoto: PhotosPickerItem?
