@@ -970,6 +970,48 @@ struct BeautifulStatsSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Growth Chart
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .foregroundStyle(AppTheme.accent)
+                            Text("Growth Trends")
+                                .font(.title2.bold())
+                        }
+
+                        VStack(spacing: 16) {
+                            // Followers Chart
+                            GrowthChartCard(
+                                title: "Followers",
+                                value: formatNumber(profile.followerCount),
+                                change: "+\(Int.random(in: 10...30))%",
+                                data: generateTrendData(),
+                                color: .purple
+                            )
+
+                            // Engagement Chart
+                            GrowthChartCard(
+                                title: "Engagement",
+                                value: "8.5%",
+                                change: "+5.2%",
+                                data: generateTrendData(),
+                                color: .pink
+                            )
+
+                            // Profile Views Chart
+                            GrowthChartCard(
+                                title: "Profile Views",
+                                value: "\(Int.random(in: 1000...5000))",
+                                change: "+\(Int.random(in: 15...40))%",
+                                data: generateTrendData(),
+                                color: .blue
+                            )
+                        }
+                    }
+                    .padding()
+                    .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+
                     // Overview
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
@@ -1113,6 +1155,17 @@ struct BeautifulStatsSheet: View {
                 }
             }
         }
+    }
+
+    func generateTrendData() -> [Double] {
+        var data: [Double] = []
+        var current = Double.random(in: 50...100)
+        for _ in 0..<30 {
+            current += Double.random(in: -5...10)
+            current = max(20, min(100, current))
+            data.append(current)
+        }
+        return data
     }
 }
 
@@ -1493,4 +1546,107 @@ private func formatNumber(_ number: Int) -> String {
         return String(format: "%.1fK", Double(number) / 1_000)
     }
     return "\(number)"
+}
+
+// MARK: - Growth Chart Card
+private struct GrowthChartCard: View {
+    let title: String
+    let value: String
+    let change: String
+    let data: [Double]
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Text(value)
+                        .font(.title2.bold())
+                        .foregroundStyle(color)
+                }
+
+                Spacer()
+
+                Text(change)
+                    .font(.caption.bold())
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.green.opacity(0.1), in: Capsule())
+            }
+
+            MiniSparklineChart(data: data, color: color)
+                .frame(height: 60)
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Mini Sparkline Chart
+private struct MiniSparklineChart: View {
+    let data: [Double]
+    let color: Color
+
+    @State private var animateChart = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            let path = createPath(in: geometry.size)
+
+            ZStack(alignment: .bottomLeading) {
+                // Gradient fill
+                path
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                color.opacity(0.3),
+                                color.opacity(0.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .scaleEffect(y: animateChart ? 1 : 0, anchor: .bottom)
+
+                // Line stroke
+                path
+                    .stroke(color, lineWidth: 2)
+                    .scaleEffect(y: animateChart ? 1 : 0, anchor: .bottom)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
+                animateChart = true
+            }
+        }
+    }
+
+    func createPath(in size: CGSize) -> Path {
+        var path = Path()
+
+        guard !data.isEmpty else { return path }
+
+        let stepX = size.width / CGFloat(data.count - 1)
+        let maxValue = data.max() ?? 1.0
+        let minValue = data.min() ?? 0.0
+        let range = maxValue - minValue
+
+        path.move(to: CGPoint(
+            x: 0,
+            y: size.height - (CGFloat(data[0] - minValue) / CGFloat(range)) * size.height
+        ))
+
+        for (index, value) in data.enumerated() {
+            let x = CGFloat(index) * stepX
+            let y = size.height - (CGFloat(value - minValue) / CGFloat(range)) * size.height
+            path.addLine(to: CGPoint(x: x, y: y))
+        }
+
+        return path
+    }
 }
