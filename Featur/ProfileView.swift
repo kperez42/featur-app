@@ -1,7 +1,6 @@
 import SwiftUI
 import AuthenticationServices
 import FirebaseAuth
-import PhotosUI
 
 struct ProfileView: View {
     @EnvironmentObject var auth: AuthViewModel
@@ -41,26 +40,26 @@ private struct GuestProfileSignIn: View {
             AppTheme.gradient
                 .ignoresSafeArea()
                 .opacity(0.1)
-
+            
             VStack(spacing: 32) {
                 Spacer()
-
+                
                 // Icon
                 ZStack {
                     Circle()
                         .fill(AppTheme.gradient)
                         .frame(width: 120, height: 120)
                         .shadow(color: AppTheme.accent.opacity(0.3), radius: 20, x: 0, y: 10)
-
+                    
                     Image(systemName: "person.crop.circle.fill")
                         .font(.system(size: 60))
                         .foregroundStyle(.white)
                 }
-
+                
                 VStack(spacing: 12) {
                     Text("Welcome to FEATUR")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
-
+                    
                     Text("Sign in to connect with creators, save your matches, and unlock premium features.")
                         .font(.body)
                         .multilineTextAlignment(.center)
@@ -68,9 +67,9 @@ private struct GuestProfileSignIn: View {
                         .padding(.horizontal, 32)
                         .lineSpacing(4)
                 }
-
+                
                 Spacer()
-
+                
                 // Sign in button
                 VStack(spacing: 16) {
                     SignInWithAppleButton(.signIn) { request in
@@ -84,7 +83,7 @@ private struct GuestProfileSignIn: View {
                     .frame(height: 56)
                     .cornerRadius(16)
                     .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
-
+                    
                     if let msg = auth.errorMessage, !msg.isEmpty {
                         HStack(spacing: 8) {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -111,100 +110,80 @@ private struct SignedInProfile: View {
     @ObservedObject var profileViewModel: ProfileViewModel
     @Binding var showSettings: Bool
     @Binding var showEditProfile: Bool
-
+    
     @State private var displayName: String = ""
     @State private var email: String = ""
     @State private var appleAnon: Bool = false
-    @State private var selectedPhoto: PhotosPickerItem?
-    @State private var isUploadingPhoto = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
                 // Header Section
                 profileHeader
-
+                
                 // Stats Section
                 if let profile = profileViewModel.profile {
                     statsSection(profile: profile)
                 }
-
+                
                 // Action Buttons
                 actionButtons
-
+                
                 // Profile Info Cards
                 if let profile = profileViewModel.profile {
                     profileInfoCards(profile: profile)
                 } else {
                     setupProfileCard
                 }
-
+                
                 // Account Section
                 accountSection
-
+                
                 Spacer(minLength: 32)
             }
         }
         .background(AppTheme.bg.ignoresSafeArea())
         .refreshable {
-            if let uid = auth.user?.uid {
-                await profileViewModel.loadProfile(uid: uid)
-            }
+            await profileViewModel.refreshProfile()
         }
         .onAppear {
             loadUser()
         }
         .sheet(isPresented: $showSettings) {
-            if let _ = profileViewModel.profile {
-                Text("Settings Coming Soon")
-                    .padding()
-            }
-        }
-        .sheet(isPresented: $showEditProfile) {
-            if let profile = profileViewModel.profile {
-                ProfileCreationFlow(viewModel: profileViewModel)
-            } else {
-                ProfileCreationFlow(viewModel: profileViewModel)
-            }
+            SettingsSheet()
+                .environmentObject(auth)
         }
     }
-
+    
     // MARK: - Profile Header
     private var profileHeader: some View {
         VStack(spacing: 16) {
             // Profile Image/Avatar
             ZStack(alignment: .bottomTrailing) {
-                Group {
-                    if isUploadingPhoto {
-                        ZStack {
+                if let profile = profileViewModel.profile,
+                   let imageURL = profile.profileImageURL,
+                   let url = URL(string: imageURL) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 120, height: 120)
+                                .clipShape(Circle())
+                        default:
                             avatarPlaceholder
-                            ProgressView()
-                                .scaleEffect(1.5)
-                                .tint(.white)
                         }
-                    } else if let profile = profileViewModel.profile,
-                       let imageURL = profile.profileImageURL,
-                       let url = URL(string: imageURL) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 120, height: 120)
-                                    .clipShape(Circle())
-                            default:
-                                avatarPlaceholder
-                            }
-                        }
-                    } else {
-                        avatarPlaceholder
                     }
+                } else {
+                    avatarPlaceholder
                 }
-
-                // Photo picker button
-                PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                    Image(systemName: isUploadingPhoto ? "arrow.up.circle.fill" : "pencil.circle.fill")
+                
+                // Edit button
+                Button {
+                    showEditProfile = true
+                } label: {
+                    Image(systemName: "pencil.circle.fill")
                         .font(.system(size: 32))
                         .foregroundStyle(.white)
                         .background(
@@ -214,35 +193,28 @@ private struct SignedInProfile: View {
                         )
                 }
                 .offset(x: 4, y: 4)
-                .disabled(isUploadingPhoto)
             }
             .shadow(color: AppTheme.accent.opacity(0.3), radius: 20, x: 0, y: 10)
-            .onChange(of: selectedPhoto) { oldValue, newValue in
-                guard let newValue else { return }
-                Task {
-                    await uploadProfilePhoto(newValue)
-                }
-            }
-
+            
             // Name and verification
             VStack(spacing: 6) {
                 HStack(spacing: 8) {
                     Text(profileViewModel.profile?.displayName ?? displayName)
                         .font(.system(size: 28, weight: .bold, design: .rounded))
-
+                    
                     if profileViewModel.profile?.isVerified == true {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.title3)
                             .foregroundStyle(AppTheme.accent)
                     }
                 }
-
+                
                 if let profile = profileViewModel.profile, let age = profile.age {
                     Text("\(age) years old")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-
+                
                 if appleAnon {
                     HStack(spacing: 4) {
                         Image(systemName: "applelogo")
@@ -256,7 +228,7 @@ private struct SignedInProfile: View {
                     .background(Color.secondary.opacity(0.1), in: Capsule())
                 }
             }
-
+            
             // Bio
             if let profile = profileViewModel.profile, let bio = profile.bio, !bio.isEmpty {
                 Text(bio)
@@ -270,20 +242,20 @@ private struct SignedInProfile: View {
         .padding(.top, 24)
         .padding(.bottom, 20)
     }
-
+    
     // MARK: - Avatar Placeholder
     private var avatarPlaceholder: some View {
         ZStack {
             Circle()
                 .fill(AppTheme.gradient)
                 .frame(width: 120, height: 120)
-
+            
             Text(initials(from: displayName.isEmpty ? email : displayName))
                 .font(.system(size: 42, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
         }
     }
-
+    
     // MARK: - Stats Section
     private func statsSection(profile: UserProfile) -> some View {
         HStack(spacing: 0) {
@@ -292,19 +264,19 @@ private struct SignedInProfile: View {
                 label: "Followers",
                 icon: "person.2.fill"
             )
-
+            
             Divider()
                 .frame(height: 40)
-
+            
             statBox(
                 value: "\(profile.mediaURLs.count)",
                 label: "Posts",
                 icon: "photo.stack.fill"
             )
-
+            
             Divider()
                 .frame(height: 40)
-
+            
             statBox(
                 value: "\(profile.contentStyles.count)",
                 label: "Styles",
@@ -316,28 +288,27 @@ private struct SignedInProfile: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 20)
     }
-
+    
     private func statBox(value: String, label: String, icon: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.title3)
                 .foregroundStyle(AppTheme.accent)
-
+            
             Text(value)
                 .font(.system(size: 22, weight: .bold, design: .rounded))
-
+            
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
     }
-
+    
     // MARK: - Action Buttons
     private var actionButtons: some View {
         HStack(spacing: 12) {
             Button {
-                Haptics.impact(.medium)
                 showEditProfile = true
             } label: {
                 Label("Edit Profile", systemImage: "pencil")
@@ -347,9 +318,8 @@ private struct SignedInProfile: View {
                     .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))
                     .foregroundStyle(.white)
             }
-
+            
             Button {
-                Haptics.impact(.light)
                 showSettings = true
             } label: {
                 Image(systemName: "gearshape.fill")
@@ -362,7 +332,7 @@ private struct SignedInProfile: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 20)
     }
-
+    
     // MARK: - Profile Info Cards
     private func profileInfoCards(profile: UserProfile) -> some View {
         VStack(spacing: 16) {
@@ -372,7 +342,7 @@ private struct SignedInProfile: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Content Styles", systemImage: "sparkles")
                             .font(.headline)
-
+                        
                         FlowLayout(spacing: 8) {
                             ForEach(profile.contentStyles, id: \.self) { style in
                                 HStack(spacing: 6) {
@@ -390,16 +360,16 @@ private struct SignedInProfile: View {
                     }
                 }
             }
-
+            
             // Social Links Card
-            if profile.socialLinks.tiktok != nil ||
-               profile.socialLinks.instagram != nil ||
+            if profile.socialLinks.tiktok != nil || 
+               profile.socialLinks.instagram != nil || 
                profile.socialLinks.youtube != nil {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Social Media", systemImage: "link")
                             .font(.headline)
-
+                        
                         VStack(spacing: 10) {
                             if let tiktok = profile.socialLinks.tiktok {
                                 socialLinkRow(
@@ -410,7 +380,7 @@ private struct SignedInProfile: View {
                                     isVerified: tiktok.isVerified
                                 )
                             }
-
+                            
                             if let instagram = profile.socialLinks.instagram {
                                 socialLinkRow(
                                     platform: "Instagram",
@@ -420,7 +390,7 @@ private struct SignedInProfile: View {
                                     isVerified: instagram.isVerified
                                 )
                             }
-
+                            
                             if let youtube = profile.socialLinks.youtube {
                                 socialLinkRow(
                                     platform: "YouTube",
@@ -434,18 +404,18 @@ private struct SignedInProfile: View {
                     }
                 }
             }
-
+            
             // Location Card
             if let location = profile.location, location.city != nil {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Location", systemImage: "mappin.circle.fill")
                             .font(.headline)
-
+                        
                         HStack(spacing: 8) {
                             Image(systemName: "location.fill")
                                 .foregroundStyle(AppTheme.accent)
-
+                            
                             if let city = location.city, let state = location.state {
                                 Text("\(city), \(state)")
                                     .font(.body)
@@ -454,14 +424,14 @@ private struct SignedInProfile: View {
                     }
                 }
             }
-
+            
             // Collaboration Preferences Card
             if !profile.collaborationPreferences.lookingFor.isEmpty {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Looking to Collaborate", systemImage: "hand.wave.fill")
                             .font(.headline)
-
+                        
                         FlowLayout(spacing: 8) {
                             ForEach(profile.collaborationPreferences.lookingFor, id: \.self) { collab in
                                 Text(collab.rawValue)
@@ -471,11 +441,11 @@ private struct SignedInProfile: View {
                                     .background(AppTheme.card, in: Capsule())
                             }
                         }
-
+                        
                         HStack(spacing: 4) {
                             Image(systemName: "clock")
                                 .font(.caption)
-                            Text("Responds \(responseTimeText(profile.collaborationPreferences.responseTime))")
+                            Text("Responds \(profile.collaborationPreferences.responseTime.displayText)")
                                 .font(.caption)
                         }
                         .foregroundStyle(.secondary)
@@ -486,70 +456,42 @@ private struct SignedInProfile: View {
         }
         .padding(.horizontal, 16)
     }
-
+    
     private func socialLinkRow(platform: String, icon: String, username: String, followers: Int?, isVerified: Bool) -> some View {
-        Button {
-            Haptics.impact(.light)
-            openSocialMediaLink(platform: platform, username: username)
-        } label: {
-            HStack {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(AppTheme.accent)
-                    .frame(width: 32)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text("@\(username)")
-                            .font(.body.weight(.medium))
-
-                        if isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.caption)
-                                .foregroundStyle(.blue)
-                        }
-                    }
-
-                    if let followers = followers {
-                        Text("\(formatFollowerCount(followers)) followers")
+        HStack {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 32)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text("@\(username)")
+                        .font(.body.weight(.medium))
+                    
+                    if isVerified {
+                        Image(systemName: "checkmark.seal.fill")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.blue)
                     }
                 }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                
+                if let followers = followers {
+                    Text("\(formatFollowerCount(followers)) followers")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 8)
     }
-
-    private func openSocialMediaLink(platform: String, username: String) {
-        var urlString = ""
-
-        switch platform.lowercased() {
-        case "tiktok":
-            urlString = "https://www.tiktok.com/@\(username)"
-        case "instagram":
-            urlString = "https://www.instagram.com/\(username)"
-        case "youtube":
-            urlString = "https://www.youtube.com/@\(username)"
-        case "twitch":
-            urlString = "https://www.twitch.tv/\(username)"
-        default:
-            return
-        }
-
-        if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
-        }
-    }
-
+    
     // MARK: - Setup Profile Card
     private var setupProfileCard: some View {
         GlassCard {
@@ -557,17 +499,16 @@ private struct SignedInProfile: View {
                 Image(systemName: "person.crop.circle.badge.plus")
                     .font(.system(size: 60))
                     .foregroundStyle(AppTheme.accent)
-
+                
                 Text("Complete Your Profile")
                     .font(.title3.bold())
-
+                
                 Text("Add your content styles, social links, and photos to start connecting with other creators.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-
+                
                 Button {
-                    Haptics.impact(.medium)
                     showEditProfile = true
                 } label: {
                     Text("Set Up Profile")
@@ -582,24 +523,23 @@ private struct SignedInProfile: View {
         }
         .padding(.horizontal, 16)
     }
-
+    
     // MARK: - Account Section
     private var accountSection: some View {
         VStack(spacing: 12) {
             Divider()
                 .padding(.vertical, 8)
-
+            
             VStack(spacing: 8) {
                 accountInfoRow(label: "Email", value: email, icon: "envelope.fill")
-
+                
                 if let uid = Auth.auth().currentUser?.uid {
                     accountInfoRow(label: "User ID", value: uid, icon: "key.fill", monospaced: true)
                 }
             }
-
+            
             // Sign Out Button
             Button {
-                Haptics.impact(.medium)
                 Task { await auth.signOut() }
             } label: {
                 Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
@@ -614,26 +554,26 @@ private struct SignedInProfile: View {
         .padding(.horizontal, 16)
         .padding(.top, 20)
     }
-
+    
     private func accountInfoRow(label: String, value: String, icon: String, monospaced: Bool = false) -> some View {
         HStack {
             Image(systemName: icon)
                 .font(.caption)
                 .foregroundStyle(AppTheme.accent)
                 .frame(width: 24)
-
+            
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-
+                
                 Text(value)
                     .font(monospaced ? .caption.monospaced() : .caption)
                     .lineLimit(1)
             }
-
+            
             Spacer()
-
+            
             Button {
                 UIPasteboard.general.string = value
                 Haptics.impact(.light)
@@ -647,13 +587,13 @@ private struct SignedInProfile: View {
         .padding(.vertical, 10)
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 10))
     }
-
+    
     // MARK: - Helper Functions
     private func loadUser() {
         let u = Auth.auth().currentUser
         displayName = u?.displayName ?? ""
         email = u?.email ?? ""
-
+        
         if let provider = u?.providerData.first(where: { $0.providerID == "apple.com" }),
            let mail = provider.email, mail.contains("privaterelay.appleid.com") {
             appleAnon = true
@@ -661,7 +601,7 @@ private struct SignedInProfile: View {
             appleAnon = false
         }
     }
-
+    
     private func initials(from text: String) -> String {
         let parts = text.split(separator: " ")
         let letters = parts.prefix(2).compactMap { $0.first }
@@ -669,51 +609,6 @@ private struct SignedInProfile: View {
             return String(first).uppercased()
         }
         return letters.map { String($0).uppercased() }.joined()
-    }
-
-    private func uploadProfilePhoto(_ item: PhotosPickerItem) async {
-        guard let uid = auth.user?.uid else { return }
-
-        isUploadingPhoto = true
-        Haptics.impact(.medium)
-
-        do {
-            if let data = try await item.loadTransferable(type: Data.self) {
-                let url = try await profileViewModel.uploadImageToStorage(userId: uid, data: data)
-
-                // Update profile with new photo URL
-                if var currentProfile = profileViewModel.profile {
-                    currentProfile.profileImageURL = url
-                    await profileViewModel.updateProfile(currentProfile)
-                }
-
-                Haptics.notify(.success)
-            }
-        } catch {
-            print("Error loading photo: \(error)")
-            Haptics.notify(.error)
-        }
-
-        isUploadingPhoto = false
-        selectedPhoto = nil
-    }
-
-    private func formatFollowerCount(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            return String(format: "%.1fM", Double(count) / 1_000_000)
-        } else if count >= 1_000 {
-            return String(format: "%.1fK", Double(count) / 1_000)
-        } else {
-            return "\(count)"
-        }
-    }
-
-    private func responseTimeText(_ responseTime: UserProfile.CollaborationPreferences.ResponseTime) -> String {
-        switch responseTime {
-        case .fast: return "within hours"
-        case .moderate: return "within a day"
-        case .slow: return "within a week"
-        }
     }
 }
 
