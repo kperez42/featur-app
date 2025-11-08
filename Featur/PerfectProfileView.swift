@@ -3,6 +3,7 @@
 import SwiftUI
 import FirebaseAuth
 import PhotosUI
+import AuthenticationServices
 
 struct PerfectProfileView: View {
     @EnvironmentObject var auth: AuthViewModel
@@ -1012,40 +1013,66 @@ private struct StatDetailRow: View {
 
 // MARK: - Beautiful Guest View
 private struct BeautifulGuestView: View {
+    @EnvironmentObject var auth: AuthViewModel
+
     var body: some View {
         ZStack {
             AppTheme.gradient.ignoresSafeArea()
-            
+
             VStack(spacing: 40) {
                 Spacer()
-                
+
                 VStack(spacing: 20) {
-                    Image(systemName: "person.crop.circle.fill")
-                        .font(.system(size: 80))
-                        .foregroundStyle(.white)
-                    
+                    ZStack {
+                        Circle()
+                            .fill(.white.opacity(0.2))
+                            .frame(width: 120, height: 120)
+                            .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 10)
+
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundStyle(.white)
+                    }
+
                     Text("Welcome to FEATUR")
                         .font(.system(size: 32, weight: .bold))
                         .foregroundStyle(.white)
-                    
-                    Text("Connect with creators and grow together")
-                        .font(.title3)
+
+                    Text("Sign in to connect with creators, save your matches, and unlock premium features.")
+                        .font(.body)
                         .foregroundStyle(.white.opacity(0.9))
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+                        .padding(.horizontal, 32)
+                        .lineSpacing(4)
                 }
-                
+
                 Spacer()
-                
-                NavigationLink {
-                    LoginView(navigationPath: .constant(NavigationPath()))
-                } label: {
-                    Text("Get Started")
-                        .font(.headline)
-                        .foregroundStyle(AppTheme.accent)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(.white, in: RoundedRectangle(cornerRadius: 16))
+
+                VStack(spacing: 16) {
+                    SignInWithAppleButton(.signIn) { request in
+                        let req = auth.makeAppleRequest()
+                        request.requestedScopes = req.requestedScopes ?? []
+                        request.nonce = req.nonce
+                    } onCompletion: { result in
+                        Task { await auth.handleApple(result: result) }
+                    }
+                    .signInWithAppleButtonStyle(.white)
+                    .frame(height: 56)
+                    .cornerRadius(16)
+                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+
+                    if let msg = auth.errorMessage, !msg.isEmpty {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                            Text(msg)
+                                .font(.caption)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(.red.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
+                    }
                 }
                 .padding(.horizontal, 32)
                 .padding(.bottom, 40)

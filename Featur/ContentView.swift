@@ -22,7 +22,7 @@ struct ContentView: View {
                 .tabItem { Label("Messages", systemImage: "bubble.left.and.bubble.right.fill") }
                 .tag(AppStateManager.Tab.messages)
 
-            NavigationStack { EnhancedProfileView() }
+            NavigationStack { PerfectProfileView() }
                 .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }
                 .tag(AppStateManager.Tab.profile)
         }
