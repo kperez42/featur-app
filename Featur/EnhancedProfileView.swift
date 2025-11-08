@@ -35,6 +35,7 @@ struct EnhancedProfileView: View {
                 HStack {
                     Spacer()
                     Button("Edit Profile") {
+                        Haptics.impact(.light)
                         showEditSheet = true
                     }
                     .buttonStyle(.borderedProminent)
@@ -69,6 +70,12 @@ struct EnhancedProfileView: View {
 
             }
             .padding(.bottom, 32)
+        }
+        .refreshable {
+            if let uid = auth.user?.uid {
+                await viewModel.loadProfile(uid: uid)
+                Haptics.impact(.light)
+            }
         }
         .sheet(isPresented: $showEditSheet) {
             if let profile = viewModel.profile {
@@ -163,6 +170,7 @@ struct EnhancedProfileView: View {
                 // Add more button
                 if profile.mediaURLs.count < 6 {
                     Button {
+                        Haptics.impact(.light)
                         showEditSheet = true
                     } label: {
                         RoundedRectangle(cornerRadius: 8)
@@ -217,39 +225,63 @@ struct EnhancedProfileView: View {
             
             VStack(spacing: 8) {
                 if let tiktok = profile.socialLinks.tiktok {
-                    SocialLinkRow(
-                        platform: "TikTok",
-                        username: tiktok.username,
-                        followers: tiktok.followerCount,
-                        icon: "music.note"
-                    )
+                    Button {
+                        Haptics.impact(.light)
+                        openSocialLink(platform: "tiktok", username: tiktok.username)
+                    } label: {
+                        SocialLinkRow(
+                            platform: "TikTok",
+                            username: tiktok.username,
+                            followers: tiktok.followerCount,
+                            icon: "music.note"
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                
+
                 if let instagram = profile.socialLinks.instagram {
-                    SocialLinkRow(
-                        platform: "Instagram",
-                        username: instagram.username,
-                        followers: instagram.followerCount,
-                        icon: "camera"
-                    )
+                    Button {
+                        Haptics.impact(.light)
+                        openSocialLink(platform: "instagram", username: instagram.username)
+                    } label: {
+                        SocialLinkRow(
+                            platform: "Instagram",
+                            username: instagram.username,
+                            followers: instagram.followerCount,
+                            icon: "camera"
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                
+
                 if let youtube = profile.socialLinks.youtube {
-                    SocialLinkRow(
-                        platform: "YouTube",
-                        username: youtube.username,
-                        followers: youtube.followerCount,
-                        icon: "play.rectangle"
-                    )
+                    Button {
+                        Haptics.impact(.light)
+                        openSocialLink(platform: "youtube", username: youtube.username)
+                    } label: {
+                        SocialLinkRow(
+                            platform: "YouTube",
+                            username: youtube.username,
+                            followers: youtube.followerCount,
+                            icon: "play.rectangle"
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                
+
                 if let twitch = profile.socialLinks.twitch {
-                    SocialLinkRow(
-                        platform: "Twitch",
-                        username: twitch.username,
-                        followers: twitch.followerCount,
-                        icon: "gamecontroller"
-                    )
+                    Button {
+                        Haptics.impact(.light)
+                        openSocialLink(platform: "twitch", username: twitch.username)
+                    } label: {
+                        SocialLinkRow(
+                            platform: "Twitch",
+                            username: twitch.username,
+                            followers: twitch.followerCount,
+                            icon: "gamecontroller"
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal)
@@ -259,6 +291,7 @@ struct EnhancedProfileView: View {
     private var settingsSection: some View {
         VStack(spacing: 12) {
             Button {
+                Haptics.impact(.medium)
                 Task { await auth.signOut() }
             } label: {
                 HStack {
@@ -279,15 +312,16 @@ struct EnhancedProfileView: View {
             Image(systemName: "person.crop.circle.badge.plus")
                 .font(.system(size: 64))
                 .foregroundStyle(AppTheme.accent)
-            
+
             Text("Complete Your Profile")
                 .font(.title2.bold())
-            
+
             Text("Add your details to start connecting with other creators")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            
+
             Button("Create Profile") {
+                Haptics.impact(.medium)
                 showEditSheet = true
             }
             .buttonStyle(.borderedProminent)
@@ -295,6 +329,27 @@ struct EnhancedProfileView: View {
         }
         .padding()
         .frame(height: 400)
+    }
+
+    private func openSocialLink(platform: String, username: String) {
+        var urlString = ""
+
+        switch platform.lowercased() {
+        case "tiktok":
+            urlString = "https://www.tiktok.com/@\(username)"
+        case "instagram":
+            urlString = "https://www.instagram.com/\(username)"
+        case "youtube":
+            urlString = "https://www.youtube.com/@\(username)"
+        case "twitch":
+            urlString = "https://www.twitch.tv/\(username)"
+        default:
+            return
+        }
+
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+        }
     }
 }
 
@@ -369,13 +424,15 @@ struct EditProfileView: View {
     @State private var profile: UserProfile
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var isSaving = false
+    @State private var isUploadingPhotos = false
+    @StateObject private var uploadViewModel = ProfileViewModel()
     let onSave: (UserProfile) -> Void
-    
+
     init(profile: UserProfile, onSave: @escaping (UserProfile) -> Void) {
         _profile = State(initialValue: profile)
         self.onSave = onSave
     }
-    
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -398,17 +455,21 @@ struct EditProfileView: View {
                                     }
                                 }
                             }
-                            
-                            Button {
-                                // Trigger photo picker
-                            } label: {
-                                Label("Add Photos", systemImage: "plus.circle")
+
+                            HStack {
+                                Label(isUploadingPhotos ? "Uploading..." : "Add Photos", systemImage: isUploadingPhotos ? "arrow.up.circle" : "plus.circle")
+                                if isUploadingPhotos {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                }
                             }
-                            .buttonStyle(.bordered)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
                         }
                         .padding()
                         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
                     }
+                    .disabled(isUploadingPhotos)
                     
                     // Basic Info
                     VStack(alignment: .leading, spacing: 16) {
@@ -447,6 +508,7 @@ struct EditProfileView: View {
                             ForEach(UserProfile.ContentStyle.allCases, id: \.self) { style in
                                 let isSelected = profile.contentStyles.contains(style)
                                 Button {
+                                    Haptics.impact(.light)
                                     if isSelected {
                                         profile.contentStyles.removeAll { $0 == style }
                                     } else {
@@ -537,12 +599,43 @@ struct EditProfileView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         isSaving = true
+                        Haptics.impact(.medium)
                         onSave(profile)
                         dismiss()
                     }
                     .disabled(profile.displayName.isEmpty || isSaving)
                 }
             }
+            .onChange(of: selectedPhotos) { oldValue, newValue in
+                guard !newValue.isEmpty else { return }
+                Task {
+                    await uploadSelectedPhotos(newValue)
+                    selectedPhotos = [] // Reset after upload
+                }
+            }
+        }
+    }
+
+    private func uploadSelectedPhotos(_ items: [PhotosPickerItem]) async {
+        guard !profile.uid.isEmpty else { return }
+        isUploadingPhotos = true
+        defer { isUploadingPhotos = false }
+
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                do {
+                    let url = try await uploadViewModel.uploadImageToStorage(userId: profile.uid, data: data)
+                    profile.mediaURLs.append(url)
+                    Haptics.impact(.light)
+                } catch {
+                    print("Error uploading photo: \(error)")
+                    Haptics.notify(.error)
+                }
+            }
+        }
+
+        if !profile.mediaURLs.isEmpty {
+            Haptics.notify(.success)
         }
     }
 }
