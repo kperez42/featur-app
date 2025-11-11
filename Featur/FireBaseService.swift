@@ -15,8 +15,25 @@ final class FirebaseService: ObservableObject {
     }
     
     func fetchProfile(uid: String) async throws -> UserProfile? {
-        try await db.collection("users").document(uid).getDocument(as: UserProfile.self)
+        guard !uid.isEmpty else {
+            print("⚠️ fetchProfile: UID is empty. Returning nil.")
+            return nil
+        }
+
+        do {
+            let profile = try await db.collection("users")
+                .document(uid)
+                .getDocument(as: UserProfile.self)
+
+            print("✅ Fetched profile for uid \(uid): \(profile.displayName)")
+            return profile
+
+        } catch {
+            print("❌ Error fetching profile for uid \(uid): \(error)")
+            throw error
+        }
     }
+
     
     func updateProfile(_ profile: UserProfile) async throws {
         // Use uid, not id
@@ -54,6 +71,14 @@ final class FirebaseService: ObservableObject {
     }
     
     func recordSwipe(_ action: SwipeAction) async throws {
+        // Guard for valid IDs
+            guard !action.userId.isEmpty, !action.targetUserId.isEmpty else {
+                print("⚠️ recordSwipe: Missing userId or targetUserId. Skipping swipe.")
+                return
+            }
+        //debug to confirm swipes
+        print(" recordSwipe: \(action.userId) → \(action.targetUserId), action=\(action.action)")
+
         try db.collection("swipes").addDocument(from: action)
         
         // Check for mutual match
@@ -65,6 +90,13 @@ final class FirebaseService: ObservableObject {
     
     
     private func checkAndCreateMatch(userId: String, targetUserId: String) async throws {
+        guard !userId.isEmpty, !targetUserId.isEmpty else {
+                print("⚠️ checkAndCreateMatch: Missing user IDs. Skipping match check.")
+                return
+            }
+        //debug statement to verify match detection
+        print("🟣 checkAndCreateMatch: checking \(userId) ↔ \(targetUserId)")
+
         // Check if target user also liked this user
         let reciprocalSwipe = try await db.collection("swipes")
             .whereField("userId", isEqualTo: targetUserId)
@@ -82,10 +114,21 @@ final class FirebaseService: ObservableObject {
                 isActive: true
             )
             try db.collection("matches").addDocument(from: match)
+            // Debug statment confirm match
+            print("✅ Match created between \(userId) and \(targetUserId)")
+
+        }else{
+            // Debug statement no match created
+            print("❌ No reciprocal like yet for \(userId) ↔ \(targetUserId)")
+
         }
     }
     
     func fetchMatches(forUser userId: String) async throws -> [Match] {
+        guard !userId.isEmpty else {
+                print("⚠️ fetchMatches: Empty userId. Returning no matches.")
+                return []
+            }
         let matches1 = try await db.collection("matches")
             .whereField("userId1", isEqualTo: userId)
             .whereField("isActive", isEqualTo: true)
@@ -101,8 +144,60 @@ final class FirebaseService: ObservableObject {
     }
     
     // MARK: - Messaging
-    
+    // MARK: - Conversations (create/get)
+
+    func getOrCreateConversation(between userA: String, and userB: String) async throws -> Conversation {
+        // 1) Try to find an existing conversation with both participants
+        let snapshot = try await db.collection("conversations")
+            .whereField("participantIds", arrayContains: userA)
+            .getDocuments()
+        
+        if let existing = snapshot.documents
+            .compactMap({ try? $0.data(as: Conversation.self) })
+            .first(where: { Set($0.participantIds) == Set([userA, userB]) }) {
+            return existing
+        }
+        
+        // 2) Create a new conversation
+        let newRef = db.collection("conversations").document()
+        let conv = Conversation(
+            id: newRef.documentID,
+            participantIds: [userA, userB],
+            lastMessage: nil,
+            lastMessageAt: Date(),
+            unreadCount: [userA: 0, userB: 0],
+            isGroupChat: false,
+            createdAt: Date()
+        )
+        try newRef.setData(from: conv)
+        return conv
+    }
+
+    // Optional: mark match as messaged once a conversation is created or first message sent
+    func markMatchAsMessaged(userA: String, userB: String) async {
+        do {
+            let q1 = try await db.collection("matches")
+                .whereField("userId1", isEqualTo: userA)
+                .whereField("userId2", isEqualTo: userB)
+                .getDocuments()
+            let q2 = try await db.collection("matches")
+                .whereField("userId1", isEqualTo: userB)
+                .whereField("userId2", isEqualTo: userA)
+                .getDocuments()
+            let docs = q1.documents + q2.documents
+            for doc in docs {
+                try await doc.reference.updateData(["hasMessaged": true])
+            }
+        } catch {
+            print("⚠️ markMatchAsMessaged failed: \(error)")
+        }
+    }
+
     func fetchConversations(forUser userId: String) async throws -> [Conversation] {
+        guard !userId.isEmpty else {
+               print("⚠️ fetchConversations: Empty userId. Returning no conversations.")
+               return []
+           }
         let snapshot = try await db.collection("conversations")
             .whereField("participantIds", arrayContains: userId)
             .order(by: "lastMessageAt", descending: true)
@@ -133,10 +228,32 @@ final class FirebaseService: ObservableObject {
     }
     
     func markMessagesAsRead(conversationId: String, userId: String) async throws {
+        // Guard against invalid IDs
+          guard !conversationId.isEmpty, !userId.isEmpty else {
+              print("⚠️ markMessagesAsRead: Missing conversationId or userId. Skipping update.")
+              return
+          }
         try await db.collection("conversations").document(conversationId).updateData([
             "unreadCount.\(userId)": 0
         ])
     }
+    // real time listener on Firestore's messages collection for a specfic conversation
+    func listenForMessages(conversationId: String, completion: @escaping ([Message]) -> Void) -> ListenerRegistration {
+        // set up query
+        db.collection("messages")
+          .whereField("conversationId", isEqualTo: conversationId)
+          .order(by: "sentAt")
+        // add snapshot to listen that the query is live
+          .addSnapshotListener { snapshot, error in
+              guard let snapshot = snapshot else { return }
+              // map documents to message model
+              let messages = snapshot.documents.compactMap { try? $0.data(as: Message.self) }
+              print(" New messages fetched: \(messages.count) for conversation \(conversationId)")
+
+              completion(messages)
+          }
+    }
+
     
     // MARK: - Featured Creators
     

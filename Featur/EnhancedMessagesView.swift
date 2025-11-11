@@ -1,10 +1,12 @@
 import SwiftUI
 import FirebaseAuth
-
+import FirebaseFirestore
 struct EnhancedMessagesView: View {
     @StateObject private var viewModel = MessagesViewModel()
     @EnvironmentObject var auth: AuthViewModel
     @State private var showNewChat = false
+    @State private var openConversation: Conversation? = nil
+
     
     var body: some View {
         Group {
@@ -12,11 +14,13 @@ struct EnhancedMessagesView: View {
                 signInPrompt
             } else if viewModel.isLoading {
                 ProgressView()
-            } else if viewModel.conversations.isEmpty {
+            } else if viewModel.conversations.isEmpty && viewModel.newMatches.isEmpty {
                 emptyState
             } else {
                 conversationsList
             }
+
+            
         }
         .navigationTitle("Messages")
         .navigationBarTitleDisplayMode(.inline)
@@ -36,8 +40,16 @@ struct EnhancedMessagesView: View {
         .task {
             if let userId = auth.user?.uid {
                 await viewModel.loadConversations(userId: userId)
+                
             }
+            
         }
+        .onChange(of: auth.user?.uid ?? "") { newValue in
+            guard !newValue.isEmpty else { return }
+            Task { await viewModel.loadConversations(userId: newValue) }
+        
+        }
+
     }
     
     private var conversationsList: some View {
@@ -71,12 +83,39 @@ struct EnhancedMessagesView: View {
             Text("New Connections")
                 .font(.headline)
                 .padding(.horizontal)
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(viewModel.newMatches.indices, id: \.self) { index in
-                        if let profile = viewModel.newMatches[index].profile {
-                            NewMatchCard(profile: profile)
+                        if let profile = viewModel.newMatches[index].profile,
+                           let currentUserId = auth.user?.uid {
+                            Button {
+                                Task {
+                                    do {
+                                        let match = viewModel.newMatches[index].match
+                                        let otherId = (match.userId1 == currentUserId)
+                                            ? match.userId2
+                                            : match.userId1
+
+                                        let conversation = try await viewModel.service.getOrCreateConversation(
+                                            between: currentUserId,
+                                            and: otherId
+                                        )
+
+                                        await viewModel.service.markMatchAsMessaged(
+                                            userA: currentUserId,
+                                            userB: otherId
+                                        )
+
+                                        openConversation = conversation
+                                    } catch {
+                                        print("❌ Failed to open conversation: \(error)")
+                                    }
+                                }
+                            } label: {
+                                NewMatchCard(profile: profile)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -85,8 +124,25 @@ struct EnhancedMessagesView: View {
         }
         .padding(.vertical, 16)
         .background(AppTheme.card)
+        .overlay(                // ✅ simpler than .background for navigation trigger
+            NavigationLink(
+                destination: Group {
+                    if let conv = openConversation {
+                        ChatView(conversation: conv)
+                    } else {
+                        EmptyView()
+                    }
+                },
+                isActive: Binding(
+                    get: { openConversation != nil },
+                    set: { if !$0 { openConversation = nil } }
+                ),
+                label: { EmptyView() }      // required label View
+            )
+            .opacity(0)                     // invisible, but keeps NavigationLink valid
+        )
     }
-    
+
     private var emptyState: some View {
         VStack(spacing: 20) {
             Image(systemName: "bubble.left.and.bubble.right")
@@ -197,21 +253,41 @@ struct ConversationRow: View {
     }
     
     private func profileAvatar(_ profile: UserProfile) -> some View {
-        AsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
-            image.resizable()
-        } placeholder: {
-            Circle()
-                .fill(AppTheme.accent.opacity(0.2))
-                .overlay {
-                    Text(String(profile.displayName.prefix(1)))
-                        .font(.headline)
-                        .foregroundStyle(AppTheme.accent)
-                }
+        AsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill() //
+                    .clipped()      //
+                    .frame(width: 56, height: 56)
+                    .clipShape(Circle())
+
+            case .failure(_):
+                placeholderAvatar(profile)
+
+            case .empty:
+                ProgressView()
+                    .frame(width: 56, height: 56)
+
+            @unknown default:
+                EmptyView()
+            }
         }
-        .frame(width: 56, height: 56)
-        .clipShape(Circle())
     }
-    
+
+    @ViewBuilder
+    private func placeholderAvatar(_ profile: UserProfile) -> some View {
+        Circle()
+            .fill(AppTheme.accent.opacity(0.2))
+            .overlay {
+                Text(String(profile.displayName.prefix(1)))
+                    .font(.headline)
+                    .foregroundStyle(AppTheme.accent)
+            }
+            .frame(width: 56, height: 56)
+    }
+
     private var groupAvatar: some View {
         ZStack {
             Circle()
@@ -314,10 +390,40 @@ struct ChatView: View {
         }
         .navigationTitle(conversation.isGroupChat ? (conversation.groupName ?? "Group") : (conversation.participantProfiles?.values.first?.displayName ?? "Chat"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 8) {
+                    if let profile = conversation.participantProfiles?.values.first,
+                       let urlString = (profile.mediaURLs ?? []).first,
+                       let url = URL(string: urlString) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .clipped()
+                        } placeholder: {
+                            Circle()
+                                .fill(AppTheme.accent.opacity(0.2))
+                        }
+                        .frame(width: 44, height: 44) // or 32 if you want smaller
+                        .clipShape(Circle())          // ✅ makes it perfectly round
+
+                    }
+                    
+                    Text(conversation.participantProfiles?.values.first?.displayName ?? "Chat")
+                        .font(.headline)
+                }
+            }
+        }
         .background(AppTheme.bg)
-        .task {
-            await viewModel.loadMessages(conversationId: conversation.id ?? "")
-            await viewModel.markAsRead(conversationId: conversation.id ?? "")
+        .onAppear {
+            Task {
+                await viewModel.loadMessages(conversationId: conversation.id ?? "")
+                await viewModel.markAsRead(conversationId: conversation.id ?? "")
+            }
+        }
+        .onDisappear {
+            viewModel.stopListening()
         }
     }
     
@@ -337,6 +443,7 @@ struct ChatView: View {
             )
             messageText = ""
             Haptics.impact(.light)
+            
         }
     }
 }
@@ -386,7 +493,7 @@ final class MessagesViewModel: ObservableObject {
     @Published var newMatches: [(match: Match, profile: UserProfile?)] = []
     @Published var isLoading = false
     
-    private let service = FirebaseService()
+    internal let service = FirebaseService()
     
     func loadConversations(userId: String) async {
         isLoading = true
@@ -394,21 +501,32 @@ final class MessagesViewModel: ObservableObject {
         
         do {
             conversations = try await service.fetchConversations(forUser: userId)
-            
-            // Load new matches
+            print(" Conversations fetched: \(conversations.count)")
+            // Attach other user's profile for display
+            for i in 0..<conversations.count {
+                if let otherId = conversations[i].participantIds.first(where: { $0 != userId }),
+                   let profile = try? await service.fetchProfile(uid: otherId) {
+                    conversations[i].participantProfiles = [otherId: profile]
+                }
+            }
+
             let matches = try await service.fetchMatches(forUser: userId)
-            let unmessaged = matches.filter { !$0.hasMessaged }
+            print(" Matches fetched: \(matches.count)")
+            
+            let unmessaged = matches.filter { !$0.hasMessaged && $0.isActive }
+            print(" Unmessaged active matches: \(unmessaged.count)")
             
             var matchesWithProfiles: [(Match, UserProfile?)] = []
             for match in unmessaged {
-                let otherId = match.userId1 == userId ? match.userId2 : match.userId1
+                let otherId = (match.userId1 == userId) ? match.userId2 : match.userId1
                 let profile = try? await service.fetchProfile(uid: otherId)
+                print("  • Match otherId=\(otherId) profileFound=\(profile != nil)")
                 matchesWithProfiles.append((match, profile))
             }
             newMatches = matchesWithProfiles
             
         } catch {
-            print("Error loading conversations: \(error)")
+            print(" Error loading conversations: \(error)")
         }
     }
 }
@@ -418,7 +536,25 @@ final class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     
     private let service = FirebaseService()
-    
+    private var listener: ListenerRegistration?
+    // Start firestore listener
+    func startListening(conversationId: String) {
+        // Debug statement to confirm we actively listen for messages
+        print(" Listening for messages in conversation: \(conversationId)")
+            listener = service.listenForMessages(conversationId: conversationId) { [weak self] newMessages in
+                Task { @MainActor in
+                    // print this to confirm Firestore pushed new data
+                    print("📨 Received snapshot with \(newMessages.count) messages")
+
+                    self?.messages = newMessages
+                }
+            }
+        }
+        
+        func stopListening() {
+            listener?.remove()
+            listener = nil
+        }
     func loadMessages(conversationId: String) async {
         do {
             messages = try await service.fetchMessages(conversationId: conversationId, limit: 100)
@@ -440,10 +576,14 @@ final class ChatViewModel: ObservableObject {
         
         do {
             try await service.sendMessage(message)
+            // print confirmation a message was sent
+            print(" Message sent: \(content) to \(recipientId) in \(conversationId)")
+
             messages.append(message)
         } catch {
             print("Error sending message: \(error)")
         }
+        
     }
     
     func markAsRead(conversationId: String) async {
