@@ -1261,30 +1261,4 @@ struct DiscoverFilters {
 }
 
 // MARK: - Extensions
-
-extension UserProfile {
-    var isOnline: Bool {
-        Bool.random()
-    }
-}
-
-extension UserProfile.ContentStyle {
-    var icon: String {
-        switch self {
-        case .comedy: return "theatermasks.fill"
-        case .editing: return "scissors"
-        case .beauty: return "sparkles"
-        case .fashion: return "tshirt.fill"
-        case .fitness: return "figure.run"
-        case .mukbang: return "fork.knife"
-        case .cooking: return "frying.pan.fill"
-        case .dance: return "figure.dance"
-        case .music: return "music.note"
-        case .gaming: return "gamecontroller.fill"
-        case .pet: return "pawprint.fill"
-        case .tech: return "laptopcomputer"
-        case .art: return "paintpalette.fill"
-        case .sports: return "sportscourt.fill"
-        }
-    }
-}
+// Note: Extensions for UserProfile and UserProfile.ContentStyle are in UserProfile+Extensions.swift
