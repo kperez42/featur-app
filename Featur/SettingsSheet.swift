@@ -628,23 +628,115 @@ struct ChangePasswordView: View {
     @State private var currentPassword = ""
     @State private var newPassword = ""
     @State private var confirmPassword = ""
-    
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var showSuccess = false
+    @Environment(\.dismiss) var dismiss
+
     var body: some View {
         Form {
             Section {
                 SecureField("Current Password", text: $currentPassword)
                 SecureField("New Password", text: $newPassword)
+                    .textContentType(.newPassword)
                 SecureField("Confirm New Password", text: $confirmPassword)
+                    .textContentType(.newPassword)
+            } footer: {
+                Text("Password must be at least 6 characters")
+                    .font(.caption)
             }
-            
-            Section {
-                Button("Change Password") {
-                    // TODO: Implement password change
+
+            if let error = errorMessage {
+                Section {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .font(.caption)
                 }
-                .disabled(newPassword.isEmpty || newPassword != confirmPassword)
+            }
+
+            Section {
+                Button {
+                    Task {
+                        await changePassword()
+                    }
+                } label: {
+                    if isLoading {
+                        HStack {
+                            ProgressView()
+                            Text("Changing Password...")
+                        }
+                    } else {
+                        Text("Change Password")
+                    }
+                }
+                .disabled(isInvalid || isLoading)
             }
         }
         .navigationTitle("Change Password")
+        .alert("Password Changed", isPresented: $showSuccess) {
+            Button("OK") {
+                dismiss()
+            }
+        } message: {
+            Text("Your password has been successfully updated.")
+        }
+    }
+
+    private var isInvalid: Bool {
+        currentPassword.isEmpty ||
+        newPassword.isEmpty ||
+        newPassword != confirmPassword ||
+        newPassword.count < 6
+    }
+
+    private func changePassword() async {
+        guard let user = Auth.auth().currentUser,
+              let email = user.email else {
+            errorMessage = "User not found"
+            return
+        }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            // Step 1: Reauthenticate user for security
+            let credential = EmailAuthProvider.credential(withEmail: email, password: currentPassword)
+            try await user.reauthenticate(with: credential)
+
+            // Step 2: Update password
+            try await user.updatePassword(to: newPassword)
+
+            // Step 3: Show success
+            isLoading = false
+            showSuccess = true
+
+            // Clear fields
+            currentPassword = ""
+            newPassword = ""
+            confirmPassword = ""
+
+            print("✅ Password changed successfully")
+
+        } catch let error as NSError {
+            isLoading = false
+
+            // Provide user-friendly error messages
+            switch error.code {
+            case AuthErrorCode.wrongPassword.rawValue:
+                errorMessage = "Current password is incorrect"
+            case AuthErrorCode.weakPassword.rawValue:
+                errorMessage = "New password is too weak"
+            case AuthErrorCode.requiresRecentLogin.rawValue:
+                errorMessage = "Please sign out and sign in again to change password"
+            case AuthErrorCode.networkError.rawValue:
+                errorMessage = "Network error. Please check your connection"
+            default:
+                errorMessage = "Failed to change password: \(error.localizedDescription)"
+            }
+
+            print("❌ Error changing password: \(error)")
+        }
     }
 }
 
