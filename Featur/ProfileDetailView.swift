@@ -130,10 +130,13 @@ struct ProfileDetailView: View {
             Text("You and \(profile.displayName) liked each other!")
         }
         .task {
-            // Load like status when view appears
+            // Load like status and online status when view appears
             if let currentUserId = Auth.auth().currentUser?.uid {
                 await viewModel.loadLikeStatus(currentUserId: currentUserId, targetUserId: profile.uid)
             }
+
+            // Fetch online status for this profile
+            await PresenceManager.shared.fetchOnlineStatus(userId: profile.uid)
         }
         .overlay(alignment: .bottom) {
             if viewModel.showCopySuccess {

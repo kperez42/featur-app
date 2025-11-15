@@ -857,6 +857,10 @@ final class DiscoverViewModel: ObservableObject {
 
                 guard !Task.isCancelled else { return }
 
+                // Step 3.5: Fetch online status for all profiles
+                let userIds = allProfiles.map { $0.uid }
+                await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+
                 // Step 4: Apply filters & finish
                 applyFilters()
                 isLoading = false

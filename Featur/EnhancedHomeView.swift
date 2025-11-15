@@ -892,8 +892,13 @@ final class HomeViewModel: ObservableObject {
             )
 
             profiles = fetched
+
+            // Fetch online status for all profiles
+            let userIds = fetched.map { $0.uid }
+            await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+
             isLoading = false
-            
+
         } catch {
             isLoading = false
             profiles = []

@@ -25,7 +25,15 @@ final class AuthViewModel: NSObject, ObservableObject {
 
         // Now safe to use Auth
         Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            Task { @MainActor in self?.user = user }
+            Task { @MainActor in
+                self?.user = user
+
+                // Update presence when user signs in
+                if let userId = user?.uid {
+                    await PresenceManager.shared.updatePresence(userId: userId)
+                    print("✅ User signed in - presence updated: \(userId)")
+                }
+            }
         }
 
         self.dumpEnvironmentOnce()
@@ -109,6 +117,12 @@ final class AuthViewModel: NSObject, ObservableObject {
 
     func signOut() async {
         do {
+            // Set user offline before signing out
+            if let userId = user?.uid {
+                await PresenceManager.shared.setOffline(userId: userId)
+                print("✅ User set offline before sign out: \(userId)")
+            }
+
             try Auth.auth().signOut()
             self.user = nil
             self.errorMessage = nil

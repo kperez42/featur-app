@@ -406,4 +406,63 @@ final class FirebaseService: ObservableObject {
         return sharedStyles * 2 + sharedInterests // weight content styles higher
     }
 
+    // MARK: - Presence & Online Status
+
+    /// Update user's last active timestamp
+    func updatePresence(userId: String) async throws {
+        guard !userId.isEmpty else {
+            print("⚠️ updatePresence: Empty userId")
+            return
+        }
+
+        try await db.collection("presence").document(userId).setData([
+            "lastActive": FieldValue.serverTimestamp(),
+            "status": "online"
+        ], merge: true)
+
+        print("✅ Updated presence for user: \(userId)")
+    }
+
+    /// Get user's last active timestamp
+    func getLastActive(userId: String) async throws -> Date? {
+        guard !userId.isEmpty else {
+            print("⚠️ getLastActive: Empty userId")
+            return nil
+        }
+
+        let doc = try await db.collection("presence").document(userId).getDocument()
+
+        guard let data = doc.data(),
+              let timestamp = data["lastActive"] as? Timestamp else {
+            return nil
+        }
+
+        return timestamp.dateValue()
+    }
+
+    /// Check if user is currently online (active within last 5 minutes)
+    func isUserOnline(userId: String) async throws -> Bool {
+        guard let lastActive = try await getLastActive(userId: userId) else {
+            return false
+        }
+
+        let fiveMinutesAgo = Date().addingTimeInterval(-5 * 60)
+        return lastActive > fiveMinutesAgo
+    }
+
+    /// Set user status to offline
+    func setOffline(userId: String) async throws {
+        guard !userId.isEmpty else {
+            print("⚠️ setOffline: Empty userId")
+            return
+        }
+
+        try await db.collection("presence").document(userId).setData([
+            "status": "offline",
+            "lastActive": FieldValue.serverTimestamp()
+        ], merge: true)
+
+        print("✅ Set offline for user: \(userId)")
+    }
+
 }
