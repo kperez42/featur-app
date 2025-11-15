@@ -210,7 +210,7 @@ struct ProfileDetailPlaceholder: View {
             ScrollView {
                 VStack(spacing: 20) {
                     // Profile Image
-                    if let firstMediaURL = profile.mediaURLs.first {
+                    if let firstMediaURL = profile.mediaURLs?.first {
                         AsyncImage(url: URL(string: firstMediaURL)) { phase in
                             switch phase {
                             case .success(let image):
@@ -241,7 +241,7 @@ struct ProfileDetailPlaceholder: View {
                                     .foregroundStyle(.secondary)
                             }
                             
-                            if profile.isVerified {
+                            if profile.isVerified ?? false {
                                 Image(systemName: "checkmark.seal.fill")
                                     .foregroundStyle(.blue)
                             }

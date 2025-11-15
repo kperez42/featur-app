@@ -16,7 +16,7 @@ struct ProfileDetailView: View {
             VStack(spacing: 0) {
                 // Image Gallery Header
                 ImageGalleryHeader(
-                    mediaURLs: profile.mediaURLs,
+                    mediaURLs: profile.mediaURLs ?? [],
                     selectedIndex: $selectedImageIndex,
                     onTapImage: { showImageViewer = true }
                 )
@@ -49,8 +49,10 @@ struct ProfileDetailView: View {
                     // Social Links
                     SocialLinksGrid(profile: profile)
                     
-                    // Collaboration Info
-                    CollaborationSection(preferences: profile.collaborationPreferences)
+                    if let prefs = profile.collaborationPreferences {
+                        CollaborationSection(preferences: prefs)
+                    }
+
                     
                     // Location
                     if let location = profile.location {
@@ -58,8 +60,8 @@ struct ProfileDetailView: View {
                     }
                     
                     // Interests
-                    if !profile.interests.isEmpty {
-                        InterestsSection(interests: profile.interests)
+                    if !(profile.interests ?? []).isEmpty {
+                        InterestsSection(interests: (profile.interests ?? []))
                     }
                     
                     // Report Button
@@ -116,7 +118,7 @@ struct ProfileDetailView: View {
             ReportSheet(profile: profile)
         }
         .fullScreenCover(isPresented: $showImageViewer) {
-            ImageViewerSheet(mediaURLs: profile.mediaURLs, selectedIndex: $selectedImageIndex)
+            ImageViewerSheet(mediaURLs: (profile.mediaURLs ?? []), selectedIndex: $selectedImageIndex)
         }
     }
 }
@@ -179,7 +181,7 @@ private struct ProfileHeaderInfo: View {
                         Text(profile.displayName)
                             .font(.system(size: 32, weight: .bold))
                         
-                        if profile.isVerified {
+                        if profile.isVerified ?? false {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.title2)
                                 .foregroundStyle(.blue)
@@ -270,12 +272,12 @@ private struct QuickStatsRow: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            StatColumn(value: formatNumber(profile.followerCount), label: "Followers")
+            StatColumn(value: formatNumber(profile.followerCount ?? 0), label: "Followers")
             
             Divider()
                 .frame(height: 40)
             
-            StatColumn(value: "\(profile.mediaURLs.count)", label: "Posts")
+            StatColumn(value: "\((profile.mediaURLs ?? []).count)", label: "Posts")
             
             Divider()
                 .frame(height: 40)
@@ -372,10 +374,10 @@ private struct SocialLinksGrid: View {
     
     var socialLinks: [(platform: String, account: UserProfile.SocialLinks.SocialAccount?, icon: String, color: Color)] {
         [
-            ("Instagram", profile.socialLinks.instagram, "camera", .pink),
-            ("TikTok", profile.socialLinks.tiktok, "music.note", .black),
-            ("YouTube", profile.socialLinks.youtube, "play.rectangle", .red),
-            ("Twitch", profile.socialLinks.twitch, "gamecontroller", .purple)
+            ("Instagram", profile.socialLinks?.instagram, "camera", .pink),
+            ("TikTok", profile.socialLinks?.tiktok, "music.note", .black),
+            ("YouTube", profile.socialLinks?.youtube, "play.rectangle", .red),
+            ("Twitch", profile.socialLinks?.twitch, "gamecontroller", .purple)
         ]
     }
     

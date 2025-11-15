@@ -240,12 +240,8 @@ struct EnhancedHomeView: View {
             }
         }
         .task {
-            // 🧪 TEST: Use test data in debug mode
-            #if DEBUG
-            viewModel.loadTestProfiles()
-            #else
+           // fetch the latest profiles using current user id, if nil default to an empty string
             await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
-            #endif
         }
         .refreshable {
             await viewModel.refresh(currentUserId: auth.user?.uid ?? "")
@@ -551,24 +547,45 @@ struct ProfileCardView: View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
                 // Background Image/Gradient
-                if let firstMediaURL = profile.mediaURLs.first {
-                    AsyncImage(url: URL(string: firstMediaURL)) { phase in
+                if let firstMediaURL = profile.mediaURLs?.first,
+                   let url = URL(string: firstMediaURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    
+                    AsyncImage(url: url) { phase in
                         switch phase {
                         case .empty:
-                            AppTheme.gradient
+                            // While loading: subtle gradient + blur shimmer
+                            ZStack {
+                                AppTheme.gradient
+                                Rectangle()
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(0.4)
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                            .transition(.opacity)
+                            
                         case .success(let image):
                             image
                                 .resizable()
-                                .aspectRatio(contentMode: .fill)
+                                .scaledToFill()
+                                .overlay(
+                                    // Add slight fade so gradient gently merges into image
+                                    AppTheme.gradient.opacity(0.15)
+                                )
+                                .transition(.opacity)
+                                .animation(.easeInOut(duration: 0.4), value: UUID()) // harmless trigger
+
                         case .failure:
                             AppTheme.gradient
                         @unknown default:
                             AppTheme.gradient
                         }
                     }
+                    
                 } else {
                     AppTheme.gradient
                 }
+
                 
                 // Gradient Overlay
                 LinearGradient(
@@ -590,7 +607,7 @@ struct ProfileCardView: View {
                                 .foregroundStyle(.white.opacity(0.9))
                         }
                         
-                        if profile.isVerified {
+                        if profile.isVerified ?? false {
                             Image(systemName: "checkmark.seal.fill")
                                 .foregroundStyle(.blue)
                                 .font(.title3)
@@ -840,12 +857,16 @@ final class HomeViewModel: ObservableObject {
         errorMessage = nil
         
         do {
+            guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
+                throw NSError(domain: "Missing current user profile", code: 0)
+            }
             let fetched = try await service.fetchDiscoverProfiles(
+                for: currentUser,
                 limit: 20,
                 excludeUserIds: Array(swipedUserIds)
             )
             
-            profiles = fetched.filter { $0.uid != currentUserId }
+            profiles = fetched
             isLoading = false
             
         } catch {
@@ -856,11 +877,12 @@ final class HomeViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             errorMessage = nil
             
-            print("❌ Error loading profiles: \(error.localizedDescription)")
+            print("❌ Error loading profiles: \(error)")
         }
     }
     
     func handleSwipe(profile: UserProfile, action: SwipeAction.Action) async {
+        /*
         // 🧪 TEST: Skip Firebase calls in debug mode
         #if DEBUG
         // Just remove from local array for testing
@@ -874,7 +896,7 @@ final class HomeViewModel: ObservableObject {
         }
         return
         #endif
-        
+        */
         guard let currentUserId = Auth.auth().currentUser?.uid else { return }
         
         swipedUserIds.insert(profile.uid)
@@ -893,6 +915,8 @@ final class HomeViewModel: ObservableObject {
         
         do {
             try await service.recordSwipe(swipe)
+            print("Swipe recorded to Firestore: \(action) → \(profile.displayName) (\(profile.uid))")
+
             
             if action == .like || action == .superLike {
                 let matches = try await service.fetchMatches(forUser: currentUserId)

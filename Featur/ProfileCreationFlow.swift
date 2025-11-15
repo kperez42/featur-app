@@ -5,7 +5,7 @@ import FirebaseFirestore
 struct ProfileCreationFlow: View {
     @ObservedObject var viewModel: ProfileViewModel
 
-    enum Step: Int, CaseIterable { case gender, age, contentType, socials, photos, review }
+    enum Step: Int, CaseIterable { case gender, age, contentType, socials, photos, location, review }
     @State private var step: Step = .gender
 
     // Local state
@@ -16,7 +16,7 @@ struct ProfileCreationFlow: View {
     @State private var tiktok: String = ""
     @State private var mediaURLs: [String] = []
     @State private var profileImageURL: String?
-    
+    @StateObject private var locationManager = LocationManager()
     // Custom view for step progress bar
         private var stepProgressBar: some View {
             GeometryReader { geometry in
@@ -81,6 +81,9 @@ struct ProfileCreationFlow: View {
                     case .photos:
                         PhotosPage(mediaURLs: $mediaURLs, profileImageURL: $profileImageURL)
                             .environmentObject(viewModel)
+                    case .location:
+                        LocationAccessPage(locationManager: locationManager)
+                        
                     case .review:
                         ReviewPage(
                             gender: gender,
@@ -95,6 +98,16 @@ struct ProfileCreationFlow: View {
                 }
                 .animation(.easeInOut, value: step)
                 .transition(.opacity)
+                // Automatically advance once user grants location access
+                .onChange(of: locationManager.authorizationStatus) {
+                    if locationManager.authorizationStatus == .authorizedWhenInUse ||
+                       locationManager.authorizationStatus == .authorizedAlways {
+                        withAnimation(.easeInOut) {
+                            step = .review
+                        }
+                    }
+                }
+
 
                 // --- Continue Button ---
                 Button(action: onContinue) {
@@ -122,6 +135,8 @@ struct ProfileCreationFlow: View {
         case .contentType: return !contentStyles.isEmpty
         case .socials:     return true
         case .photos:      return true
+        case .location:     return locationManager.authorizationStatus == .authorizedWhenInUse ||
+                                    locationManager.authorizationStatus == .authorizedAlways
         case .review:      return true
         }
     }
@@ -163,7 +178,12 @@ struct ProfileCreationFlow: View {
             displayName: nameFromRegistration,
             age: age,
             bio: nil,
-            location: nil,
+            location: UserProfile.Location(
+                city: locationManager.city,
+                state: locationManager.state,
+                country: locationManager.country,
+                coordinates: locationManager.coordinates
+            ),
             interests: [],
             contentStyles: contentStyles,
             socialLinks: links,
