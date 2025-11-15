@@ -777,19 +777,24 @@ final class DiscoverViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var errorMessage: String?
-    
+
     @Published var currentSort: SortOption = .relevance
     @Published var currentFilter: String?
     @Published var currentSearchQuery: String = ""
-    
+
     @Published var activeFilters = DiscoverFilters()
     @Published var selectedContentStyles: Set<UserProfile.ContentStyle> = []
     @Published var selectedCollabTypes: Set<UserProfile.CollaborationPreferences.CollabType> = []
-    
+
     private let service = FirebaseService()
     private var loadTask: Task<Void, Never>?
+    private var searchTask: Task<Void, Never>?
     private var currentPage = 0
     private let pageSize = 20
+
+    // Search optimization
+    private var searchCache: [String: (results: [UserProfile], timestamp: Date)] = [:]
+    private let cacheValidityDuration: TimeInterval = 300 // 5 minutes
     
     var totalProfiles: Int { filteredProfiles.count }
     var onlineCount: Int { filteredProfiles.filter { $0.isOnline }.count }
@@ -1150,22 +1155,79 @@ final class DiscoverViewModel: ObservableObject {
     }
     
     func search(query: String) async {
+        // Cancel any existing search task (debouncing)
+        searchTask?.cancel()
+
         currentSearchQuery = query
-        
-        if !query.isEmpty {
+
+        // If query is empty, show all profiles with filters
+        if query.isEmpty {
+            applyFilters()
+            return
+        }
+
+        // Minimum query length
+        guard query.count >= 2 else {
+            filteredProfiles = []
+            return
+        }
+
+        searchTask = Task {
+            // Debounce: wait 300ms before searching
+            try? await Task.sleep(nanoseconds: 300_000_000)
+
+            guard !Task.isCancelled else { return }
+
+            // Check cache first
+            let cacheKey = "\(query)_\(currentFilter ?? "")"
+            if let cached = searchCache[cacheKey],
+               Date().timeIntervalSince(cached.timestamp) < cacheValidityDuration {
+                print("✅ Using cached search results for '\(query)'")
+                filteredProfiles = cached.results
+                applySorting()
+                return
+            }
+
+            // Perform search
             do {
                 let results = try await service.searchProfiles(
                     query: query,
                     filters: currentFilter.map { [$0] }
                 )
+
+                guard !Task.isCancelled else { return }
+
+                // Cache the results
+                searchCache[cacheKey] = (results, Date())
+
+                // Limit cache size to prevent memory issues
+                if searchCache.count > 20 {
+                    // Remove oldest entries
+                    let sortedKeys = searchCache.keys.sorted {
+                        searchCache[$0]!.timestamp < searchCache[$1]!.timestamp
+                    }
+                    for key in sortedKeys.prefix(5) {
+                        searchCache.removeValue(forKey: key)
+                    }
+                }
+
                 filteredProfiles = results
                 applySorting()
+
+                print("✅ Search completed: \(results.count) results for '\(query)'")
+
             } catch {
+                guard !Task.isCancelled else { return }
                 errorMessage = "Search failed"
+                print("❌ Search error: \(error)")
             }
-        } else {
-            applyFilters()
         }
+    }
+
+    /// Clear the search cache (useful when data changes)
+    func clearSearchCache() {
+        searchCache.removeAll()
+        print("🗑️ Search cache cleared")
     }
     
     func sortBy(_ option: SortOption) {

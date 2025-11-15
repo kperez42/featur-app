@@ -355,23 +355,100 @@ final class FirebaseService: ObservableObject {
     }
     
     // MARK: - Search & Discovery
-    
+
+    /// Enhanced search with multi-field matching and relevance scoring
     func searchProfiles(query: String, filters: [String]? = nil) async throws -> [UserProfile] {
+        // Return empty if query is too short
+        guard query.count >= 2 else {
+            return []
+        }
+
         var firestoreQuery: Query = db.collection("users")
-        
+
+        // Apply content style filters
         if let filters = filters, !filters.isEmpty {
             firestoreQuery = firestoreQuery.whereField("contentStyles", arrayContainsAny: filters)
         }
-        
-        let snapshot = try await firestoreQuery.limit(to: 50).getDocuments()
+
+        let snapshot = try await firestoreQuery.limit(to: 100).getDocuments()
         let profiles = try snapshot.documents.compactMap { try $0.data(as: UserProfile.self) }
-        
-        // Filter by name if query is provided
-        if !query.isEmpty {
-            return profiles.filter { $0.displayName.localizedCaseInsensitiveContains(query) }
+
+        // Return all if query is empty
+        if query.isEmpty {
+            return profiles
         }
-        
-        return profiles
+
+        // Enhanced multi-field search with relevance scoring
+        let searchTerm = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        struct ScoredProfile {
+            let profile: UserProfile
+            let score: Int
+        }
+
+        let scoredProfiles = profiles.compactMap { profile -> ScoredProfile? in
+            var score = 0
+
+            // Display name match (highest priority)
+            let displayName = profile.displayName.lowercased()
+            if displayName == searchTerm {
+                score += 100 // Exact match
+            } else if displayName.hasPrefix(searchTerm) {
+                score += 50 // Starts with query
+            } else if displayName.contains(searchTerm) {
+                score += 25 // Contains query
+            } else if displayName.contains(where: { searchTerm.contains($0) }) {
+                score += 5 // Partial character match
+            }
+
+            // Bio match
+            if let bio = profile.bio?.lowercased() {
+                if bio.contains(searchTerm) {
+                    score += 15
+                }
+            }
+
+            // Interests match
+            if let interests = profile.interests {
+                for interest in interests {
+                    if interest.lowercased().contains(searchTerm) {
+                        score += 10
+                    }
+                }
+            }
+
+            // Content styles match
+            for style in profile.contentStyles {
+                if style.rawValue.lowercased().contains(searchTerm) {
+                    score += 8
+                }
+            }
+
+            // Location match
+            if let location = profile.location {
+                if let city = location.city, city.lowercased().contains(searchTerm) {
+                    score += 12
+                }
+                if let state = location.state, state.lowercased().contains(searchTerm) {
+                    score += 10
+                }
+            }
+
+            // Boost verified profiles slightly
+            if profile.isVerified == true {
+                score += 3
+            }
+
+            // Only return profiles with some relevance
+            return score > 0 ? ScoredProfile(profile: profile, score: score) : nil
+        }
+
+        // Sort by relevance score (descending)
+        let sortedProfiles = scoredProfiles
+            .sorted { $0.score > $1.score }
+            .map { $0.profile }
+
+        return sortedProfiles
     }
     
     // MARK: - Media Upload
