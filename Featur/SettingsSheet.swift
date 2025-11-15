@@ -639,7 +639,7 @@ struct EditAccountView: View {
                                     .frame(width: 120, height: 120)
                                     .clipShape(Circle())
                                     .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 2))
-                            } else if let photoURL = auth.user?.profilePhotoURL,
+                            } else if let photoURL = auth.user?.profileImageURL,
                                       !photoURL.isEmpty {
                                 AsyncImage(url: URL(string: photoURL)) { image in
                                     image
@@ -762,6 +762,86 @@ struct EditAccountView: View {
             } header: {
                 Text("Profile Information")
             }
+
+            // Media Gallery Section
+            Section {
+                // Gallery Grid
+                if let mediaURLs = auth.user?.mediaURLs, !mediaURLs.isEmpty {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
+                            ZStack(alignment: .topTrailing) {
+                                AsyncImage(url: URL(string: url)) { image in
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                } placeholder: {
+                                    Rectangle()
+                                        .fill(.gray.opacity(0.2))
+                                }
+                                .frame(height: 100)
+                                .clipped()
+                                .cornerRadius(8)
+
+                                // Delete button
+                                Button {
+                                    Task {
+                                        await viewModel.deleteMedia(at: index)
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.white)
+                                        .background(Circle().fill(.red))
+                                }
+                                .padding(4)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+
+                // Upload new media
+                PhotosPicker(selection: $viewModel.mediaSelections,
+                           maxSelectionCount: 6,
+                           matching: .images,
+                           photoLibrary: .shared()) {
+                    HStack {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .foregroundStyle(.blue)
+                        Text("Add Photos to Gallery")
+                        Spacer()
+                        if viewModel.isUploadingMedia {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .disabled(viewModel.isUploadingMedia || (auth.user?.mediaURLs?.count ?? 0) >= 6)
+
+                if viewModel.isUploadingMedia {
+                    HStack {
+                        Text("Uploading \(viewModel.uploadProgress.0) of \(viewModel.uploadProgress.1)...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        ProgressView(value: Double(viewModel.uploadProgress.0), total: Double(viewModel.uploadProgress.1))
+                            .frame(width: 100)
+                    }
+                }
+            } header: {
+                Text("Media Gallery")
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Add up to 6 photos to showcase your content")
+                    if let message = viewModel.mediaStatusMessage {
+                        Text(message)
+                            .foregroundStyle(viewModel.mediaUploadSuccess ? .green : .red)
+                    }
+                }
+                .font(.caption)
+            }
         }
         .navigationTitle("Edit Account")
         .onAppear {
@@ -788,6 +868,13 @@ final class EditAccountViewModel: ObservableObject {
     @Published var displayName = ""
     @Published var isUpdating = false
 
+    // Media gallery properties
+    @Published var mediaSelections: [PhotosPickerItem] = []
+    @Published var isUploadingMedia = false
+    @Published var mediaUploadSuccess = false
+    @Published var mediaStatusMessage: String?
+    @Published var uploadProgress: (Int, Int) = (0, 0)
+
     var auth: AuthViewModel?
     private var selectedImageData: Data?
     private let service = FirebaseService()
@@ -797,6 +884,13 @@ final class EditAccountViewModel: ObservableObject {
         Task {
             for await selection in $photoSelection.values {
                 await handlePhotoSelection(selection)
+            }
+        }
+
+        // Watch for media gallery selection changes
+        Task {
+            for await selections in $mediaSelections.values {
+                await handleMediaSelections(selections)
             }
         }
     }
@@ -863,11 +957,11 @@ final class EditAccountViewModel: ObservableObject {
                 throw NSError(domain: "EditAccount", code: -1, userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
             }
 
-            profile.profilePhotoURL = photoURL
+            profile.profileImageURL = photoURL
             try await service.updateProfile(profile)
 
             // Update local auth state
-            auth?.user?.profilePhotoURL = photoURL
+            auth?.user?.profileImageURL = photoURL
 
             // Success
             isUploading = false
@@ -941,6 +1035,134 @@ final class EditAccountViewModel: ObservableObject {
             errorMessage = "Failed to update display name"
             showError = true
             print("❌ Error updating display name: \(error)")
+        }
+    }
+
+    // MARK: - Media Gallery Methods
+
+    private func handleMediaSelections(_ selections: [PhotosPickerItem]) async {
+        guard !selections.isEmpty else { return }
+        guard let userId = Auth.auth().currentUser?.uid else {
+            mediaStatusMessage = "User not found"
+            return
+        }
+
+        // Check if we're at limit
+        let currentCount = auth?.user?.mediaURLs?.count ?? 0
+        let availableSlots = 6 - currentCount
+
+        if availableSlots <= 0 {
+            mediaStatusMessage = "Maximum 6 photos allowed"
+            mediaSelections = []
+            return
+        }
+
+        // Limit selections to available slots
+        let selectionsToProcess = Array(selections.prefix(availableSlots))
+
+        isUploadingMedia = true
+        mediaStatusMessage = "Processing images..."
+        uploadProgress = (0, selectionsToProcess.count)
+        mediaUploadSuccess = false
+
+        var uploadedURLs: [String] = []
+
+        do {
+            // Process each selection
+            for (index, selection) in selectionsToProcess.enumerated() {
+                uploadProgress = (index + 1, selectionsToProcess.count)
+
+                // Load image data
+                guard let data = try await selection.loadTransferable(type: Data.self) else {
+                    print("⚠️ Failed to load image \(index + 1)")
+                    continue
+                }
+
+                // Validate size
+                let maxSize = 10 * 1024 * 1024 // 10MB
+                if data.count > maxSize {
+                    print("⚠️ Image \(index + 1) too large")
+                    continue
+                }
+
+                // Compress
+                let compressedData = compressImageIfNeeded(data)
+
+                // Upload to Firebase Storage
+                let path = "media/\(userId)/\(UUID().uuidString).jpg"
+                let url = try await service.uploadMedia(data: compressedData, path: path)
+                uploadedURLs.append(url)
+
+                print("✅ Uploaded media \(index + 1) of \(selectionsToProcess.count)")
+            }
+
+            // Update profile with new URLs
+            if !uploadedURLs.isEmpty {
+                guard var profile = auth?.user else {
+                    throw NSError(domain: "EditAccount", code: -1, userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
+                }
+
+                var currentMediaURLs = profile.mediaURLs ?? []
+                currentMediaURLs.append(contentsOf: uploadedURLs)
+                profile.mediaURLs = currentMediaURLs
+
+                try await service.updateProfile(profile)
+
+                // Update local auth state
+                auth?.user?.mediaURLs = currentMediaURLs
+
+                mediaUploadSuccess = true
+                mediaStatusMessage = "Uploaded \(uploadedURLs.count) photo\(uploadedURLs.count > 1 ? "s" : "") successfully!"
+            }
+
+            // Clear selections
+            isUploadingMedia = false
+            mediaSelections = []
+
+            // Clear success message after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                self.mediaStatusMessage = nil
+                self.mediaUploadSuccess = false
+            }
+
+        } catch {
+            isUploadingMedia = false
+            mediaUploadSuccess = false
+            mediaStatusMessage = "Upload failed: \(error.localizedDescription)"
+            mediaSelections = []
+            print("❌ Error uploading media: \(error)")
+        }
+    }
+
+    func deleteMedia(at index: Int) async {
+        guard var profile = auth?.user,
+              var mediaURLs = profile.mediaURLs,
+              index < mediaURLs.count else {
+            return
+        }
+
+        let urlToDelete = mediaURLs[index]
+
+        do {
+            // Remove from array
+            mediaURLs.remove(at: index)
+            profile.mediaURLs = mediaURLs
+
+            // Update Firestore
+            try await service.updateProfile(profile)
+
+            // Update local auth state
+            auth?.user?.mediaURLs = mediaURLs
+
+            // TODO: Optionally delete from Firebase Storage to save space
+            // This would require adding a deleteMedia method to FirebaseService
+
+            print("✅ Deleted media at index \(index)")
+
+        } catch {
+            errorMessage = "Failed to delete photo"
+            showError = true
+            print("❌ Error deleting media: \(error)")
         }
     }
 }
