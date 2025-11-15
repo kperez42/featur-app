@@ -172,7 +172,9 @@ struct SettingsSheet: View {
                     }
                     
                     Button {
-                        viewModel.requestDataExport()
+                        Task {
+                            await viewModel.requestDataExport()
+                        }
                     } label: {
                         SettingRow(icon: "arrow.down.doc", title: "Download My Data", color: .blue)
                     }
@@ -306,8 +308,74 @@ final class SettingsViewModel: ObservableObject {
     }
     
     func deleteAccount() async {
-        // TODO: Implement account deletion
         print("🗑️ Deleting account...")
+
+        guard let currentUser = Auth.auth().currentUser else {
+            print("⚠️ No user logged in")
+            return
+        }
+
+        let userId = currentUser.uid
+
+        do {
+            // Step 1: Delete user data from Firestore
+            let service = FirebaseService()
+            let db = Firestore.firestore()
+
+            // Delete user profile
+            try await db.collection("users").document(userId).delete()
+            print("✅ Deleted user profile")
+
+            // Delete swipes
+            let swipes = try await db.collection("swipes")
+                .whereField("userId", isEqualTo: userId)
+                .getDocuments()
+            for doc in swipes.documents {
+                try await doc.reference.delete()
+            }
+            print("✅ Deleted \(swipes.documents.count) swipes")
+
+            // Delete matches
+            let matches1 = try await db.collection("matches")
+                .whereField("userId1", isEqualTo: userId)
+                .getDocuments()
+            let matches2 = try await db.collection("matches")
+                .whereField("userId2", isEqualTo: userId)
+                .getDocuments()
+            for doc in matches1.documents + matches2.documents {
+                try await doc.reference.delete()
+            }
+            print("✅ Deleted \(matches1.documents.count + matches2.documents.count) matches")
+
+            // Delete conversations and messages
+            let conversations = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .getDocuments()
+            for conv in conversations.documents {
+                // Delete messages in this conversation
+                if let convId = conv.documentID as String? {
+                    let messages = try await db.collection("messages")
+                        .whereField("conversationId", isEqualTo: convId)
+                        .getDocuments()
+                    for msg in messages.documents {
+                        try await msg.reference.delete()
+                    }
+                }
+                // Delete conversation
+                try await conv.reference.delete()
+            }
+            print("✅ Deleted \(conversations.documents.count) conversations")
+
+            // Step 2: Delete Firebase Auth account
+            try await currentUser.delete()
+            print("✅ Deleted Firebase Auth account")
+
+            print("✅ Account deletion completed successfully")
+
+        } catch {
+            print("❌ Error deleting account: \(error)")
+            throw error
+        }
     }
     
     func openHelpCenter() {
@@ -328,9 +396,115 @@ final class SettingsViewModel: ObservableObject {
         }
     }
     
-    func requestDataExport() {
-        // TODO: Implement data export
+    func requestDataExport() async {
         print("📦 Requesting data export...")
+
+        guard let currentUser = Auth.auth().currentUser else {
+            print("⚠️ No user logged in")
+            return
+        }
+
+        let userId = currentUser.uid
+
+        do {
+            let service = FirebaseService()
+            let db = Firestore.firestore()
+
+            // Collect all user data
+            var exportData: [String: Any] = [:]
+
+            // User profile
+            if let profile = try await service.fetchProfile(uid: userId) {
+                exportData["profile"] = [
+                    "uid": profile.uid,
+                    "displayName": profile.displayName,
+                    "age": profile.age ?? "N/A",
+                    "bio": profile.bio ?? "",
+                    "location": [
+                        "city": profile.location?.city ?? "",
+                        "state": profile.location?.state ?? "",
+                        "country": profile.location?.country ?? ""
+                    ],
+                    "interests": profile.interests ?? [],
+                    "contentStyles": profile.contentStyles.map { $0.rawValue },
+                    "isVerified": profile.isVerified ?? false,
+                    "followerCount": profile.followerCount ?? 0,
+                    "createdAt": ISO8601DateFormatter().string(from: profile.createdAt),
+                    "updatedAt": ISO8601DateFormatter().string(from: profile.updatedAt)
+                ]
+            }
+
+            // Swipe history
+            let swipes = try await db.collection("swipes")
+                .whereField("userId", isEqualTo: userId)
+                .getDocuments()
+            exportData["swipes"] = swipes.documents.map { doc in
+                var data = doc.data()
+                data["documentId"] = doc.documentID
+                return data
+            }
+
+            // Matches
+            let matches = try await service.fetchMatches(forUser: userId)
+            exportData["matches"] = matches.map { match in
+                [
+                    "matchId": match.id ?? "",
+                    "userId1": match.userId1,
+                    "userId2": match.userId2,
+                    "matchedAt": ISO8601DateFormatter().string(from: match.matchedAt),
+                    "hasMessaged": match.hasMessaged
+                ]
+            }
+
+            // Conversations
+            let conversations = try await service.fetchConversations(forUser: userId)
+            exportData["conversations"] = conversations.map { conv in
+                [
+                    "conversationId": conv.id ?? "",
+                    "participants": conv.participantIds,
+                    "lastMessage": conv.lastMessage ?? "",
+                    "lastMessageAt": ISO8601DateFormatter().string(from: conv.lastMessageAt),
+                    "createdAt": ISO8601DateFormatter().string(from: conv.createdAt)
+                ]
+            }
+
+            // Convert to JSON
+            let jsonData = try JSONSerialization.data(withJSONObject: exportData, options: .prettyPrinted)
+
+            // Save to file
+            let fileName = "featur_data_export_\(ISO8601DateFormatter().string(from: Date())).json"
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            try jsonData.write(to: tempURL)
+
+            // Present share sheet to export
+            let activityVC = UIActivityViewController(
+                activityItems: [tempURL],
+                applicationActivities: nil
+            )
+
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first,
+               let rootVC = window.rootViewController {
+
+                var topVC = rootVC
+                while let presented = topVC.presentedViewController {
+                    topVC = presented
+                }
+
+                if let popover = activityVC.popoverPresentationController {
+                    popover.sourceView = topVC.view
+                    popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+                    popover.permittedArrowDirections = []
+                }
+
+                topVC.present(activityVC, animated: true)
+            }
+
+            print("✅ Data export prepared successfully")
+
+        } catch {
+            print("❌ Error exporting data: \(error)")
+        }
     }
 }
 
