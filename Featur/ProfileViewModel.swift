@@ -140,7 +140,13 @@ final class ProfileViewModel: ObservableObject {
             
             // Update local profile
             if var currentProfile = self.profile {
-                currentProfile.mediaURLs.append(url)
+
+                // If mediaURLs is nil, create it
+                var urls = currentProfile.mediaURLs ?? []
+                urls.append(url)
+
+                // Reassign back into the struct
+                currentProfile.mediaURLs = urls
                 self.profile = currentProfile
             }
             

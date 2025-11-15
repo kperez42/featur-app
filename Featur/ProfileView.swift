@@ -260,7 +260,7 @@ private struct SignedInProfile: View {
     private func statsSection(profile: UserProfile) -> some View {
         HStack(spacing: 0) {
             statBox(
-                value: formatFollowerCount(profile.followerCount),
+                value: formatFollowerCount(profile.followerCount ?? 0),
                 label: "Followers",
                 icon: "person.2.fill"
             )
@@ -269,7 +269,7 @@ private struct SignedInProfile: View {
                 .frame(height: 40)
             
             statBox(
-                value: "\(profile.mediaURLs.count)",
+                value: "\((profile.mediaURLs ?? []).count)",
                 label: "Posts",
                 icon: "photo.stack.fill"
             )
@@ -362,16 +362,16 @@ private struct SignedInProfile: View {
             }
             
             // Social Links Card
-            if profile.socialLinks.tiktok != nil || 
-               profile.socialLinks.instagram != nil || 
-               profile.socialLinks.youtube != nil {
+            if profile.socialLinks?.tiktok != nil ||
+               profile.socialLinks?.instagram != nil ||
+               profile.socialLinks?.youtube != nil {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Social Media", systemImage: "link")
                             .font(.headline)
                         
                         VStack(spacing: 10) {
-                            if let tiktok = profile.socialLinks.tiktok {
+                            if let tiktok = profile.socialLinks?.tiktok {
                                 socialLinkRow(
                                     platform: "TikTok",
                                     icon: "music.note",
@@ -381,7 +381,7 @@ private struct SignedInProfile: View {
                                 )
                             }
                             
-                            if let instagram = profile.socialLinks.instagram {
+                            if let instagram = profile.socialLinks?.instagram {
                                 socialLinkRow(
                                     platform: "Instagram",
                                     icon: "camera",
@@ -391,7 +391,7 @@ private struct SignedInProfile: View {
                                 )
                             }
                             
-                            if let youtube = profile.socialLinks.youtube {
+                            if let youtube = profile.socialLinks?.youtube {
                                 socialLinkRow(
                                     platform: "YouTube",
                                     icon: "play.rectangle",
@@ -426,14 +426,16 @@ private struct SignedInProfile: View {
             }
             
             // Collaboration Preferences Card
-            if !profile.collaborationPreferences.lookingFor.isEmpty {
+            if !(profile.collaborationPreferences?.lookingFor ?? []).isEmpty {
+
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Looking to Collaborate", systemImage: "hand.wave.fill")
                             .font(.headline)
                         
                         FlowLayout(spacing: 8) {
-                            ForEach(profile.collaborationPreferences.lookingFor, id: \.self) { collab in
+                            ForEach(profile.collaborationPreferences?.lookingFor ?? [], id: \.self) { collab in
+
                                 Text(collab.rawValue)
                                     .font(.caption)
                                     .padding(.horizontal, 12)
@@ -445,7 +447,9 @@ private struct SignedInProfile: View {
                         HStack(spacing: 4) {
                             Image(systemName: "clock")
                                 .font(.caption)
-                            Text("Responds \(profile.collaborationPreferences.responseTime.displayText)")
+                            Text("Responds \(profile.collaborationPreferences?.responseTime.rawValue ?? "N/A")")
+
+
                                 .font(.caption)
                         }
                         .foregroundStyle(.secondary)
