@@ -201,7 +201,7 @@ struct EnhancedHomeView: View {
                 .animation(.spring(), value: viewModel.errorMessage)
             }
         }
-        .navigationTitle("Discover")
+        .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -855,17 +855,22 @@ final class HomeViewModel: ObservableObject {
     func loadProfiles(currentUserId: String) async {
         isLoading = true
         errorMessage = nil
-        
+
         do {
             guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
                 throw NSError(domain: "Missing current user profile", code: 0)
             }
+
+            // Fetch swiped user IDs from Firebase to ensure consistency across tabs
+            let swipedIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
+            swipedUserIds = Set(swipedIds)
+
             let fetched = try await service.fetchDiscoverProfiles(
                 for: currentUser,
                 limit: 20,
                 excludeUserIds: Array(swipedUserIds)
             )
-            
+
             profiles = fetched
             isLoading = false
             

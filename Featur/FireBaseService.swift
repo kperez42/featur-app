@@ -48,26 +48,34 @@ final class FirebaseService: ObservableObject {
     
     // MARK: - Discovery & Matching
     
-    // ✅ FIXED: Convert PrefixSequence to Array
+    // ✅ FIXED: Improved swipe exclusion to handle more than 10 users
     func fetchDiscoverProfiles(for user: UserProfile, limit: Int = 20, excludeUserIds: [String] = []) async throws -> [UserProfile] {
-        var query: Query = db.collection("users").limit(to: limit)
-        
-        // Exclude already swiped users
+        // Fetch more profiles than needed to account for client-side filtering
+        // This allows us to exclude more than 10 users (Firestore notIn limit)
+        let fetchLimit = excludeUserIds.count > 10 ? limit * 3 : limit
+        var query: Query = db.collection("users").limit(to: fetchLimit)
+
+        // Use Firestore notIn for first 10 excluded users (Firestore limit)
         if !excludeUserIds.isEmpty {
-            // Convert PrefixSequence to Array
             let limitedIds = Array(excludeUserIds.prefix(10))
             query = query.whereField(FieldPath.documentID(), notIn: limitedIds)
         }
-        
+
         let snapshot = try await query.getDocuments()
         var profiles = try snapshot.documents.compactMap{ try $0.data(as: UserProfile.self)}
-        //remove current user
-        profiles.removeAll {$0.uid == user.uid}
-        
-        //sort by similarity
-        profiles.sort { similarityScore(current: user, other: $0) > similarityScore(current: user, other: $1)}
-        
-        return profiles
+
+        // Remove current user
+        profiles.removeAll { $0.uid == user.uid }
+
+        // Client-side filtering for ALL excluded users (beyond the first 10)
+        let excludedSet = Set(excludeUserIds)
+        profiles.removeAll { excludedSet.contains($0.uid) }
+
+        // Sort by similarity
+        profiles.sort { similarityScore(current: user, other: $0) > similarityScore(current: user, other: $1) }
+
+        // Return only the requested limit
+        return Array(profiles.prefix(limit))
     }
     
     func recordSwipe(_ action: SwipeAction) async throws {
@@ -80,12 +88,23 @@ final class FirebaseService: ObservableObject {
         print(" recordSwipe: \(action.userId) → \(action.targetUserId), action=\(action.action)")
 
         try db.collection("swipes").addDocument(from: action)
-        
+
         // Check for mutual match
         if action.action == .like {
             try await checkAndCreateMatch(userId: action.userId, targetUserId: action.targetUserId)
         }
-        
+
+    }
+
+    // Fetch all user IDs that the current user has swiped on
+    func fetchSwipedUserIds(forUser userId: String) async throws -> [String] {
+        let snapshot = try await db.collection("swipes")
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
+
+        return snapshot.documents.compactMap { doc in
+            try? doc.data(as: SwipeAction.self)
+        }.map { $0.targetUserId }
     }
     
     

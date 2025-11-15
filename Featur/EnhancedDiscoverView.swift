@@ -829,8 +829,11 @@ final class DiscoverViewModel: ObservableObject {
                     return
                 }
 
+                //  Step 2.5: Fetch swiped user IDs to exclude them from discovery
+                let swipedUserIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
+
                 //  Step 3: Fetch discoverable profiles using that user
-                allProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: pageSize)
+                allProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: pageSize, excludeUserIds: swipedUserIds)
 
                 guard !Task.isCancelled else { return }
 

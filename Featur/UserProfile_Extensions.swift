@@ -39,12 +39,13 @@ extension UserProfile.CollaborationPreferences.ResponseTime {
     }
 }
 
-// MARK: - Online Status (Mock)
+// MARK: - Online Status
 
 extension UserProfile {
     var isOnline: Bool {
         // TODO: Replace with real online status from Firebase
-        Bool.random()
+        // For now, return false to avoid random UI changes
+        false
     }
 }
 
