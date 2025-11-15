@@ -135,6 +135,21 @@ struct ProfileDetailView: View {
                 await viewModel.loadLikeStatus(currentUserId: currentUserId, targetUserId: profile.uid)
             }
         }
+        .overlay(alignment: .bottom) {
+            if viewModel.showCopySuccess {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Link copied to clipboard")
+                        .font(.subheadline)
+                }
+                .padding()
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .padding(.bottom, 100)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(), value: viewModel.showCopySuccess)
+            }
+        }
     }
 }
 
@@ -564,6 +579,7 @@ final class ProfileDetailViewModel: ObservableObject {
     @Published var showSuccess = false
     @Published var showMatchAlert = false
     @Published var isLoading = false
+    @Published var showCopySuccess = false
 
     private let service = FirebaseService()
 
@@ -620,13 +636,52 @@ final class ProfileDetailViewModel: ObservableObject {
     }
 
     func shareProfile(profile: UserProfile) {
-        // TODO: Implement share functionality
         Haptics.impact(.light)
+
+        // Create shareable content
+        let profileURL = URL(string: "https://featur.app/profile/\(profile.uid)")!
+        let shareText = "Check out \(profile.displayName) on Featur! 🎬"
+
+        // Present iOS share sheet
+        let activityVC = UIActivityViewController(
+            activityItems: [shareText, profileURL],
+            applicationActivities: nil
+        )
+
+        // For iPad compatibility
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootVC = window.rootViewController {
+
+            // Find the topmost view controller
+            var topVC = rootVC
+            while let presented = topVC.presentedViewController {
+                topVC = presented
+            }
+
+            // For iPad - set popover presentation controller
+            if let popover = activityVC.popoverPresentationController {
+                popover.sourceView = topVC.view
+                popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+
+            topVC.present(activityVC, animated: true)
+        }
     }
 
     func copyProfileLink(profile: UserProfile) {
         UIPasteboard.general.string = "https://featur.app/profile/\(profile.uid)"
         Haptics.notify(.success)
+
+        // Show success feedback
+        showCopySuccess = true
+
+        // Auto-hide after 2 seconds
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            showCopySuccess = false
+        }
     }
 }
 
