@@ -2,6 +2,8 @@
 import SwiftUI
 import FirebaseAuth
 import UserNotifications
+import PhotosUI
+import FirebaseFirestore
 
 struct SettingsSheet: View {
     @EnvironmentObject var auth: AuthViewModel
@@ -618,9 +620,328 @@ final class NotificationSettingsViewModel: ObservableObject {
 
 // MARK: - Supporting Views
 struct EditAccountView: View {
+    @EnvironmentObject var auth: AuthViewModel
+    @StateObject private var viewModel = EditAccountViewModel()
+
     var body: some View {
-        Text("Edit Account View")
-            .navigationTitle("Edit Account")
+        Form {
+            // Profile Photo Section
+            Section {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        // Profile Image Display
+                        ZStack(alignment: .bottomTrailing) {
+                            if let selectedImage = viewModel.selectedImage {
+                                selectedImage
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 120, height: 120)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 2))
+                            } else if let photoURL = auth.user?.profilePhotoURL,
+                                      !photoURL.isEmpty {
+                                AsyncImage(url: URL(string: photoURL)) { image in
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                } placeholder: {
+                                    Image(systemName: "person.circle.fill")
+                                        .resizable()
+                                        .foregroundStyle(.gray)
+                                }
+                                .frame(width: 120, height: 120)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 2))
+                            } else {
+                                Image(systemName: "person.circle.fill")
+                                    .resizable()
+                                    .foregroundStyle(.gray)
+                                    .frame(width: 120, height: 120)
+                            }
+
+                            // Upload indicator
+                            if viewModel.isUploading {
+                                ProgressView()
+                                    .tint(.white)
+                                    .padding(8)
+                                    .background(.blue, in: Circle())
+                            } else {
+                                Image(systemName: "camera.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundStyle(.white)
+                                    .background(Circle().fill(.blue))
+                                    .overlay(Circle().stroke(.white, lineWidth: 2))
+                            }
+                        }
+
+                        PhotosPicker(selection: $viewModel.photoSelection,
+                                   matching: .images,
+                                   photoLibrary: .shared()) {
+                            Text(viewModel.selectedImage == nil ? "Change Photo" : "Update Photo")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.blue)
+                        }
+                        .disabled(viewModel.isUploading)
+
+                        if viewModel.selectedImage != nil {
+                            HStack(spacing: 12) {
+                                Button("Cancel") {
+                                    viewModel.cancelSelection()
+                                }
+                                .buttonStyle(.bordered)
+
+                                Button("Upload") {
+                                    Task {
+                                        await viewModel.uploadPhoto()
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(viewModel.isUploading)
+                            }
+                        }
+                    }
+                    Spacer()
+                }
+                .listRowBackground(Color.clear)
+            } header: {
+                Text("Profile Photo")
+            } footer: {
+                if let message = viewModel.statusMessage {
+                    Text(message)
+                        .foregroundStyle(viewModel.uploadSuccess ? .green : .red)
+                        .font(.caption)
+                }
+            }
+
+            // Account Info Section
+            Section {
+                HStack {
+                    Text("Email")
+                    Spacer()
+                    Text(Auth.auth().currentUser?.email ?? "N/A")
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Text("User ID")
+                    Spacer()
+                    Text(auth.user?.uid.prefix(8) ?? "N/A")
+                        .foregroundStyle(.secondary)
+                        .font(.caption.monospaced())
+                }
+
+                HStack {
+                    Text("Account Created")
+                    Spacer()
+                    if let created = Auth.auth().currentUser?.metadata.creationDate {
+                        Text(created.formatted(date: .abbreviated, time: .omitted))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("N/A")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Account Information")
+            }
+
+            // Display Name Section
+            Section {
+                TextField("Display Name", text: $viewModel.displayName)
+                    .textInputAutocapitalization(.words)
+
+                if viewModel.displayName != (auth.user?.displayName ?? "") {
+                    Button("Save Changes") {
+                        Task {
+                            await viewModel.updateDisplayName()
+                        }
+                    }
+                    .disabled(viewModel.displayName.isEmpty || viewModel.isUpdating)
+                }
+            } header: {
+                Text("Profile Information")
+            }
+        }
+        .navigationTitle("Edit Account")
+        .onAppear {
+            viewModel.auth = auth
+            viewModel.displayName = auth.user?.displayName ?? ""
+        }
+        .alert("Upload Error", isPresented: $viewModel.showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.errorMessage ?? "Unknown error occurred")
+        }
+    }
+}
+
+@MainActor
+final class EditAccountViewModel: ObservableObject {
+    @Published var photoSelection: PhotosPickerItem?
+    @Published var selectedImage: Image?
+    @Published var isUploading = false
+    @Published var uploadSuccess = false
+    @Published var statusMessage: String?
+    @Published var showError = false
+    @Published var errorMessage: String?
+    @Published var displayName = ""
+    @Published var isUpdating = false
+
+    var auth: AuthViewModel?
+    private var selectedImageData: Data?
+    private let service = FirebaseService()
+
+    init() {
+        // Watch for photo selection changes
+        Task {
+            for await selection in $photoSelection.values {
+                await handlePhotoSelection(selection)
+            }
+        }
+    }
+
+    private func handlePhotoSelection(_ selection: PhotosPickerItem?) async {
+        guard let selection = selection else { return }
+
+        do {
+            // Load the image data
+            guard let data = try await selection.loadTransferable(type: Data.self) else {
+                statusMessage = "Failed to load image"
+                return
+            }
+
+            // Validate image size (max 10MB)
+            let maxSize = 10 * 1024 * 1024 // 10MB
+            if data.count > maxSize {
+                statusMessage = "Image too large. Please select an image under 10MB."
+                return
+            }
+
+            selectedImageData = data
+
+            // Create SwiftUI Image for preview
+            if let uiImage = UIImage(data: data) {
+                selectedImage = Image(uiImage: uiImage)
+                statusMessage = "Ready to upload"
+                uploadSuccess = false
+            }
+        } catch {
+            print("❌ Error loading photo: \(error)")
+            statusMessage = "Failed to load image"
+        }
+    }
+
+    func cancelSelection() {
+        photoSelection = nil
+        selectedImage = nil
+        selectedImageData = nil
+        statusMessage = nil
+        uploadSuccess = false
+    }
+
+    func uploadPhoto() async {
+        guard let imageData = selectedImageData,
+              let userId = Auth.auth().currentUser?.uid else {
+            statusMessage = "No image selected or user not found"
+            return
+        }
+
+        isUploading = true
+        statusMessage = "Uploading..."
+        uploadSuccess = false
+
+        do {
+            // Compress image if needed
+            let compressedData = compressImageIfNeeded(imageData)
+
+            // Upload to Firebase Storage
+            let photoURL = try await service.uploadProfilePhoto(userId: userId, imageData: compressedData)
+
+            // Update user profile in Firestore
+            guard var profile = auth?.user else {
+                throw NSError(domain: "EditAccount", code: -1, userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
+            }
+
+            profile.profilePhotoURL = photoURL
+            try await service.updateProfile(profile)
+
+            // Update local auth state
+            auth?.user?.profilePhotoURL = photoURL
+
+            // Success
+            isUploading = false
+            uploadSuccess = true
+            statusMessage = "Photo uploaded successfully!"
+
+            // Clear selection after successful upload
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                self.selectedImage = nil
+                self.selectedImageData = nil
+                self.photoSelection = nil
+            }
+
+            print("✅ Profile photo uploaded: \(photoURL)")
+
+        } catch {
+            isUploading = false
+            uploadSuccess = false
+            statusMessage = "Upload failed"
+            errorMessage = error.localizedDescription
+            showError = true
+            print("❌ Error uploading photo: \(error)")
+        }
+    }
+
+    private func compressImageIfNeeded(_ data: Data) -> Data {
+        // If data is already small enough, return as is
+        let targetSize = 2 * 1024 * 1024 // 2MB target
+        if data.count <= targetSize {
+            return data
+        }
+
+        // Compress the image
+        guard let uiImage = UIImage(data: data) else { return data }
+
+        var compression: CGFloat = 0.8
+        var compressedData = data
+
+        while compressedData.count > targetSize && compression > 0.1 {
+            if let compressed = uiImage.jpegData(compressionQuality: compression) {
+                compressedData = compressed
+            }
+            compression -= 0.1
+        }
+
+        print("📦 Compressed image from \(data.count / 1024)KB to \(compressedData.count / 1024)KB")
+        return compressedData
+    }
+
+    func updateDisplayName() async {
+        guard let userId = Auth.auth().currentUser?.uid,
+              var profile = auth?.user,
+              !displayName.isEmpty else {
+            return
+        }
+
+        isUpdating = true
+
+        do {
+            profile.displayName = displayName
+            try await service.updateProfile(profile)
+
+            // Update local auth state
+            auth?.user?.displayName = displayName
+
+            isUpdating = false
+            print("✅ Display name updated")
+
+        } catch {
+            isUpdating = false
+            errorMessage = "Failed to update display name"
+            showError = true
+            print("❌ Error updating display name: \(error)")
+        }
     }
 }
 
