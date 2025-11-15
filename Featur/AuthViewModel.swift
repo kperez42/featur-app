@@ -107,6 +107,10 @@ final class AuthViewModel: NSObject, ObservableObject {
                 self.user = result.user
                 self.errorMessage = nil
                 log.debug("✅ Firebase sign-in success. uid=\(result.user.uid, privacy: .private)")
+
+                // Track analytics
+                AnalyticsManager.shared.setUserId(result.user.uid)
+                AnalyticsManager.shared.trackLogin(method: "apple")
             } catch {
                 let ns = error as NSError
                 self.errorMessage = "Firebase sign-in failed: \(ns.domain) code=\(ns.code) \(ns.localizedDescription)"
@@ -122,6 +126,9 @@ final class AuthViewModel: NSObject, ObservableObject {
                 await PresenceManager.shared.setOffline(userId: userId)
                 print("✅ User set offline before sign out: \(userId)")
             }
+
+            // Clear analytics data
+            AnalyticsManager.shared.clearUserData()
 
             try Auth.auth().signOut()
             self.user = nil

@@ -1214,6 +1214,9 @@ final class DiscoverViewModel: ObservableObject {
                 filteredProfiles = results
                 applySorting()
 
+                // Track analytics
+                await AnalyticsManager.shared.trackSearch(query: query, resultsCount: results.count)
+
                 print("✅ Search completed: \(results.count) results for '\(query)'")
 
             } catch {

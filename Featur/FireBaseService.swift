@@ -89,6 +89,9 @@ final class FirebaseService: ObservableObject {
 
         try db.collection("swipes").addDocument(from: action)
 
+        // Track analytics
+        await AnalyticsManager.shared.trackSwipe(action: action.action.rawValue, targetUserId: action.targetUserId)
+
         // Check for mutual match
         if action.action == .like {
             try await checkAndCreateMatch(userId: action.userId, targetUserId: action.targetUserId)
@@ -196,6 +199,9 @@ final class FirebaseService: ObservableObject {
             // Debug statment confirm match
             print("✅ Match created between \(userId) and \(targetUserId)")
 
+            // Track analytics
+            await AnalyticsManager.shared.trackMatch(matchedUserId: targetUserId)
+
         }else{
             // Debug statement no match created
             print("❌ No reciprocal like yet for \(userId) ↔ \(targetUserId)")
@@ -287,13 +293,19 @@ final class FirebaseService: ObservableObject {
     
     func sendMessage(_ message: Message) async throws {
         try db.collection("messages").addDocument(from: message)
-        
+
         // Update conversation
         try await db.collection("conversations").document(message.conversationId).updateData([
             "lastMessage": message.content,
             "lastMessageAt": message.sentAt,
             "unreadCount.\(message.recipientId)": FieldValue.increment(Int64(1))
         ])
+
+        // Track analytics
+        await AnalyticsManager.shared.trackMessageSent(
+            conversationId: message.conversationId,
+            hasMedia: message.mediaURL != nil
+        )
     }
     
     func fetchMessages(conversationId: String, limit: Int = 50) async throws -> [Message] {

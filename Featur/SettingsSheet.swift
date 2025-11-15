@@ -372,6 +372,9 @@ final class SettingsViewModel: ObservableObject {
             try await currentUser.delete()
             print("✅ Deleted Firebase Auth account")
 
+            // Track analytics before deletion completes
+            AnalyticsManager.shared.trackAccountDeletion(reason: nil)
+
             print("✅ Account deletion completed successfully")
 
         } catch {
@@ -501,6 +504,9 @@ final class SettingsViewModel: ObservableObject {
 
                 topVC.present(activityVC, animated: true)
             }
+
+            // Track analytics
+            AnalyticsManager.shared.trackDataExport()
 
             print("✅ Data export prepared successfully")
 
@@ -968,6 +974,9 @@ final class EditAccountViewModel: ObservableObject {
             uploadSuccess = true
             statusMessage = "Photo uploaded successfully!"
 
+            // Track analytics
+            AnalyticsManager.shared.trackMediaUpload(type: "profile_photo", count: 1)
+
             // Clear selection after successful upload
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 self.selectedImage = nil
@@ -1110,6 +1119,9 @@ final class EditAccountViewModel: ObservableObject {
 
                 // Update local auth state
                 auth?.user?.mediaURLs = currentMediaURLs
+
+                // Track analytics
+                AnalyticsManager.shared.trackMediaUpload(type: "gallery", count: uploadedURLs.count)
 
                 mediaUploadSuccess = true
                 mediaStatusMessage = "Uploaded \(uploadedURLs.count) photo\(uploadedURLs.count > 1 ? "s" : "") successfully!"
