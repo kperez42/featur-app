@@ -32,7 +32,8 @@ struct ProfileDetailView: View {
                         isLiked: viewModel.isLiked,
                         onLike: { viewModel.toggleLike(profile: profile) },
                         onMessage: { showMessageSheet = true },
-                        onShare: { viewModel.shareProfile(profile: profile) }
+                        onShare: { viewModel.shareProfile(profile: profile) },
+                        viewModel: viewModel
                     )
                     
                     // Stats
@@ -119,6 +120,20 @@ struct ProfileDetailView: View {
         }
         .fullScreenCover(isPresented: $showImageViewer) {
             ImageViewerSheet(mediaURLs: (profile.mediaURLs ?? []), selectedIndex: $selectedImageIndex)
+        }
+        .alert("It's a Match! 🎉", isPresented: $viewModel.showMatchAlert) {
+            Button("Send Message") {
+                showMessageSheet = true
+            }
+            Button("Keep Browsing", role: .cancel) { }
+        } message: {
+            Text("You and \(profile.displayName) liked each other!")
+        }
+        .task {
+            // Load like status when view appears
+            if let currentUserId = Auth.auth().currentUser?.uid {
+                await viewModel.loadLikeStatus(currentUserId: currentUserId, targetUserId: profile.uid)
+            }
         }
     }
 }
@@ -222,14 +237,20 @@ private struct ActionButtonsRow: View {
     let onLike: () -> Void
     let onMessage: () -> Void
     let onShare: () -> Void
-    
+    @ObservedObject var viewModel: ProfileDetailViewModel
+
     var body: some View {
         HStack(spacing: 12) {
             // Like Button
             Button(action: onLike) {
                 HStack {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                    Text(isLiked ? "Liked" : "Like")
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .tint(isLiked ? .white : AppTheme.accent)
+                    } else {
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                        Text(isLiked ? "Liked" : "Like")
+                    }
                 }
                 .font(.headline)
                 .foregroundStyle(isLiked ? .white : AppTheme.accent)
@@ -240,6 +261,7 @@ private struct ActionButtonsRow: View {
                     in: RoundedRectangle(cornerRadius: 16)
                 )
             }
+            .disabled(viewModel.isLoading)
             
             // Message Button
             Button(action: onMessage) {
@@ -540,23 +562,69 @@ private struct InterestsSection: View {
 final class ProfileDetailViewModel: ObservableObject {
     @Published var isLiked = false
     @Published var showSuccess = false
-    
+    @Published var showMatchAlert = false
+    @Published var isLoading = false
+
+    private let service = FirebaseService()
+
+    func loadLikeStatus(currentUserId: String, targetUserId: String) async {
+        do {
+            isLiked = try await service.checkLikeStatus(userId: currentUserId, targetUserId: targetUserId)
+        } catch {
+            print("❌ Error loading like status: \(error)")
+        }
+    }
+
     func toggleLike(profile: UserProfile) {
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            print("⚠️ No current user - cannot like")
+            return
+        }
+
+        // Optimistic UI update
         withAnimation(.spring(response: 0.3)) {
             isLiked.toggle()
         }
         Haptics.impact(isLiked ? .medium : .light)
-        
-        // TODO: Save like to Firebase
+
+        // Save to Firebase
+        Task {
+            isLoading = true
+
+            do {
+                if isLiked {
+                    // Save like
+                    let didMatch = try await service.saveLike(userId: currentUserId, targetUserId: profile.uid)
+
+                    if didMatch {
+                        // Show match alert
+                        showMatchAlert = true
+                        Haptics.notify(.success)
+                    }
+                } else {
+                    // Remove like
+                    try await service.removeLike(userId: currentUserId, targetUserId: profile.uid)
+                }
+
+            } catch {
+                print("❌ Error toggling like: \(error)")
+
+                // Revert UI on error
+                withAnimation {
+                    isLiked.toggle()
+                }
+            }
+
+            isLoading = false
+        }
     }
-    
+
     func shareProfile(profile: UserProfile) {
         // TODO: Implement share functionality
         Haptics.impact(.light)
     }
-    
+
     func copyProfileLink(profile: UserProfile) {
-        // TODO: Copy profile link to clipboard
         UIPasteboard.general.string = "https://featur.app/profile/\(profile.uid)"
         Haptics.notify(.success)
     }

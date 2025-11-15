@@ -106,8 +106,68 @@ final class FirebaseService: ObservableObject {
             try? doc.data(as: SwipeAction.self)
         }.map { $0.targetUserId }
     }
-    
-    
+
+    // Check if current user has liked a specific profile
+    func checkLikeStatus(userId: String, targetUserId: String) async throws -> Bool {
+        guard !userId.isEmpty, !targetUserId.isEmpty else {
+            print("⚠️ checkLikeStatus: Missing user IDs.")
+            return false
+        }
+
+        let snapshot = try await db.collection("swipes")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("targetUserId", isEqualTo: targetUserId)
+            .whereField("action", isEqualTo: SwipeAction.Action.like.rawValue)
+            .getDocuments()
+
+        return !snapshot.isEmpty
+    }
+
+    // Save a like from profile detail page (same as swipe right)
+    func saveLike(userId: String, targetUserId: String) async throws -> Bool {
+        guard !userId.isEmpty, !targetUserId.isEmpty else {
+            print("⚠️ saveLike: Missing user IDs.")
+            return false
+        }
+
+        let swipe = SwipeAction(
+            userId: userId,
+            targetUserId: targetUserId,
+            action: .like,
+            timestamp: Date()
+        )
+
+        try await recordSwipe(swipe)
+        print("✅ Like saved: \(userId) → \(targetUserId)")
+
+        // Return true if this created a match
+        let matches = try await fetchMatches(forUser: userId)
+        return matches.contains(where: {
+            $0.userId1 == targetUserId || $0.userId2 == targetUserId
+        })
+    }
+
+    // Remove a like (unlike)
+    func removeLike(userId: String, targetUserId: String) async throws {
+        guard !userId.isEmpty, !targetUserId.isEmpty else {
+            print("⚠️ removeLike: Missing user IDs.")
+            return
+        }
+
+        let snapshot = try await db.collection("swipes")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("targetUserId", isEqualTo: targetUserId)
+            .whereField("action", isEqualTo: SwipeAction.Action.like.rawValue)
+            .getDocuments()
+
+        for doc in snapshot.documents {
+            try await doc.reference.delete()
+        }
+
+        print("✅ Like removed: \(userId) → \(targetUserId)")
+    }
+
+
     private func checkAndCreateMatch(userId: String, targetUserId: String) async throws {
         guard !userId.isEmpty, !targetUserId.isEmpty else {
                 print("⚠️ checkAndCreateMatch: Missing user IDs. Skipping match check.")
