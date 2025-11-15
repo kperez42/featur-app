@@ -277,12 +277,32 @@ struct FeaturedView: View {
     // MARK: - Error Toast
     
     private func errorToast(_ message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundStyle(.white)
-            .padding()
-            .background(.red, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Button {
+                Task {
+                    await viewModel.loadFeatured(forceRefresh: true)
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding()
+        .background(.red, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
 }
 
@@ -831,9 +851,20 @@ final class FeaturedViewModel: ObservableObject {
             isLoading = false
         } catch {
             isLoading = false
-            errorMessage = "Unable to load featured creators"
+
+            // Provide specific error messages based on error type
+            if let nsError = error as NSError? {
+                if nsError.domain == NSURLErrorDomain {
+                    errorMessage = "No internet connection"
+                } else {
+                    errorMessage = "Failed to load featured creators"
+                }
+            } else {
+                errorMessage = "Failed to load featured creators"
+            }
+
             print("❌ Error loading featured: \(error)")
-            
+
             // Clear error after delay
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             errorMessage = nil

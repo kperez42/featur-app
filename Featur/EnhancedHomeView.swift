@@ -451,14 +451,34 @@ struct EnhancedHomeView: View {
     }
     
     // MARK: - Error Toast
-    
+
     private func errorToast(_ message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundStyle(.white)
-            .padding()
-            .background(.red, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Button {
+                Task {
+                    await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding()
+        .background(.red, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
 }
 
@@ -877,11 +897,21 @@ final class HomeViewModel: ObservableObject {
         } catch {
             isLoading = false
             profiles = []
-            errorMessage = "Unable to load profiles. Pull to refresh."
-            
+
+            // Provide specific error messages based on error type
+            if let nsError = error as NSError? {
+                if nsError.domain == NSURLErrorDomain {
+                    errorMessage = "No internet connection"
+                } else {
+                    errorMessage = "Failed to load profiles"
+                }
+            } else {
+                errorMessage = "Failed to load profiles"
+            }
+
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             errorMessage = nil
-            
+
             print("❌ Error loading profiles: \(error)")
         }
     }
@@ -944,7 +974,16 @@ final class HomeViewModel: ObservableObject {
                 await loadProfiles(currentUserId: currentUserId)
             }
         } catch {
-            errorMessage = "Failed to process swipe"
+            // Provide specific error messages
+            if let nsError = error as NSError?, nsError.domain == NSURLErrorDomain {
+                errorMessage = "Connection lost - swipe not saved"
+            } else {
+                errorMessage = "Failed to save swipe"
+            }
+
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            errorMessage = nil
+
             print("❌ Error handling swipe: \(error)")
         }
     }

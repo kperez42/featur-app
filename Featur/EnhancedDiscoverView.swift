@@ -365,14 +365,34 @@ struct EnhancedDiscoverView: View {
     
     
     // MARK: - Error Toast
-    
+
     private func errorToast(_ message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundStyle(.white)
-            .padding()
-            .background(.red, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Button {
+                Task {
+                    await viewModel.loadProfiles()
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding()
+        .background(.red, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
     
     // MARK: - Helper
@@ -848,7 +868,16 @@ final class DiscoverViewModel: ObservableObject {
                 allProfiles = []
                 filteredProfiles = []
 
-                errorMessage = "Unable to load profiles. Please check your connection."
+                // Provide specific error messages based on error type
+                if let nsError = error as NSError? {
+                    if nsError.domain == NSURLErrorDomain {
+                        errorMessage = "No internet connection"
+                    } else {
+                        errorMessage = "Failed to load creators"
+                    }
+                } else {
+                    errorMessage = "Failed to load creators"
+                }
 
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
                 if !Task.isCancelled {
