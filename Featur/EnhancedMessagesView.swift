@@ -417,12 +417,19 @@ struct ChatView: View {
         }
         .background(AppTheme.bg)
         .onAppear {
+            guard let conversationId = conversation.id else { return }
+
+            // Load initial messages
             Task {
-                await viewModel.loadMessages(conversationId: conversation.id ?? "")
-                await viewModel.markAsRead(conversationId: conversation.id ?? "")
+                await viewModel.loadMessages(conversationId: conversationId)
+                await viewModel.markAsRead(conversationId: conversationId)
             }
+
+            // Start real-time listener for new messages
+            viewModel.startListening(conversationId: conversationId)
         }
         .onDisappear {
+            // Clean up listener to prevent memory leaks
             viewModel.stopListening()
         }
     }
@@ -534,27 +541,37 @@ final class MessagesViewModel: ObservableObject {
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
-    
+
     private let service = FirebaseService()
     private var listener: ListenerRegistration?
+
     // Start firestore listener
     func startListening(conversationId: String) {
+        // Stop any existing listener first to prevent duplicates
+        stopListening()
+
         // Debug statement to confirm we actively listen for messages
         print(" Listening for messages in conversation: \(conversationId)")
-            listener = service.listenForMessages(conversationId: conversationId) { [weak self] newMessages in
-                Task { @MainActor in
-                    // print this to confirm Firestore pushed new data
-                    print("📨 Received snapshot with \(newMessages.count) messages")
-
-                    self?.messages = newMessages
-                }
+        listener = service.listenForMessages(conversationId: conversationId) { [weak self] newMessages in
+            Task { @MainActor in
+                // print this to confirm Firestore pushed new data
+                print("📨 Received snapshot with \(newMessages.count) messages")
+                self?.messages = newMessages
             }
         }
-        
-        func stopListening() {
-            listener?.remove()
-            listener = nil
-        }
+    }
+
+    func stopListening() {
+        listener?.remove()
+        listener = nil
+        print("🔇 Stopped listening for messages")
+    }
+
+    // Ensure cleanup happens even if view is dismissed abruptly
+    deinit {
+        listener?.remove()
+        print("🧹 ChatViewModel deinitialized - listener cleaned up")
+    }
     func loadMessages(conversationId: String) async {
         do {
             messages = try await service.fetchMessages(conversationId: conversationId, limit: 100)
