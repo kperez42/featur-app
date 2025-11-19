@@ -2923,122 +2923,159 @@ private struct MainProfileContent: View {
     // MARK: - Collaboration History Section
     private struct CollaborationHistorySection: View {
         let profile: UserProfile
-        
-        let collaborations = [
-            CollabItem(name: "Sarah J.", project: "Beauty Campaign", date: "2 weeks ago", image: nil, status: .completed),
-            CollabItem(name: "Marcus C.", project: "Gaming Stream", date: "1 month ago", image: nil, status: .completed),
-            CollabItem(name: "Alex R.", project: "Photography Series", date: "Ongoing", image: nil, status: .active)
-        ]
-        
+        @StateObject private var collabVM = CollaborationHistoryViewModel()
+        @State private var showAllCollabs = false
+
         var body: some View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Label("Collaboration History", systemImage: "person.2.fill")
                         .font(.headline)
-                    
+
                     Spacer()
-                    
-                    Text("\(collaborations.count)")
-                        .font(.caption.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(AppTheme.accent, in: Capsule())
+
+                    if !collabVM.collaborations.isEmpty {
+                        Text("\(collabVM.collaborations.count)")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(AppTheme.accent, in: Capsule())
+                    }
                 }
-                
-                VStack(spacing: 12) {
-                    ForEach(collaborations) { collab in
-                        CollabHistoryCard(collab: collab)
+
+                if collabVM.isLoading {
+                    ProgressView("Loading collaborations...")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding()
+                } else if collabVM.collaborations.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "person.2")
+                            .font(.largeTitle)
+                            .foregroundStyle(.secondary)
+                        Text("No collaborations yet")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(collabVM.collaborations.prefix(3)) { collabWithPartner in
+                            CollabHistoryCard(
+                                collaboration: collabWithPartner.collaboration,
+                                partnerProfile: collabWithPartner.partnerProfile
+                            )
+                        }
+
+                        if collabVM.collaborations.count > 3 {
+                            Button("View All \(collabVM.collaborations.count) Collaborations") {
+                                showAllCollabs = true
+                            }
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.accent)
+                        }
                     }
                 }
             }
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-        }
-    }
-    
-    struct CollabItem: Identifiable {
-        let id = UUID()
-        let name: String
-        let project: String
-        let date: String
-        let image: String?
-        let status: CollabStatus
-        
-        enum CollabStatus {
-            case active, completed, pending
-            
-            var color: Color {
-                switch self {
-                case .active: return .green
-                case .completed: return .blue
-                case .pending: return .orange
-                }
+            .task {
+                await collabVM.loadCollaborations(userId: profile.uid)
             }
-            
-            var icon: String {
-                switch self {
-                case .active: return "checkmark.circle.fill"
-                case .completed: return "checkmark.seal.fill"
-                case .pending: return "clock.fill"
-                }
+            .sheet(isPresented: $showAllCollabs) {
+                AllCollaborationsSheet(
+                    profile: profile,
+                    viewModel: collabVM
+                )
             }
         }
     }
-    
+
     private struct CollabHistoryCard: View {
-        let collab: CollabItem
-        
+        let collaboration: Collaboration
+        let partnerProfile: UserProfile?
+
         var body: some View {
             HStack(spacing: 12) {
                 // Avatar
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.accent.opacity(0.3))
-                        .frame(width: 50, height: 50)
-                    
-                    Text(collab.name.prefix(1))
-                        .font(.title3.bold())
-                        .foregroundStyle(AppTheme.accent)
+                if let imageURL = partnerProfile?.profileImageURL, let url = URL(string: imageURL) {
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(AppTheme.accent.opacity(0.3))
+                    }
+                    .frame(width: 50, height: 50)
+                    .clipShape(Circle())
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.accent.opacity(0.3))
+                            .frame(width: 50, height: 50)
+
+                        if let name = partnerProfile?.displayName {
+                            Text(name.prefix(1))
+                                .font(.title3.bold())
+                                .foregroundStyle(AppTheme.accent)
+                        } else {
+                            Image(systemName: "person.fill")
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                    }
                 }
-                
+
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(collab.project)
+                    Text(collaboration.projectName)
                         .font(.subheadline.bold())
-                    
+
                     HStack(spacing: 6) {
-                        Text(collab.name)
+                        Text(partnerProfile?.displayName ?? "Unknown")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        
+
                         Circle()
                             .fill(Color.secondary)
                             .frame(width: 2, height: 2)
-                        
-                        Text(collab.date)
+
+                        Text(formatDate(collaboration.startedAt))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                
+
                 Spacer()
-                
+
+                // Status Badge
                 HStack(spacing: 4) {
-                    Image(systemName: collab.status.icon)
-                        .font(.caption)
-                    Text(collab.status == .active ? "Active" : collab.status == .completed ? "Done" : "Pending")
+                    Image(systemName: collaboration.status.icon)
+                        .font(.caption2)
+                    Text(collaboration.status.rawValue)
                         .font(.caption2.bold())
                 }
-                .foregroundStyle(collab.status.color)
+                .foregroundStyle(.white)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(collab.status.color.opacity(0.15), in: Capsule())
+                .background(getStatusColor(collaboration.status), in: Capsule())
             }
             .padding()
             .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
         }
+
+        private func formatDate(_ date: Date) -> String {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .short
+            return formatter.localizedString(for: date, relativeTo: Date())
+        }
+
+        private func getStatusColor(_ status: Collaboration.CollabStatus) -> Color {
+            switch status {
+            case .active: return .green
+            case .completed: return .blue
+            case .pending: return .orange
+            }
+        }
     }
-    
+
     // MARK: - Creator Stats Dashboard
     private struct CreatorStatsDashboard: View {
         let profile: UserProfile
@@ -4638,6 +4675,166 @@ struct AddTestimonialSheet: View {
             return false
         } catch {
             return false
+        }
+    }
+}
+
+// MARK: - Collaboration History ViewModel
+@MainActor
+final class CollaborationHistoryViewModel: ObservableObject {
+    @Published var collaborations: [CollaborationWithPartner] = []
+    @Published var isLoading: Bool = false
+
+    struct CollaborationWithPartner: Identifiable {
+        var id: String { collaboration.id ?? UUID().uuidString }
+        let collaboration: Collaboration
+        let partnerProfile: UserProfile?
+    }
+
+    func loadCollaborations(userId: String) async {
+        isLoading = true
+
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+
+            // Fetch collaborations where user is either user1 or user2
+            let query1 = db.collection("collaborations")
+                .whereField("user1Id", isEqualTo: userId)
+            let query2 = db.collection("collaborations")
+                .whereField("user2Id", isEqualTo: userId)
+
+            let snapshot1 = try await query1.getDocuments()
+            let snapshot2 = try await query2.getDocuments()
+
+            var allCollabs: [Collaboration] = []
+
+            allCollabs += snapshot1.documents.compactMap { doc in
+                try? doc.data(as: Collaboration.self)
+            }
+            allCollabs += snapshot2.documents.compactMap { doc in
+                try? doc.data(as: Collaboration.self)
+            }
+
+            // Sort by date
+            allCollabs.sort { $0.startedAt > $1.startedAt }
+
+            // Fetch partner profiles for each collaboration
+            var collabsWithPartners: [CollaborationWithPartner] = []
+
+            for collab in allCollabs {
+                if let partnerId = collab.getPartnerUserId(currentUserId: userId) {
+                    let partnerProfile = try? await fetchProfile(userId: partnerId)
+                    collabsWithPartners.append(
+                        CollaborationWithPartner(
+                            collaboration: collab,
+                            partnerProfile: partnerProfile
+                        )
+                    )
+                }
+            }
+
+            collaborations = collabsWithPartners
+
+            print("✅ Loaded \(collaborations.count) collaborations")
+        } catch {
+            print("❌ Error loading collaborations: \(error)")
+        }
+
+        isLoading = false
+    }
+
+    private func fetchProfile(userId: String) async throws -> UserProfile? {
+        let db = FirebaseFirestore.Firestore.firestore()
+        let doc = try await db.collection("users").document(userId).getDocument()
+        return try? doc.data(as: UserProfile.self)
+    }
+}
+
+// MARK: - All Collaborations Sheet
+struct AllCollaborationsSheet: View {
+    let profile: UserProfile
+    @ObservedObject var viewModel: CollaborationHistoryViewModel
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    if !viewModel.collaborations.isEmpty {
+                        // Stats Summary
+                        HStack(spacing: 16) {
+                            StatBox(
+                                title: "Total",
+                                value: "\(viewModel.collaborations.count)",
+                                color: .blue
+                            )
+                            StatBox(
+                                title: "Active",
+                                value: "\(viewModel.collaborations.filter { $0.collaboration.status == .active }.count)",
+                                color: .green
+                            )
+                            StatBox(
+                                title: "Completed",
+                                value: "\(viewModel.collaborations.filter { $0.collaboration.status == .completed }.count)",
+                                color: .purple
+                            )
+                        }
+                        .padding(.horizontal)
+
+                        // All collaborations
+                        VStack(spacing: 12) {
+                            ForEach(viewModel.collaborations) { collabWithPartner in
+                                CollabHistoryCard(
+                                    collaboration: collabWithPartner.collaboration,
+                                    partnerProfile: collabWithPartner.partnerProfile
+                                )
+                            }
+                        }
+                        .padding(.horizontal)
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.2")
+                                .font(.system(size: 60))
+                                .foregroundStyle(.secondary)
+                            Text("No collaborations yet")
+                                .font(.headline)
+                            Text("Start collaborating with other creators!")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                    }
+                }
+                .padding(.vertical)
+            }
+            .background(AppTheme.bg)
+            .navigationTitle("Collaboration History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    struct StatBox: View {
+        let title: String
+        let value: String
+        let color: Color
+
+        var body: some View {
+            VStack(spacing: 4) {
+                Text(value)
+                    .font(.title2.bold())
+                    .foregroundStyle(color)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 }
