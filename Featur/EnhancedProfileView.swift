@@ -3116,89 +3116,6 @@ private struct MainProfileContent: View {
         }
     }
 
-    private struct CollabHistoryCard: View {
-        let collaboration: Collaboration
-        let partnerProfile: UserProfile?
-
-        var body: some View {
-            HStack(spacing: 12) {
-                // Avatar
-                if let imageURL = partnerProfile?.profileImageURL, let url = URL(string: imageURL) {
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Circle().fill(AppTheme.accent.opacity(0.3))
-                    }
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-                } else {
-                    ZStack {
-                        Circle()
-                            .fill(AppTheme.accent.opacity(0.3))
-                            .frame(width: 50, height: 50)
-
-                        if let name = partnerProfile?.displayName {
-                            Text(name.prefix(1))
-                                .font(.title3.bold())
-                                .foregroundStyle(AppTheme.accent)
-                        } else {
-                            Image(systemName: "person.fill")
-                                .foregroundStyle(AppTheme.accent)
-                        }
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(collaboration.projectName)
-                        .font(.subheadline.bold())
-
-                    HStack(spacing: 6) {
-                        Text(partnerProfile?.displayName ?? "Unknown")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Circle()
-                            .fill(Color.secondary)
-                            .frame(width: 2, height: 2)
-
-                        Text(formatDate(collaboration.startedAt))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer()
-
-                // Status Badge
-                HStack(spacing: 4) {
-                    Image(systemName: collaboration.status.icon)
-                        .font(.caption2)
-                    Text(collaboration.status.rawValue)
-                        .font(.caption2.bold())
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(getStatusColor(collaboration.status), in: Capsule())
-            }
-            .padding()
-            .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
-        }
-
-        private func formatDate(_ date: Date) -> String {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .short
-            return formatter.localizedString(for: date, relativeTo: Date())
-        }
-
-        private func getStatusColor(_ status: Collaboration.CollabStatus) -> Color {
-            switch status {
-            case .active: return .green
-            case .completed: return .blue
-            case .pending: return .orange
-            }
-        }
-    }
 
     // MARK: - Creator Stats Dashboard
     private struct CreatorStatsDashboard: View {
@@ -4959,6 +4876,91 @@ struct AllCollaborationsSheet: View {
             .frame(maxWidth: .infinity)
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
+// MARK: - Collaboration History Card
+struct CollabHistoryCard: View {
+    let collaboration: Collaboration
+    let partnerProfile: UserProfile?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Avatar
+            if let imageURL = partnerProfile?.profileImageURL, let url = URL(string: imageURL) {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Circle().fill(AppTheme.accent.opacity(0.3))
+                }
+                .frame(width: 50, height: 50)
+                .clipShape(Circle())
+            } else {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.accent.opacity(0.3))
+                        .frame(width: 50, height: 50)
+
+                    if let name = partnerProfile?.displayName {
+                        Text(name.prefix(1))
+                            .font(.title3.bold())
+                            .foregroundStyle(AppTheme.accent)
+                    } else {
+                        Image(systemName: "person.fill")
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(collaboration.projectName)
+                    .font(.subheadline.bold())
+
+                HStack(spacing: 6) {
+                    Text(partnerProfile?.displayName ?? "Unknown")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Circle()
+                        .fill(Color.secondary)
+                        .frame(width: 2, height: 2)
+
+                    Text(formatDate(collaboration.startedAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            // Status Badge
+            HStack(spacing: 4) {
+                Image(systemName: collaboration.status.icon)
+                    .font(.caption2)
+                Text(collaboration.status.rawValue)
+                    .font(.caption2.bold())
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(getStatusColor(collaboration.status), in: Capsule())
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private func getStatusColor(_ status: Collaboration.CollabStatus) -> Color {
+        switch status {
+        case .active: return .green
+        case .completed: return .blue
+        case .pending: return .orange
         }
     }
 }
