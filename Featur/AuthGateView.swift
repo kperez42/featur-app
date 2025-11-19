@@ -9,7 +9,27 @@ struct AuthGateView: View {
     var body: some View {
         Group {
             if let user = auth.user, user.isEmailVerified {
-                ContentView()
+                // Check if user has completed profile setup
+                if auth.isLoadingProfile {
+                    // Show loading while checking for profile
+                    ZStack {
+                        AppTheme.gradient.ignoresSafeArea()
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(1.5)
+                            Text("Loading your profile...")
+                                .foregroundStyle(.white)
+                                .font(.subheadline)
+                        }
+                    }
+                } else if auth.userProfile == nil {
+                    // No profile exists - show setup flow
+                    ProfileSetupView()
+                } else {
+                    // Profile exists - show main app
+                    ContentView()
+                }
             } else {
                 NavigationStack(path: $navigationPath) {
                     LoginView(navigationPath: $navigationPath) // Pass navigationPath

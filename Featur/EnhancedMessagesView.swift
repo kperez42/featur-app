@@ -4,10 +4,11 @@ import FirebaseFirestore
 struct EnhancedMessagesView: View {
     @StateObject private var viewModel = MessagesViewModel()
     @EnvironmentObject var auth: AuthViewModel
+    @EnvironmentObject var appState: AppStateManager
     @State private var showNewChat = false
-    @State private var openConversation: Conversation? = nil
+    @State private var navigateToConversation: Conversation? = nil
+    @State private var showChatView = false
 
-    
     var body: some View {
         Group {
             if auth.user == nil {
@@ -38,18 +39,59 @@ struct EnhancedMessagesView: View {
             NewChatView()
         }
         .task {
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Messages", screenClass: "EnhancedMessagesView")
+
             if let userId = auth.user?.uid {
                 await viewModel.loadConversations(userId: userId)
-                
             }
-            
         }
-        .onChange(of: auth.user?.uid ?? "") { newValue in
+        .refreshable {
+            if let userId = auth.user?.uid {
+                await viewModel.loadConversations(userId: userId)
+                Haptics.notify(.success)
+            }
+        }
+        .onChange(of: auth.user?.uid ?? "") { _, newValue in
             guard !newValue.isEmpty else { return }
             Task { await viewModel.loadConversations(userId: newValue) }
-        
         }
+        .onChange(of: appState.pendingMatchedUserId) { _, matchedUserId in
+            guard let userId = matchedUserId,
+                  let currentUserId = auth.user?.uid else { return }
 
+            Task {
+                await handlePendingMatch(currentUserId: currentUserId, matchedUserId: userId)
+            }
+        }
+        .sheet(isPresented: $showChatView) {
+            if let conversation = navigateToConversation {
+                ChatView(conversation: conversation)
+            }
+        }
+    }
+
+    private func handlePendingMatch(currentUserId: String, matchedUserId: String) async {
+        do {
+            // Create or get existing conversation
+            let conversation = try await viewModel.service.getOrCreateConversation(
+                between: currentUserId,
+                and: matchedUserId
+            )
+
+            // Navigate to the conversation
+            navigateToConversation = conversation
+            showChatView = true
+
+            // Clear the pending match
+            appState.pendingMatchedUserId = nil
+
+            print("✅ Navigated to conversation with matched user")
+
+        } catch {
+            print("❌ Error creating conversation for match: \(error)")
+            appState.pendingMatchedUserId = nil
+        }
     }
     
     private var conversationsList: some View {
@@ -107,7 +149,7 @@ struct EnhancedMessagesView: View {
                                             userB: otherId
                                         )
 
-                                        openConversation = conversation
+                                        navigateToConversation = conversation
                                     } catch {
                                         print("❌ Failed to open conversation: \(error)")
                                     }
@@ -127,15 +169,15 @@ struct EnhancedMessagesView: View {
         .overlay(                // ✅ simpler than .background for navigation trigger
             NavigationLink(
                 destination: Group {
-                    if let conv = openConversation {
+                    if let conv = navigateToConversation {
                         ChatView(conversation: conv)
                     } else {
                         EmptyView()
                     }
                 },
                 isActive: Binding(
-                    get: { openConversation != nil },
-                    set: { if !$0 { openConversation = nil } }
+                    get: { navigateToConversation != nil },
+                    set: { if !$0 { navigateToConversation = nil } }
                 ),
                 label: { EmptyView() }      // required label View
             )
@@ -337,6 +379,8 @@ struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
     @State private var messageText = ""
     @FocusState private var isInputFocused: Bool
+    @State private var showImagePicker = false
+    @State private var selectedImage: UIImage?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -349,7 +393,7 @@ struct ChatView: View {
                         }
                     }
                     .padding()
-                    .onChange(of: viewModel.messages.count) { _ in
+                    .onChange(of: viewModel.messages.count) { _, _ in
                         if let lastMessage = viewModel.messages.last {
                             withAnimation {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
@@ -362,9 +406,9 @@ struct ChatView: View {
             // Input Bar
             HStack(spacing: 12) {
                 Button {
-                    // Add media
+                    showImagePicker = true
                 } label: {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: "photo.circle.fill")
                         .font(.title2)
                         .foregroundStyle(AppTheme.accent)
                 }
@@ -417,13 +461,31 @@ struct ChatView: View {
         }
         .background(AppTheme.bg)
         .onAppear {
+            guard let conversationId = conversation.id else { return }
+
+            // Load initial messages
             Task {
-                await viewModel.loadMessages(conversationId: conversation.id ?? "")
-                await viewModel.markAsRead(conversationId: conversation.id ?? "")
+                await viewModel.loadMessages(conversationId: conversationId)
+                await viewModel.markAsRead(conversationId: conversationId)
             }
+
+            // Start real-time listener for new messages
+            viewModel.startListening(conversationId: conversationId)
         }
         .onDisappear {
+            // Clean up listener to prevent memory leaks
             viewModel.stopListening()
+        }
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(selectedImage: $selectedImage)
+        }
+        .onChange(of: selectedImage) { _, newImage in
+            if let image = newImage {
+                Task {
+                    await sendImageMessage(image: image)
+                    selectedImage = nil
+                }
+            }
         }
     }
     
@@ -441,9 +503,44 @@ struct ChatView: View {
                 recipientId: recipientId,
                 content: messageText
             )
+
+            // Track analytics
+            await AnalyticsManager.shared.trackMessageSent(conversationId: conversationId, hasMedia: false)
+
             messageText = ""
             Haptics.impact(.light)
-            
+        }
+    }
+
+    private func sendImageMessage(image: UIImage) async {
+        guard let currentUserId = Auth.auth().currentUser?.uid,
+              let conversationId = conversation.id else { return }
+
+        let recipientId = conversation.participantIds.first { $0 != currentUserId } ?? ""
+
+        do {
+            // Upload image to Firebase Storage
+            let service = FirebaseService()
+            let imageURL = try await service.uploadProfilePhoto(userId: currentUserId, image: image)
+
+            // Send message with image URL
+            await viewModel.sendMessage(
+                conversationId: conversationId,
+                senderId: currentUserId,
+                recipientId: recipientId,
+                content: "📷 Photo",
+                mediaURL: imageURL
+            )
+
+            // Track analytics
+            await AnalyticsManager.shared.trackMessageSent(conversationId: conversationId, hasMedia: true)
+
+            Haptics.notify(.success)
+            print("✅ Image message sent successfully")
+
+        } catch {
+            print("❌ Error sending image: \(error.localizedDescription)")
+            Haptics.notify(.error)
         }
     }
 }
@@ -457,23 +554,55 @@ struct MessageBubble: View {
     var body: some View {
         HStack {
             if isFromCurrentUser { Spacer(minLength: 60) }
-            
+
             VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                Text(message.content)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        isFromCurrentUser ? AppTheme.accent : AppTheme.card,
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                // Show image if mediaURL exists
+                if let mediaURL = message.mediaURL, let url = URL(string: mediaURL) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView()
+                                .frame(width: 200, height: 200)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 200, height: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        case .failure:
+                            Image(systemName: "photo")
+                                .frame(width: 200, height: 200)
+                                .background(AppTheme.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                    .frame(width: 200, height: 200)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(isFromCurrentUser ? AppTheme.accent : Color.clear, lineWidth: 2)
                     )
-                    .foregroundStyle(isFromCurrentUser ? .white : .primary)
-                
+                }
+
+                // Show text content (always show for context, especially for images)
+                if !message.content.isEmpty {
+                    Text(message.content)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            isFromCurrentUser ? AppTheme.accent : AppTheme.card,
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                        .foregroundStyle(isFromCurrentUser ? .white : .primary)
+                }
+
                 Text(timeString)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
             }
-            
+
             if !isFromCurrentUser { Spacer(minLength: 60) }
         }
     }
@@ -534,27 +663,37 @@ final class MessagesViewModel: ObservableObject {
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
-    
+
     private let service = FirebaseService()
     private var listener: ListenerRegistration?
+
     // Start firestore listener
     func startListening(conversationId: String) {
+        // Stop any existing listener first to prevent duplicates
+        stopListening()
+
         // Debug statement to confirm we actively listen for messages
         print(" Listening for messages in conversation: \(conversationId)")
-            listener = service.listenForMessages(conversationId: conversationId) { [weak self] newMessages in
-                Task { @MainActor in
-                    // print this to confirm Firestore pushed new data
-                    print("📨 Received snapshot with \(newMessages.count) messages")
-
-                    self?.messages = newMessages
-                }
+        listener = service.listenForMessages(conversationId: conversationId) { [weak self] newMessages in
+            Task { @MainActor in
+                // print this to confirm Firestore pushed new data
+                print("📨 Received snapshot with \(newMessages.count) messages")
+                self?.messages = newMessages
             }
         }
-        
-        func stopListening() {
-            listener?.remove()
-            listener = nil
-        }
+    }
+
+    func stopListening() {
+        listener?.remove()
+        listener = nil
+        print("🔇 Stopped listening for messages")
+    }
+
+    // Ensure cleanup happens even if view is dismissed abruptly
+    deinit {
+        listener?.remove()
+        print("🧹 ChatViewModel deinitialized - listener cleaned up")
+    }
     func loadMessages(conversationId: String) async {
         do {
             messages = try await service.fetchMessages(conversationId: conversationId, limit: 100)
@@ -564,12 +703,13 @@ final class ChatViewModel: ObservableObject {
         }
     }
     
-    func sendMessage(conversationId: String, senderId: String, recipientId: String, content: String) async {
+    func sendMessage(conversationId: String, senderId: String, recipientId: String, content: String, mediaURL: String? = nil) async {
         let message = Message(
             conversationId: conversationId,
             senderId: senderId,
             recipientId: recipientId,
             content: content,
+            mediaURL: mediaURL,
             sentAt: Date(),
             readAt: nil
         )
@@ -596,21 +736,100 @@ final class ChatViewModel: ObservableObject {
 
 struct NewChatView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = NewChatViewModel()
     @State private var searchText = ""
-    
+
+    var filteredMatches: [(match: Match, profile: UserProfile?)] {
+        if searchText.isEmpty {
+            return viewModel.matches
+        } else {
+            return viewModel.matches.filter { match in
+                guard let profile = match.profile else { return false }
+                return profile.displayName.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            VStack {
+            VStack(spacing: 0) {
                 SearchBar(text: $searchText, placeholder: "Search connections")
-                
-                Text("Select from your matches")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                
-                // List matches here
-                Spacer()
+                    .padding()
+
+                if viewModel.isLoading {
+                    ProgressView()
+                        .frame(maxHeight: .infinity)
+                } else if viewModel.matches.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "person.2.slash")
+                            .font(.system(size: 50))
+                            .foregroundStyle(.secondary)
+                        Text("No Matches Yet")
+                            .font(.headline)
+                        Text("Start swiping to find collaborators!")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(filteredMatches.indices, id: \.self) { index in
+                                if let profile = filteredMatches[index].profile {
+                                    Button {
+                                        Task {
+                                            await viewModel.createConversation(with: profile)
+                                            dismiss()
+                                        }
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            // Profile Photo
+                                            AsyncImage(url: URL(string: profile.profileImageURL ?? "")) { image in
+                                                image
+                                                    .resizable()
+                                                    .scaledToFill()
+                                            } placeholder: {
+                                                Circle()
+                                                    .fill(AppTheme.accent.opacity(0.2))
+                                                    .overlay {
+                                                        Text(profile.displayName.prefix(1))
+                                                            .font(.title2.bold())
+                                                            .foregroundStyle(AppTheme.accent)
+                                                    }
+                                            }
+                                            .frame(width: 50, height: 50)
+                                            .clipShape(Circle())
+
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(profile.displayName)
+                                                    .font(.headline)
+                                                    .foregroundStyle(.primary)
+
+                                                if let bio = profile.bio, !bio.isEmpty {
+                                                    Text(bio)
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                        .lineLimit(1)
+                                                }
+                                            }
+
+                                            Spacer()
+
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .padding()
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    Divider()
+                                        .padding(.leading, 76)
+                                }
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle("New Message")
             .navigationBarTitleDisplayMode(.inline)
@@ -620,6 +839,126 @@ struct NewChatView: View {
                 }
             }
             .background(AppTheme.bg)
+            .task {
+                await viewModel.loadMatches()
+            }
+            .alert("Error", isPresented: $viewModel.showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(viewModel.errorMessage)
+            }
+        }
+    }
+}
+
+// MARK: - New Chat View Model
+
+@MainActor
+final class NewChatViewModel: ObservableObject {
+    @Published var matches: [(match: Match, profile: UserProfile?)] = []
+    @Published var isLoading = false
+    @Published var showError = false
+    @Published var errorMessage = ""
+
+    private let service = FirebaseService()
+
+    func loadMatches() async {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            errorMessage = "Please sign in to continue"
+            showError = true
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            // Fetch all active matches
+            let fetchedMatches = try await service.fetchMatches(forUser: userId)
+            print("✅ Loaded \(fetchedMatches.count) matches for new chat")
+
+            // Fetch profiles for each match
+            var matchesWithProfiles: [(match: Match, profile: UserProfile?)] = []
+            for match in fetchedMatches {
+                let otherUserId = match.userId1 == userId ? match.userId2 : match.userId1
+                let profile = try? await service.fetchProfile(uid: otherUserId)
+                matchesWithProfiles.append((match: match, profile: profile))
+            }
+
+            matches = matchesWithProfiles
+
+        } catch {
+            errorMessage = "Failed to load matches: \(error.localizedDescription)"
+            showError = true
+            print("❌ Error loading matches: \(error)")
+        }
+    }
+
+    func createConversation(with profile: UserProfile) async {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+
+        do {
+            let conversation = try await service.getOrCreateConversation(
+                between: currentUserId,
+                and: profile.uid
+            )
+
+            print("✅ Conversation created/retrieved: \(conversation.id ?? "unknown")")
+
+            // Track analytics
+            AnalyticsManager.shared.trackConversationStarted(withUserId: profile.uid)
+
+        } catch {
+            errorMessage = "Failed to create conversation: \(error.localizedDescription)"
+            showError = true
+            print("❌ Error creating conversation: \(error)")
+        }
+    }
+}
+
+// MARK: - Image Picker
+
+import PhotosUI
+
+struct ImagePicker: UIViewControllerRepresentable {
+    @Binding var selectedImage: UIImage?
+    @Environment(\.dismiss) var dismiss
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let parent: ImagePicker
+
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            parent.dismiss()
+
+            guard let provider = results.first?.itemProvider else { return }
+
+            if provider.canLoadObject(ofClass: UIImage.self) {
+                provider.loadObject(ofClass: UIImage.self) { image, _ in
+                    DispatchQueue.main.async {
+                        self.parent.selectedImage = image as? UIImage
+                    }
+                }
+            }
         }
     }
 }

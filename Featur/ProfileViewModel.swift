@@ -48,11 +48,11 @@ final class ProfileViewModel: ObservableObject {
         do {
             var profileToSave = updatedProfile
             profileToSave.updatedAt = Date()
-            
-            try db.collection("users")
+
+            try await db.collection("users")
                 .document(updatedProfile.uid)
                 .setData(from: profileToSave, merge: true)
-            
+
             self.profile = profileToSave
             print("✅ Profile updated successfully")
         } catch {
@@ -70,10 +70,10 @@ final class ProfileViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            try db.collection("users")
+            try await db.collection("users")
                 .document(newProfile.uid)
                 .setData(from: newProfile)
-            
+
             self.profile = newProfile
             self.needsSetup = false
             print("✅ Profile created successfully")
@@ -101,13 +101,13 @@ final class ProfileViewModel: ObservableObject {
     }
     
     // MARK: - Update Profile Photo
-    
+
     func updateProfilePhoto(userId: String, imageData: Data) async {
         isLoading = true
-        
+
         do {
             let url = try await uploadImageToStorage(userId: userId, data: imageData)
-            
+
             // Update profile with new photo URL
             if var currentProfile = self.profile {
                 currentProfile.profileImageURL = url
@@ -117,15 +117,29 @@ final class ProfileViewModel: ObservableObject {
                 try await db.collection("users")
                     .document(userId)
                     .updateData(["profileImageURL": url])
-                
+
                 print("✅ Profile photo updated")
             }
         } catch {
             self.errorMessage = "Failed to upload photo: \(error.localizedDescription)"
             print("❌ Error uploading photo: \(error)")
         }
-        
+
         isLoading = false
+    }
+
+    // MARK: - Upload Gallery Photo
+
+    func uploadGalleryPhoto(userId: String, imageData: Data) async -> String? {
+        do {
+            let url = try await uploadImageToStorage(userId: userId, data: imageData)
+            print("✅ Gallery photo uploaded: \(url)")
+            return url
+        } catch {
+            self.errorMessage = "Failed to upload gallery photo: \(error.localizedDescription)"
+            print("❌ Error uploading gallery photo: \(error)")
+            return nil
+        }
     }
     
     // MARK: - Add Media URLs
@@ -135,7 +149,7 @@ final class ProfileViewModel: ObservableObject {
             try await db.collection("users")
                 .document(userId)
                 .updateData([
-                    "mediaURLs": FieldValue.arrayUnion([url])
+                    "mediaURLs": FirebaseFirestore.FieldValue.arrayUnion([url])
                 ])
             
             // Update local profile

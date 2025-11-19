@@ -1,6 +1,7 @@
 // ProfileDetailView.swift - View Other Creators' Profiles
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 
 struct ProfileDetailView: View {
     let profile: UserProfile
@@ -8,62 +9,88 @@ struct ProfileDetailView: View {
     @StateObject private var viewModel = ProfileDetailViewModel()
     @State private var showMessageSheet = false
     @State private var showReportSheet = false
-    @State private var selectedImageIndex = 0
-    @State private var showImageViewer = false
-    
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                // Image Gallery Header
-                ImageGalleryHeader(
-                    mediaURLs: profile.mediaURLs ?? [],
-                    selectedIndex: $selectedImageIndex,
-                    onTapImage: { showImageViewer = true }
-                )
-                
-                // Profile Content
-                VStack(spacing: 20) {
-                    // Name & Basic Info
-                    ProfileHeaderInfo(profile: profile)
-                    
-                    // Action Buttons
-                    ActionButtonsRow(
-                        profile: profile,
-                        isLiked: viewModel.isLiked,
-                        onLike: { viewModel.toggleLike(profile: profile) },
-                        onMessage: { showMessageSheet = true },
-                        onShare: { viewModel.shareProfile(profile: profile) }
-                    )
-                    
-                    // Stats
-                    QuickStatsRow(profile: profile)
-                    
-                    // Bio
-                    if let bio = profile.bio, !bio.isEmpty {
-                        BioSection(bio: bio)
+            VStack(spacing: 20) {
+                // Single Profile Image
+                if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 400)
+                                .clipped()
+                        default:
+                            Rectangle()
+                                .fill(AppTheme.accent.opacity(0.2))
+                                .frame(height: 400)
+                        }
                     }
-                    
-                    // Content Styles
-                    ContentStylesSection(styles: profile.contentStyles)
-                    
-                    // Social Links
-                    SocialLinksGrid(profile: profile)
-                    
-                    if let prefs = profile.collaborationPreferences {
-                        CollaborationSection(preferences: prefs)
+                } else {
+                    Rectangle()
+                        .fill(AppTheme.accent.opacity(0.2))
+                        .frame(height: 400)
+                }
+
+                VStack(spacing: 20) {
+                    // Name
+                    Text(profile.displayName)
+                        .font(.system(size: 32, weight: .bold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    // Like and Message Buttons
+                    HStack(spacing: 12) {
+                        // Like Button
+                        Button(action: { viewModel.toggleLike(profile: profile) }) {
+                            HStack {
+                                if viewModel.isLoading {
+                                    ProgressView()
+                                        .tint(viewModel.isLiked ? .white : AppTheme.accent)
+                                } else {
+                                    Image(systemName: viewModel.isLiked ? "heart.fill" : "heart")
+                                    Text(viewModel.isLiked ? "Liked" : "Like")
+                                }
+                            }
+                            .font(.headline)
+                            .foregroundStyle(viewModel.isLiked ? .white : AppTheme.accent)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                viewModel.isLiked ? AppTheme.accent : AppTheme.card,
+                                in: RoundedRectangle(cornerRadius: 16)
+                            )
+                        }
+                        .disabled(viewModel.isLoading)
+
+                        // Message Button
+                        Button(action: { showMessageSheet = true }) {
+                            HStack {
+                                Image(systemName: "message.fill")
+                                Text("Message")
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                        }
                     }
 
-                    
-                    // Location
-                    if let location = profile.location {
-                        LocationSection(location: location)
+                    // Bio (if exists)
+                    if let bio = profile.bio, !bio.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("About")
+                                .font(.headline)
+                            Text(bio)
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    
-                    // Interests
-                    if !(profile.interests ?? []).isEmpty {
-                        InterestsSection(interests: (profile.interests ?? []))
-                    }
-                    
+
                     // Report Button
                     Button {
                         showReportSheet = true
@@ -83,42 +110,16 @@ struct ProfileDetailView: View {
         }
         .background(AppTheme.bg)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        viewModel.shareProfile(profile: profile)
-                    } label: {
-                        Label("Share Profile", systemImage: "square.and.arrow.up")
-                    }
-                    
-                    Button {
-                        viewModel.copyProfileLink(profile: profile)
-                    } label: {
-                        Label("Copy Link", systemImage: "link")
-                    }
-                    
-                    Divider()
-                    
-                    Button(role: .destructive) {
-                        showReportSheet = true
-                    } label: {
-                        Label("Report", systemImage: "exclamationmark.triangle")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .foregroundStyle(AppTheme.accent)
-                }
-            }
-        }
         .sheet(isPresented: $showMessageSheet) {
             MessageSheet(recipientProfile: profile)
         }
         .sheet(isPresented: $showReportSheet) {
             ReportSheet(profile: profile)
         }
-        .fullScreenCover(isPresented: $showImageViewer) {
-            ImageViewerSheet(mediaURLs: (profile.mediaURLs ?? []), selectedIndex: $selectedImageIndex)
+        .task {
+            if let currentUserId = Auth.auth().currentUser?.uid {
+                await viewModel.loadLikeStatus(currentUserId: currentUserId, targetUserId: profile.uid)
+            }
         }
     }
 }
@@ -187,7 +188,7 @@ private struct ProfileHeaderInfo: View {
                                 .foregroundStyle(.blue)
                         }
                         
-                        if profile.isOnline {
+                        if PresenceManager.shared.isOnline(userId: profile.uid) {
                             HStack(spacing: 4) {
                                 Circle()
                                     .fill(.green)
@@ -222,14 +223,20 @@ private struct ActionButtonsRow: View {
     let onLike: () -> Void
     let onMessage: () -> Void
     let onShare: () -> Void
-    
+    @ObservedObject var viewModel: ProfileDetailViewModel
+
     var body: some View {
         HStack(spacing: 12) {
             // Like Button
             Button(action: onLike) {
                 HStack {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                    Text(isLiked ? "Liked" : "Like")
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .tint(isLiked ? .white : AppTheme.accent)
+                    } else {
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                        Text(isLiked ? "Liked" : "Like")
+                    }
                 }
                 .font(.headline)
                 .foregroundStyle(isLiked ? .white : AppTheme.accent)
@@ -240,6 +247,7 @@ private struct ActionButtonsRow: View {
                     in: RoundedRectangle(cornerRadius: 16)
                 )
             }
+            .disabled(viewModel.isLoading)
             
             // Message Button
             Button(action: onMessage) {
@@ -263,45 +271,6 @@ private struct ActionButtonsRow: View {
                     .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             }
         }
-    }
-}
-
-// MARK: - Quick Stats Row
-private struct QuickStatsRow: View {
-    let profile: UserProfile
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            StatColumn(value: formatNumber(profile.followerCount ?? 0), label: "Followers")
-            
-            Divider()
-                .frame(height: 40)
-            
-            StatColumn(value: "\((profile.mediaURLs ?? []).count)", label: "Posts")
-            
-            Divider()
-                .frame(height: 40)
-            
-            StatColumn(value: "\(Int.random(in: 5...50))", label: "Collabs")
-        }
-        .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-private struct StatColumn: View {
-    let value: String
-    let label: String
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.title2.bold())
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -444,122 +413,91 @@ private struct SocialLinkCard: View {
     }
 }
 
-// MARK: - Collaboration Section
-private struct CollaborationSection: View {
-    let preferences: UserProfile.CollaborationPreferences
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Looking to Collaborate")
-                .font(.headline)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(preferences.lookingFor, id: \.self) { type in
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text(type.rawValue)
-                            .font(.subheadline)
-                    }
-                }
-                
-                Divider()
-                
-                HStack {
-                    Image(systemName: "clock")
-                        .foregroundStyle(AppTheme.accent)
-                    Text(preferences.responseTime.rawValue)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding()
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-        }
-    }
-}
-
-// MARK: - Location Section
-private struct LocationSection: View {
-    let location: UserProfile.Location
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Location")
-                .font(.headline)
-            
-            HStack(spacing: 12) {
-                Image(systemName: "mappin.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(AppTheme.accent)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    if let city = location.city, let state = location.state {
-                        Text("\(city), \(state)")
-                            .font(.subheadline)
-                    }
-                    if let country = location.country {
-                        Text(country)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                Spacer()
-            }
-            .padding()
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-        }
-    }
-}
-
-// MARK: - Interests Section
-private struct InterestsSection: View {
-    let interests: [String]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Interests")
-                .font(.headline)
-            
-            FlowLayout(spacing: 8) {
-                ForEach(interests, id: \.self) { interest in
-                    Text(interest)
-                        .font(.caption)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(AppTheme.card, in: Capsule())
-                }
-            }
-        }
-    }
-}
-
 // MARK: - View Model
 @MainActor
 final class ProfileDetailViewModel: ObservableObject {
     @Published var isLiked = false
-    @Published var showSuccess = false
-    
+    @Published var isLoading = false
+
+    private let service = FirebaseService()
+
+    func loadLikeStatus(currentUserId: String, targetUserId: String) async {
+        do {
+            isLiked = try await service.checkLikeStatus(userId: currentUserId, targetUserId: targetUserId)
+        } catch {
+            print("❌ Error loading like status: \(error)")
+        }
+    }
+
     func toggleLike(profile: UserProfile) {
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            print("⚠️ No current user - cannot like")
+            return
+        }
+
+        // Optimistic UI update
         withAnimation(.spring(response: 0.3)) {
             isLiked.toggle()
         }
         Haptics.impact(isLiked ? .medium : .light)
-        
-        // TODO: Save like to Firebase
+
+        // Save to Firebase
+        Task {
+            isLoading = true
+
+            do {
+                if isLiked {
+                    _ = try await service.saveLike(userId: currentUserId, targetUserId: profile.uid)
+                } else {
+                    try await service.removeLike(userId: currentUserId, targetUserId: profile.uid)
+                }
+            } catch {
+                print("❌ Error toggling like: \(error)")
+                // Revert UI on error
+                withAnimation {
+                    isLiked.toggle()
+                }
+            }
+
+            isLoading = false
+        }
     }
-    
+
     func shareProfile(profile: UserProfile) {
-        // TODO: Implement share functionality
         Haptics.impact(.light)
+
+        // Create shareable content
+        let profileURL = URL(string: "https://featur.app/profile/\(profile.uid)")!
+        let shareText = "Check out \(profile.displayName) on Featur! 🎬"
+
+        // Present iOS share sheet
+        let activityVC = UIActivityViewController(
+            activityItems: [shareText, profileURL],
+            applicationActivities: nil
+        )
+
+        // For iPad compatibility
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootVC = window.rootViewController {
+
+            // Find the topmost view controller
+            var topVC = rootVC
+            while let presented = topVC.presentedViewController {
+                topVC = presented
+            }
+
+            // For iPad - set popover presentation controller
+            if let popover = activityVC.popoverPresentationController {
+                popover.sourceView = topVC.view
+                popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+
+            topVC.present(activityVC, animated: true)
+        }
     }
-    
-    func copyProfileLink(profile: UserProfile) {
-        // TODO: Copy profile link to clipboard
-        UIPasteboard.general.string = "https://featur.app/profile/\(profile.uid)"
-        Haptics.notify(.success)
-    }
+
 }
 
 // MARK: - Message Sheet
@@ -567,7 +505,12 @@ struct MessageSheet: View {
     let recipientProfile: UserProfile
     @Environment(\.dismiss) var dismiss
     @State private var messageText = ""
-    
+    @State private var isSending = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    private let service = FirebaseService()
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
@@ -607,17 +550,25 @@ struct MessageSheet: View {
                 Spacer()
                 
                 Button {
-                    // Send message
-                    dismiss()
+                    Task {
+                        await sendMessage()
+                    }
                 } label: {
-                    Text("Send Message")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                    HStack {
+                        if isSending {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Text("Send Message")
+                                .font(.headline)
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
                 }
-                .disabled(messageText.isEmpty)
+                .disabled(messageText.isEmpty || isSending)
                 .padding(.horizontal)
                 .padding(.bottom, 20)
             }
@@ -629,6 +580,67 @@ struct MessageSheet: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+        }
+    }
+
+    private func sendMessage() async {
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            errorMessage = "Please sign in to send messages"
+            showError = true
+            return
+        }
+
+        guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        isSending = true
+
+        do {
+            // Get or create conversation
+            let conversation = try await service.getOrCreateConversation(
+                between: currentUserId,
+                and: recipientProfile.uid
+            )
+
+            guard let conversationId = conversation.id else {
+                throw NSError(domain: "MessageSheet", code: -1,
+                             userInfo: [NSLocalizedDescriptionKey: "Conversation ID not found"])
+            }
+
+            // Create and send message
+            let message = Message(
+                id: UUID().uuidString,
+                conversationId: conversationId,
+                senderId: currentUserId,
+                recipientId: recipientProfile.uid,
+                content: messageText.trimmingCharacters(in: .whitespacesAndNewlines),
+                mediaURL: nil,
+                sentAt: Date(),
+                readAt: nil
+            )
+
+            try await service.sendMessage(message)
+
+            // Mark match as messaged
+            await service.markMatchAsMessaged(userA: currentUserId, userB: recipientProfile.uid)
+
+            print("✅ Message sent successfully to \(recipientProfile.displayName)")
+
+            // Dismiss on success
+            isSending = false
+            dismiss()
+
+        } catch {
+            isSending = false
+            errorMessage = "Failed to send message: \(error.localizedDescription)"
+            showError = true
+            print("❌ Error sending message: \(error)")
         }
     }
 }
@@ -639,7 +651,12 @@ struct ReportSheet: View {
     @Environment(\.dismiss) var dismiss
     @State private var selectedReason = ""
     @State private var details = ""
-    
+    @State private var isSubmitting = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    private let service = FirebaseService()
+
     let reasons = [
         "Inappropriate content",
         "Spam or scam",
@@ -673,12 +690,52 @@ struct ReportSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Submit") {
-                        // Submit report
-                        dismiss()
+                        Task {
+                            await submitReport()
+                        }
                     }
-                    .disabled(selectedReason.isEmpty)
+                    .disabled(selectedReason.isEmpty || isSubmitting)
                 }
             }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+        }
+    }
+
+    private func submitReport() async {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        do {
+            // Create report document in Firestore
+            let report: [String: Any] = [
+                "reportedUserId": profile.uid,
+                "reportedBy": currentUserId,
+                "reason": selectedReason,
+                "details": details,
+                "timestamp": FieldValue.serverTimestamp(),
+                "status": "pending"
+            ]
+
+            try await Firestore.firestore().collection("reports").addDocument(data: report)
+
+            print("✅ Report submitted successfully")
+
+            // Track analytics
+            AnalyticsManager.shared.trackError(error: "profile_reported", context: selectedReason)
+
+            Haptics.notify(.success)
+            dismiss()
+
+        } catch {
+            errorMessage = "Failed to submit report: \(error.localizedDescription)"
+            showError = true
+            print("❌ Error submitting report: \(error)")
         }
     }
 }
