@@ -4,6 +4,23 @@ import FirebaseAuth
 import FirebaseFirestore
 import PhotosUI
 
+// MARK: - Stats Period Enum
+enum StatsPeriod: String, CaseIterable {
+    case week = "Week"
+    case month = "Month"
+    case year = "Year"
+    case allTime = "All Time"
+
+    var days: Int? {
+        switch self {
+        case .week: return 7
+        case .month: return 30
+        case .year: return 365
+        case .allTime: return nil
+        }
+    }
+}
+
 struct EnhancedProfileView: View {
     @EnvironmentObject var auth: AuthViewModel
     @StateObject private var viewModel = ProfileViewModel()
@@ -2288,22 +2305,6 @@ private struct MainProfileContent: View {
 
         @State private var selectedPeriod: StatsPeriod = .week
 
-        enum StatsPeriod: String, CaseIterable {
-            case week = "Week"
-            case month = "Month"
-            case year = "Year"
-            case allTime = "All Time"
-
-            var days: Int? {
-                switch self {
-                case .week: return 7
-                case .month: return 30
-                case .year: return 365
-                case .allTime: return nil
-                }
-            }
-        }
-
         var body: some View {
             NavigationStack {
                 ScrollView {
@@ -4071,7 +4072,7 @@ final class DetailedAnalyticsViewModel: ObservableObject {
 
     private let service = FirebaseService()
 
-    func loadAnalytics(userId: String, period: EnhancedProfileView.MainProfileContent.EnhancedStatsSheet.StatsPeriod) async {
+    func loadAnalytics(userId: String, period: StatsPeriod) async {
         isLoading = true
 
         let startDate = getStartDate(for: period)
@@ -4276,7 +4277,7 @@ final class DetailedAnalyticsViewModel: ObservableObject {
         }
     }
 
-    private func getStartDate(for period: EnhancedProfileView.MainProfileContent.EnhancedStatsSheet.StatsPeriod) -> Date {
+    private func getStartDate(for period: StatsPeriod) -> Date {
         let calendar = Calendar.current
         let now = Date()
 
@@ -4292,7 +4293,7 @@ final class DetailedAnalyticsViewModel: ObservableObject {
         }
     }
 
-    private func getPreviousStartDate(for period: EnhancedProfileView.MainProfileContent.EnhancedStatsSheet.StatsPeriod) -> Date {
+    private func getPreviousStartDate(for period: StatsPeriod) -> Date {
         let calendar = Calendar.current
         let currentStart = getStartDate(for: period)
 
