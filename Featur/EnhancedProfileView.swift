@@ -1999,8 +1999,11 @@ private struct MainProfileContent: View {
         @State private var selectedInterests: Set<String>
         @State private var selectedContentStyles: Set<UserProfile.ContentStyle>
         @State private var selectedPhoto: PhotosPickerItem?
+        @State private var selectedGalleryPhotos: [PhotosPickerItem] = []
+        @State private var galleryImageURLs: [String]
         @State private var isUploading = false
-        
+        @State private var isUploadingGallery = false
+
         let availableInterests = ["Music", "Art", "Gaming", "Fitness", "Travel", "Food", "Tech", "Fashion", "Sports", "Photography"]
         
         init(profile: UserProfile, viewModel: ProfileViewModel, onSave: @escaping () -> Void) {
@@ -2011,6 +2014,7 @@ private struct MainProfileContent: View {
             _bio = State(initialValue: profile.bio ?? "")
             _selectedInterests = State(initialValue: Set(profile.interests ?? []))
             _selectedContentStyles = State(initialValue: Set(profile.contentStyles))
+            _galleryImageURLs = State(initialValue: profile.mediaURLs ?? [])
         }
         
         var body: some View {
@@ -2044,9 +2048,9 @@ private struct MainProfileContent: View {
                         }
                     }
                     
-                    Section("Basic Info") {
+                    Section {
                         TextField("Display Name", text: $displayName)
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Bio")
                                 .font(.caption)
@@ -2054,6 +2058,71 @@ private struct MainProfileContent: View {
                             TextEditor(text: $bio)
                                 .frame(height: 100)
                         }
+                    } header: {
+                        Text("Basic Info")
+                    }
+
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Add up to 6 photos")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\(galleryImageURLs.count)/6")
+                                    .font(.caption)
+                                    .foregroundStyle(galleryImageURLs.count >= 6 ? .red : .secondary)
+                            }
+
+                            // Photo grid
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                ForEach(Array(galleryImageURLs.enumerated()), id: \.offset) { index, url in
+                                    ZStack(alignment: .topTrailing) {
+                                        AsyncImage(url: URL(string: url)) { image in
+                                            image.resizable().scaledToFill()
+                                        } placeholder: {
+                                            Color.gray.opacity(0.2)
+                                        }
+                                        .frame(height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                                        Button {
+                                            galleryImageURLs.remove(at: index)
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.white)
+                                                .background(Circle().fill(.black.opacity(0.6)))
+                                        }
+                                        .padding(4)
+                                    }
+                                }
+
+                                // Add photo button
+                                if galleryImageURLs.count < 6 {
+                                    PhotosPicker(selection: $selectedGalleryPhotos, maxSelectionCount: 6 - galleryImageURLs.count, matching: .images) {
+                                        VStack(spacing: 8) {
+                                            Image(systemName: "plus")
+                                                .font(.title2)
+                                            Text("Add")
+                                                .font(.caption)
+                                        }
+                                        .foregroundStyle(AppTheme.accent)
+                                        .frame(height: 100)
+                                        .frame(maxWidth: .infinity)
+                                        .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                                    }
+                                }
+                            }
+
+                            if isUploadingGallery {
+                                ProgressView("Uploading photos...")
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                    } header: {
+                        Text("Photo Gallery")
+                    } footer: {
+                        Text("These photos will be visible to others on your profile")
                     }
                     
                     Section("Content Styles") {
@@ -2107,6 +2176,7 @@ private struct MainProfileContent: View {
                                 updated.bio = bio.isEmpty ? nil : bio
                                 updated.interests = Array(selectedInterests)
                                 updated.contentStyles = Array(selectedContentStyles)
+                                updated.mediaURLs = galleryImageURLs.isEmpty ? nil : galleryImageURLs
                                 await viewModel.updateProfile(updated)
                                 Haptics.notify(.success)
                                 onSave()
@@ -2114,7 +2184,7 @@ private struct MainProfileContent: View {
                             }
                         }
                         .fontWeight(.bold)
-                        .disabled(displayName.isEmpty)
+                        .disabled(displayName.isEmpty || isUploadingGallery)
                     }
                 }
                 .onChange(of: selectedPhoto) { _, newValue in
@@ -2122,11 +2192,31 @@ private struct MainProfileContent: View {
                     Task {
                         isUploading = true
                         defer { isUploading = false }
-                        
+
                         if let data = try? await newValue.loadTransferable(type: Data.self),
                            let compressed = UIImage(data: data)?.jpegData(compressionQuality: 0.7),
                            let uid = Auth.auth().currentUser?.uid {
                             await viewModel.updateProfilePhoto(userId: uid, imageData: compressed)
+                        }
+                    }
+                }
+                .onChange(of: selectedGalleryPhotos) { _, newPhotos in
+                    guard !newPhotos.isEmpty else { return }
+                    Task {
+                        isUploadingGallery = true
+                        defer {
+                            isUploadingGallery = false
+                            selectedGalleryPhotos = []
+                        }
+
+                        for photo in newPhotos {
+                            if let data = try? await photo.loadTransferable(type: Data.self),
+                               let compressed = UIImage(data: data)?.jpegData(compressionQuality: 0.7),
+                               let uid = Auth.auth().currentUser?.uid {
+                                if let url = await viewModel.uploadGalleryPhoto(userId: uid, imageData: compressed) {
+                                    galleryImageURLs.append(url)
+                                }
+                            }
                         }
                     }
                 }

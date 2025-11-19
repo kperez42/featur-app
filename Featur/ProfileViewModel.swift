@@ -101,13 +101,13 @@ final class ProfileViewModel: ObservableObject {
     }
     
     // MARK: - Update Profile Photo
-    
+
     func updateProfilePhoto(userId: String, imageData: Data) async {
         isLoading = true
-        
+
         do {
             let url = try await uploadImageToStorage(userId: userId, data: imageData)
-            
+
             // Update profile with new photo URL
             if var currentProfile = self.profile {
                 currentProfile.profileImageURL = url
@@ -117,15 +117,29 @@ final class ProfileViewModel: ObservableObject {
                 try await db.collection("users")
                     .document(userId)
                     .updateData(["profileImageURL": url])
-                
+
                 print("✅ Profile photo updated")
             }
         } catch {
             self.errorMessage = "Failed to upload photo: \(error.localizedDescription)"
             print("❌ Error uploading photo: \(error)")
         }
-        
+
         isLoading = false
+    }
+
+    // MARK: - Upload Gallery Photo
+
+    func uploadGalleryPhoto(userId: String, imageData: Data) async -> String? {
+        do {
+            let url = try await uploadImageToStorage(userId: userId, data: imageData)
+            print("✅ Gallery photo uploaded: \(url)")
+            return url
+        } catch {
+            self.errorMessage = "Failed to upload gallery photo: \(error.localizedDescription)"
+            print("❌ Error uploading gallery photo: \(error)")
+            return nil
+        }
     }
     
     // MARK: - Add Media URLs
