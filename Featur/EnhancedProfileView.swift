@@ -2448,6 +2448,36 @@ private struct MainProfileContent: View {
         }
     }
     
+    // MARK: - Preview Profile Image Helper
+    struct PreviewProfileImage: View {
+        let imageURL: String?
+
+        var body: some View {
+            Group {
+                if let imageURL = imageURL, let url = URL(string: imageURL) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        placeholderView
+                    }
+                    .frame(width: UIScreen.main.bounds.width, height: 300)
+                    .clipped()
+                } else {
+                    placeholderView
+                }
+            }
+        }
+
+        private var placeholderView: some View {
+            Rectangle()
+                .fill(AppTheme.accent.opacity(0.2))
+                .frame(height: 300)
+                .overlay(ProgressView().tint(.white))
+        }
+    }
+
     // MARK: - Profile Preview View
     struct ProfilePreviewView: View {
         let profile: UserProfile
@@ -2458,35 +2488,7 @@ private struct MainProfileContent: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         // Profile Image - properly sized, not zoomed
-                        if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: UIScreen.main.bounds.width, height: 300)
-                                        .clipped()
-                                case .failure(_):
-                                    Rectangle()
-                                        .fill(AppTheme.accent.opacity(0.2))
-                                        .frame(height: 300)
-                                case .empty:
-                                    Rectangle()
-                                        .fill(AppTheme.accent.opacity(0.2))
-                                        .frame(height: 300)
-                                        .overlay(ProgressView())
-                                @unknown default:
-                                    Rectangle()
-                                        .fill(AppTheme.accent.opacity(0.2))
-                                        .frame(height: 300)
-                                }
-                            }
-                        } else {
-                            Rectangle()
-                                .fill(AppTheme.accent.opacity(0.2))
-                                .frame(height: 300)
-                        }
+                        PreviewProfileImage(imageURL: profile.profileImageURL)
 
                         VStack(spacing: 20) {
                             // Name with verification
