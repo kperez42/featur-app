@@ -2284,16 +2284,26 @@ private struct MainProfileContent: View {
     struct EnhancedStatsSheet: View {
         let profile: UserProfile
         @Environment(\.dismiss) var dismiss
-        
+        @StateObject private var analyticsVM = DetailedAnalyticsViewModel()
+
         @State private var selectedPeriod: StatsPeriod = .week
-        
+
         enum StatsPeriod: String, CaseIterable {
             case week = "Week"
             case month = "Month"
             case year = "Year"
             case allTime = "All Time"
+
+            var days: Int? {
+                switch self {
+                case .week: return 7
+                case .month: return 30
+                case .year: return 365
+                case .allTime: return nil
+                }
+            }
         }
-        
+
         var body: some View {
             NavigationStack {
                 ScrollView {
@@ -2306,93 +2316,106 @@ private struct MainProfileContent: View {
                         }
                         .pickerStyle(.segmented)
                         .padding(.horizontal)
-                        
-                        // Engagement Stats
-                        StatsSection(title: "Engagement", icon: "chart.line.uptrend.xyaxis") {
-                            VStack(spacing: 12) {
-                                DetailedStatRow(
-                                    label: "Profile Views",
-                                    value: "\(Int.random(in: 500...5000))",
-                                    change: "+12%",
-                                    isPositive: true
-                                )
-                                DetailedStatRow(
-                                    label: "New Followers",
-                                    value: "+\(Int.random(in: 50...500))",
-                                    change: "+8%",
-                                    isPositive: true
-                                )
-                                DetailedStatRow(
-                                    label: "Likes Received",
-                                    value: "\(Int.random(in: 100...1000))",
-                                    change: "+15%",
-                                    isPositive: true
-                                )
+                        .onChange(of: selectedPeriod) { _, newPeriod in
+                            Task {
+                                await analyticsVM.loadAnalytics(userId: profile.uid, period: newPeriod)
                             }
                         }
-                        
-                        // Match Stats
-                        StatsSection(title: "Matches", icon: "heart.fill") {
-                            VStack(spacing: 12) {
-                                DetailedStatRow(
-                                    label: "Total Matches",
-                                    value: "\(Int.random(in: 10...100))",
-                                    change: "+5%",
-                                    isPositive: true
-                                )
-                                DetailedStatRow(
-                                    label: "Match Rate",
-                                    value: "24%",
-                                    change: "+3%",
-                                    isPositive: true
-                                )
-                                DetailedStatRow(
-                                    label: "Messages Sent",
-                                    value: "\(Int.random(in: 50...500))",
-                                    change: "+10%",
-                                    isPositive: true
-                                )
+
+                        if analyticsVM.isLoading {
+                            ProgressView("Loading analytics...")
+                                .padding()
+                        } else {
+                            // Engagement Stats
+                            StatsSection(title: "Engagement", icon: "chart.line.uptrend.xyaxis") {
+                                VStack(spacing: 12) {
+                                    DetailedStatRow(
+                                        label: "Profile Views",
+                                        value: "\(analyticsVM.profileViews)",
+                                        change: analyticsVM.profileViewsChange,
+                                        isPositive: analyticsVM.profileViewsChangePositive
+                                    )
+                                    DetailedStatRow(
+                                        label: "New Followers",
+                                        value: "+\(analyticsVM.newFollowers)",
+                                        change: analyticsVM.followersChange,
+                                        isPositive: analyticsVM.followersChangePositive
+                                    )
+                                    DetailedStatRow(
+                                        label: "Likes Received",
+                                        value: "\(analyticsVM.likesReceived)",
+                                        change: analyticsVM.likesChange,
+                                        isPositive: analyticsVM.likesChangePositive
+                                    )
+                                }
                             }
-                        }
-                        
-                        // Content Stats
-                        StatsSection(title: "Content", icon: "photo.stack.fill") {
-                            VStack(spacing: 12) {
-                                DetailedStatRow(
-                                    label: "Total Photos",
-                                    value: "\((profile.mediaURLs ?? []).count)",
-                                    change: "+2",
-                                    isPositive: true
-                                )
-                                DetailedStatRow(
-                                    label: "Avg. Likes per Photo",
-                                    value: "\(Int.random(in: 50...200))",
-                                    change: "+18%",
-                                    isPositive: true
-                                )
+
+                            // Match Stats
+                            StatsSection(title: "Matches", icon: "heart.fill") {
+                                VStack(spacing: 12) {
+                                    DetailedStatRow(
+                                        label: "Total Matches",
+                                        value: "\(analyticsVM.totalMatches)",
+                                        change: analyticsVM.matchesChange,
+                                        isPositive: analyticsVM.matchesChangePositive
+                                    )
+                                    DetailedStatRow(
+                                        label: "Match Rate",
+                                        value: analyticsVM.matchRate,
+                                        change: analyticsVM.matchRateChange,
+                                        isPositive: analyticsVM.matchRateChangePositive
+                                    )
+                                    DetailedStatRow(
+                                        label: "Messages Sent",
+                                        value: "\(analyticsVM.messagesSent)",
+                                        change: analyticsVM.messagesChange,
+                                        isPositive: analyticsVM.messagesChangePositive
+                                    )
+                                }
                             }
+
+                            // Content Stats
+                            StatsSection(title: "Content", icon: "photo.stack.fill") {
+                                VStack(spacing: 12) {
+                                    DetailedStatRow(
+                                        label: "Total Photos",
+                                        value: "\((profile.mediaURLs ?? []).count)",
+                                        change: "—",
+                                        isPositive: true
+                                    )
+                                    DetailedStatRow(
+                                        label: "Active Collabs",
+                                        value: "\(analyticsVM.activeCollabs)",
+                                        change: analyticsVM.collabsChange,
+                                        isPositive: analyticsVM.collabsChangePositive
+                                    )
+                                }
+                            }
+
+                            // Summary Card
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Period Summary")
+                                    .font(.headline)
+
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(AppTheme.gradient.opacity(0.3))
+                                    .frame(height: 120)
+                                    .overlay(
+                                        VStack(spacing: 8) {
+                                            Image(systemName: "chart.bar.fill")
+                                                .font(.system(size: 40))
+                                                .foregroundStyle(.white)
+                                            Text("Total Activity: \(analyticsVM.totalActivity)")
+                                                .font(.headline)
+                                                .foregroundStyle(.white)
+                                            Text("in \(selectedPeriod.rawValue)")
+                                                .font(.caption)
+                                                .foregroundStyle(.white.opacity(0.8))
+                                        }
+                                    )
+                            }
+                            .padding(.horizontal)
                         }
-                        
-                        // Growth Chart Placeholder
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Growth Overview")
-                                .font(.headline)
-                            
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(AppTheme.gradient.opacity(0.3))
-                                .frame(height: 200)
-                                .overlay(
-                                    VStack {
-                                        Image(systemName: "chart.bar.fill")
-                                            .font(.system(size: 50))
-                                            .foregroundStyle(.white)
-                                        Text("Chart Coming Soon")
-                                            .font(.caption)
-                                            .foregroundStyle(.white)
-                                    }
-                                )
-                        }
-                        .padding(.horizontal)
                     }
                     .padding(.vertical)
                 }
@@ -2403,6 +2426,9 @@ private struct MainProfileContent: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Done") { dismiss() }
                     }
+                }
+                .task {
+                    await analyticsVM.loadAnalytics(userId: profile.uid, period: selectedPeriod)
                 }
             }
         }
@@ -4002,6 +4028,310 @@ final class ProfileAnalyticsViewModel: ObservableObject {
             print("❌ Error fetching collab count: \(error)")
             return 0
         }
+    }
+}
+
+// MARK: - Detailed Analytics ViewModel (for Analytics Sheet)
+@MainActor
+final class DetailedAnalyticsViewModel: ObservableObject {
+    @Published var isLoading: Bool = false
+
+    // Engagement metrics
+    @Published var profileViews: Int = 0
+    @Published var profileViewsChange: String = "—"
+    @Published var profileViewsChangePositive: Bool = true
+
+    @Published var newFollowers: Int = 0
+    @Published var followersChange: String = "—"
+    @Published var followersChangePositive: Bool = true
+
+    @Published var likesReceived: Int = 0
+    @Published var likesChange: String = "—"
+    @Published var likesChangePositive: Bool = true
+
+    // Match metrics
+    @Published var totalMatches: Int = 0
+    @Published var matchesChange: String = "—"
+    @Published var matchesChangePositive: Bool = true
+
+    @Published var matchRate: String = "0%"
+    @Published var matchRateChange: String = "—"
+    @Published var matchRateChangePositive: Bool = true
+
+    @Published var messagesSent: Int = 0
+    @Published var messagesChange: String = "—"
+    @Published var messagesChangePositive: Bool = true
+
+    // Content metrics
+    @Published var activeCollabs: Int = 0
+    @Published var collabsChange: String = "—"
+    @Published var collabsChangePositive: Bool = true
+
+    @Published var totalActivity: Int = 0
+
+    private let service = FirebaseService()
+
+    func loadAnalytics(userId: String, period: EnhancedProfileView.MainProfileContent.EnhancedStatsSheet.StatsPeriod) async {
+        isLoading = true
+
+        let startDate = getStartDate(for: period)
+        let previousStartDate = getPreviousStartDate(for: period)
+
+        async let currentStats = fetchPeriodStats(userId: userId, startDate: startDate, endDate: Date())
+        async let previousStats = fetchPeriodStats(userId: userId, startDate: previousStartDate, endDate: startDate)
+
+        let (current, previous) = await (currentStats, previousStats)
+
+        // Update current values
+        profileViews = current.profileViews
+        newFollowers = current.newFollowers
+        likesReceived = current.likesReceived
+        totalMatches = current.totalMatches
+        messagesSent = current.messagesSent
+        activeCollabs = current.activeCollabs
+
+        // Calculate match rate
+        let totalSwipes = current.totalSwipes
+        if totalSwipes > 0 {
+            let rate = Double(current.totalMatches) / Double(totalSwipes) * 100
+            matchRate = String(format: "%.1f%%", rate)
+        } else {
+            matchRate = "0%"
+        }
+
+        // Calculate changes
+        profileViewsChange = calculateChange(current: current.profileViews, previous: previous.profileViews)
+        profileViewsChangePositive = current.profileViews >= previous.profileViews
+
+        followersChange = calculateChange(current: current.newFollowers, previous: previous.newFollowers)
+        followersChangePositive = current.newFollowers >= previous.newFollowers
+
+        likesChange = calculateChange(current: current.likesReceived, previous: previous.likesReceived)
+        likesChangePositive = current.likesReceived >= previous.likesReceived
+
+        matchesChange = calculateChange(current: current.totalMatches, previous: previous.totalMatches)
+        matchesChangePositive = current.totalMatches >= previous.totalMatches
+
+        messagesChange = calculateChange(current: current.messagesSent, previous: previous.messagesSent)
+        messagesChangePositive = current.messagesSent >= previous.messagesSent
+
+        collabsChange = calculateChange(current: current.activeCollabs, previous: previous.activeCollabs)
+        collabsChangePositive = current.activeCollabs >= previous.activeCollabs
+
+        // Calculate match rate change
+        if totalSwipes > 0 && previous.totalSwipes > 0 {
+            let currentRate = Double(current.totalMatches) / Double(totalSwipes) * 100
+            let previousRate = Double(previous.totalMatches) / Double(previous.totalSwipes) * 100
+            let diff = currentRate - previousRate
+            matchRateChange = diff >= 0 ? "+\(String(format: "%.1f", diff))%" : "\(String(format: "%.1f", diff))%"
+            matchRateChangePositive = diff >= 0
+        }
+
+        // Calculate total activity
+        totalActivity = profileViews + totalMatches + messagesSent + activeCollabs
+
+        isLoading = false
+        print("✅ Detailed analytics loaded for \(period.rawValue)")
+    }
+
+    private func fetchPeriodStats(userId: String, startDate: Date, endDate: Date) async -> PeriodStats {
+        let db = FirebaseFirestore.Firestore.firestore()
+
+        async let viewsTask = fetchCount(
+            db: db,
+            collection: "swipes",
+            field: "targetUserId",
+            userId: userId,
+            startDate: startDate,
+            endDate: endDate
+        )
+
+        async let likesTask = fetchCount(
+            db: db,
+            collection: "swipes",
+            field: "targetUserId",
+            userId: userId,
+            startDate: startDate,
+            endDate: endDate,
+            additionalFilter: ("action", "like")
+        )
+
+        async let matchesTask = fetchMatchesInPeriod(userId: userId, startDate: startDate, endDate: endDate)
+
+        async let messagesTask = fetchMessagesInPeriod(userId: userId, startDate: startDate, endDate: endDate)
+
+        async let collabsTask = fetchCollabsInPeriod(userId: userId, startDate: startDate, endDate: endDate)
+
+        async let swipesTask = fetchCount(
+            db: db,
+            collection: "swipes",
+            field: "userId",
+            userId: userId,
+            startDate: startDate,
+            endDate: endDate
+        )
+
+        let (views, likes, matches, messages, collabs, swipes) = await (viewsTask, likesTask, matchesTask, messagesTask, collabsTask, swipesTask)
+
+        return PeriodStats(
+            profileViews: views,
+            newFollowers: 0, // Would need follower tracking system
+            likesReceived: likes,
+            totalMatches: matches,
+            messagesSent: messages,
+            activeCollabs: collabs,
+            totalSwipes: swipes
+        )
+    }
+
+    private func fetchCount(
+        db: Firestore,
+        collection: String,
+        field: String,
+        userId: String,
+        startDate: Date,
+        endDate: Date,
+        additionalFilter: (String, String)? = nil
+    ) async -> Int {
+        do {
+            var query = db.collection(collection)
+                .whereField(field, isEqualTo: userId)
+                .whereField("timestamp", isGreaterThanOrEqualTo: startDate)
+                .whereField("timestamp", isLessThan: endDate)
+
+            if let (filterField, filterValue) = additionalFilter {
+                query = query.whereField(filterField, isEqualTo: filterValue)
+            }
+
+            let snapshot = try await query.getDocuments()
+            return snapshot.documents.count
+        } catch {
+            print("❌ Error fetching count from \(collection): \(error)")
+            return 0
+        }
+    }
+
+    private func fetchMatchesInPeriod(userId: String, startDate: Date, endDate: Date) async -> Int {
+        do {
+            let matches = try await service.fetchMatches(forUser: userId)
+            return matches.filter { $0.matchedAt >= startDate && $0.matchedAt < endDate }.count
+        } catch {
+            print("❌ Error fetching matches: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchMessagesInPeriod(userId: String, startDate: Date, endDate: Date) async -> Int {
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let conversations = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .getDocuments()
+
+            var messageCount = 0
+            for doc in conversations.documents {
+                let messages = try await db.collection("conversations")
+                    .document(doc.documentID)
+                    .collection("messages")
+                    .whereField("senderId", isEqualTo: userId)
+                    .whereField("sentAt", isGreaterThanOrEqualTo: startDate)
+                    .whereField("sentAt", isLessThan: endDate)
+                    .getDocuments()
+
+                messageCount += messages.documents.count
+            }
+
+            return messageCount
+        } catch {
+            print("❌ Error fetching messages: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchCollabsInPeriod(userId: String, startDate: Date, endDate: Date) async -> Int {
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let conversations = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .whereField("createdAt", isGreaterThanOrEqualTo: startDate)
+                .whereField("createdAt", isLessThan: endDate)
+                .getDocuments()
+
+            var activeCollabs = 0
+            for doc in conversations.documents {
+                let messageSnapshot = try await db.collection("conversations")
+                    .document(doc.documentID)
+                    .collection("messages")
+                    .getDocuments()
+
+                if messageSnapshot.documents.count >= 5 {
+                    activeCollabs += 1
+                }
+            }
+
+            return activeCollabs
+        } catch {
+            print("❌ Error fetching collabs: \(error)")
+            return 0
+        }
+    }
+
+    private func getStartDate(for period: EnhancedProfileView.MainProfileContent.EnhancedStatsSheet.StatsPeriod) -> Date {
+        let calendar = Calendar.current
+        let now = Date()
+
+        switch period {
+        case .week:
+            return calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        case .month:
+            return calendar.date(byAdding: .day, value: -30, to: now) ?? now
+        case .year:
+            return calendar.date(byAdding: .day, value: -365, to: now) ?? now
+        case .allTime:
+            return Date(timeIntervalSince1970: 0) // Beginning of time
+        }
+    }
+
+    private func getPreviousStartDate(for period: EnhancedProfileView.MainProfileContent.EnhancedStatsSheet.StatsPeriod) -> Date {
+        let calendar = Calendar.current
+        let currentStart = getStartDate(for: period)
+
+        switch period {
+        case .week:
+            return calendar.date(byAdding: .day, value: -7, to: currentStart) ?? currentStart
+        case .month:
+            return calendar.date(byAdding: .day, value: -30, to: currentStart) ?? currentStart
+        case .year:
+            return calendar.date(byAdding: .day, value: -365, to: currentStart) ?? currentStart
+        case .allTime:
+            return Date(timeIntervalSince1970: 0)
+        }
+    }
+
+    private func calculateChange(current: Int, previous: Int) -> String {
+        guard previous > 0 else {
+            return current > 0 ? "+100%" : "—"
+        }
+
+        let percentChange = Double(current - previous) / Double(previous) * 100
+
+        if percentChange > 0 {
+            return "+\(String(format: "%.1f", percentChange))%"
+        } else if percentChange < 0 {
+            return "\(String(format: "%.1f", percentChange))%"
+        } else {
+            return "0%"
+        }
+    }
+
+    struct PeriodStats {
+        let profileViews: Int
+        let newFollowers: Int
+        let likesReceived: Int
+        let totalMatches: Int
+        let messagesSent: Int
+        let activeCollabs: Int
+        let totalSwipes: Int
     }
 }
 
