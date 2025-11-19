@@ -373,6 +373,8 @@ struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
     @State private var messageText = ""
     @FocusState private var isInputFocused: Bool
+    @State private var showImagePicker = false
+    @State private var selectedImage: UIImage?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -398,9 +400,9 @@ struct ChatView: View {
             // Input Bar
             HStack(spacing: 12) {
                 Button {
-                    // Add media
+                    showImagePicker = true
                 } label: {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: "photo.circle.fill")
                         .font(.title2)
                         .foregroundStyle(AppTheme.accent)
                 }
@@ -468,6 +470,17 @@ struct ChatView: View {
             // Clean up listener to prevent memory leaks
             viewModel.stopListening()
         }
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(selectedImage: $selectedImage)
+        }
+        .onChange(of: selectedImage) { _, newImage in
+            if let image = newImage {
+                Task {
+                    await sendImageMessage(image: image)
+                    selectedImage = nil
+                }
+            }
+        }
     }
     
     private func sendMessage() {
@@ -484,9 +497,44 @@ struct ChatView: View {
                 recipientId: recipientId,
                 content: messageText
             )
+
+            // Track analytics
+            await AnalyticsManager.shared.trackMessageSent(conversationId: conversationId, hasMedia: false)
+
             messageText = ""
             Haptics.impact(.light)
-            
+        }
+    }
+
+    private func sendImageMessage(image: UIImage) async {
+        guard let currentUserId = Auth.auth().currentUser?.uid,
+              let conversationId = conversation.id else { return }
+
+        let recipientId = conversation.participantIds.first { $0 != currentUserId } ?? ""
+
+        do {
+            // Upload image to Firebase Storage
+            let service = FirebaseService()
+            let imageURL = try await service.uploadProfilePhoto(userId: currentUserId, image: image)
+
+            // Send message with image URL
+            await viewModel.sendMessage(
+                conversationId: conversationId,
+                senderId: currentUserId,
+                recipientId: recipientId,
+                content: "📷 Photo",
+                mediaURL: imageURL
+            )
+
+            // Track analytics
+            await AnalyticsManager.shared.trackMessageSent(conversationId: conversationId, hasMedia: true)
+
+            Haptics.notify(.success)
+            print("✅ Image message sent successfully")
+
+        } catch {
+            print("❌ Error sending image: \(error.localizedDescription)")
+            Haptics.notify(.error)
         }
     }
 }
@@ -500,23 +548,55 @@ struct MessageBubble: View {
     var body: some View {
         HStack {
             if isFromCurrentUser { Spacer(minLength: 60) }
-            
+
             VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                Text(message.content)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        isFromCurrentUser ? AppTheme.accent : AppTheme.card,
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                // Show image if mediaURL exists
+                if let mediaURL = message.mediaURL, let url = URL(string: mediaURL) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView()
+                                .frame(width: 200, height: 200)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 200, height: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        case .failure:
+                            Image(systemName: "photo")
+                                .frame(width: 200, height: 200)
+                                .background(AppTheme.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                    .frame(width: 200, height: 200)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(isFromCurrentUser ? AppTheme.accent : Color.clear, lineWidth: 2)
                     )
-                    .foregroundStyle(isFromCurrentUser ? .white : .primary)
-                
+                }
+
+                // Show text content (always show for context, especially for images)
+                if !message.content.isEmpty {
+                    Text(message.content)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            isFromCurrentUser ? AppTheme.accent : AppTheme.card,
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                        .foregroundStyle(isFromCurrentUser ? .white : .primary)
+                }
+
                 Text(timeString)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
             }
-            
+
             if !isFromCurrentUser { Spacer(minLength: 60) }
         }
     }
@@ -617,14 +697,15 @@ final class ChatViewModel: ObservableObject {
         }
     }
     
-    func sendMessage(conversationId: String, senderId: String, recipientId: String, content: String) async {
+    func sendMessage(conversationId: String, senderId: String, recipientId: String, content: String, mediaURL: String? = nil) async {
         let message = Message(
             conversationId: conversationId,
             senderId: senderId,
             recipientId: recipientId,
             content: content,
             sentAt: Date(),
-            readAt: nil
+            readAt: nil,
+            mediaURL: mediaURL
         )
         
         do {
@@ -825,6 +906,53 @@ final class NewChatViewModel: ObservableObject {
             errorMessage = "Failed to create conversation: \(error.localizedDescription)"
             showError = true
             print("❌ Error creating conversation: \(error)")
+        }
+    }
+}
+
+// MARK: - Image Picker
+
+import PhotosUI
+
+struct ImagePicker: UIViewControllerRepresentable {
+    @Binding var selectedImage: UIImage?
+    @Environment(\.dismiss) var dismiss
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let parent: ImagePicker
+
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            parent.dismiss()
+
+            guard let provider = results.first?.itemProvider else { return }
+
+            if provider.canLoadObject(ofClass: UIImage.self) {
+                provider.loadObject(ofClass: UIImage.self) { image, _ in
+                    DispatchQueue.main.async {
+                        self.parent.selectedImage = image as? UIImage
+                    }
+                }
+            }
         }
     }
 }
