@@ -1,6 +1,7 @@
 // ProfileDetailView.swift - View Other Creators' Profiles
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 
 struct ProfileDetailView: View {
     let profile: UserProfile
@@ -808,9 +809,9 @@ struct MessageSheet: View {
                 senderId: currentUserId,
                 recipientId: recipientProfile.uid,
                 content: messageText.trimmingCharacters(in: .whitespacesAndNewlines),
+                mediaURL: nil,
                 sentAt: Date(),
-                isRead: false,
-                mediaURL: nil
+                readAt: nil
             )
 
             try await service.sendMessage(message)
