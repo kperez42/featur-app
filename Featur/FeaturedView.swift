@@ -1,6 +1,7 @@
 // FeaturedView.swift - IMPROVED VERSION (Uses SharedComponents - No Duplicates!)
 import SwiftUI
 import FirebaseAuth
+import StoreKit
 
 struct FeaturedView: View {
     @StateObject private var viewModel = FeaturedViewModel()
@@ -586,7 +587,10 @@ struct FeaturedCreatorCard: View {
 
 struct GetFeaturedSheet: View {
     @Environment(\.dismiss) var dismiss
-    
+    @StateObject private var store = StoreKitManager.shared
+    @State private var showSuccess = false
+    @State private var showError = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -649,25 +653,22 @@ struct GetFeaturedSheet: View {
                     VStack(spacing: 16) {
                         Text("Choose Your Plan")
                             .font(.headline)
-                        
-                        PricingCard(
-                            duration: "24 Hours",
-                            price: "$4.99",
-                            features: ["24-hour spotlight", "Featured badge", "Priority support"]
-                        )
-                        
-                        PricingCard(
-                            duration: "7 Days",
-                            price: "$19.99",
-                            popular: true,
-                            features: ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"]
-                        )
-                        
-                        PricingCard(
-                            duration: "30 Days",
-                            price: "$59.99",
-                            features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"]
-                        )
+
+                        if store.products.isEmpty {
+                            ProgressView("Loading plans...")
+                                .padding()
+                        } else {
+                            ForEach(store.products, id: \.id) { product in
+                                PricingCard(
+                                    product: product,
+                                    popular: product.id.contains("7d"),
+                                    store: store,
+                                    onPurchaseSuccess: {
+                                        showSuccess = true
+                                    }
+                                )
+                            }
+                        }
                     }
                     
                     Text("Payment processed securely via Apple Pay")
@@ -685,6 +686,24 @@ struct GetFeaturedSheet: View {
                         dismiss()
                     }
                 }
+            }
+            .task {
+                await store.loadProducts()
+            }
+            .alert("Success!", isPresented: $showSuccess) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("You're now featured! Your profile will appear prominently in the FEATUREd tab.")
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(store.purchaseError ?? "Purchase failed. Please try again.")
+            }
+            .onChange(of: store.purchaseError) { newValue in
+                showError = newValue != nil
             }
         }
     }
@@ -716,24 +735,46 @@ struct BenefitRow: View {
 }
 
 struct PricingCard: View {
-    let duration: String
-    let price: String
+    let product: Product
     var popular: Bool = false
-    let features: [String]
-    
+    @ObservedObject var store: StoreKitManager
+    let onPurchaseSuccess: () -> Void
+
+    private var duration: String {
+        if product.id.contains("24h") {
+            return "24 Hours"
+        } else if product.id.contains("7d") {
+            return "7 Days"
+        } else if product.id.contains("30d") {
+            return "30 Days"
+        } else {
+            return "Featured"
+        }
+    }
+
+    private var features: [String] {
+        if product.id.contains("24h") {
+            return ["24-hour spotlight", "Featured badge", "Priority support"]
+        } else if product.id.contains("7d") {
+            return ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"]
+        } else {
+            return ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"]
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(duration)
                         .font(.headline)
-                    Text(price)
+                    Text(product.displayPrice)
                         .font(.title.bold())
                         .foregroundStyle(AppTheme.accent)
                 }
-                
+
                 Spacer()
-                
+
                 if popular {
                     Text("POPULAR")
                         .font(.caption2.weight(.bold))
@@ -743,9 +784,9 @@ struct PricingCard: View {
                         .background(AppTheme.accent, in: Capsule())
                 }
             }
-            
+
             Divider()
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(features, id: \.self) { feature in
                     HStack(spacing: 8) {
@@ -757,18 +798,32 @@ struct PricingCard: View {
                     }
                 }
             }
-            
+
             Button {
-                // Handle purchase
-                Haptics.impact(.medium)
+                Task {
+                    do {
+                        try await store.purchase(product)
+                        onPurchaseSuccess()
+                    } catch {
+                        // Error handled by store
+                    }
+                }
             } label: {
-                Text("Select Plan")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+                if store.isPurchasing {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                } else {
+                    Text("Select Plan")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
             }
+            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+            .disabled(store.isPurchasing)
         }
         .padding()
         .background(
