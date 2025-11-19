@@ -194,11 +194,37 @@ private struct MainProfileContent: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showSettingsSheet = true
+                    Menu {
+                        Button { showEditSheet = true } label: {
+                            Label("Edit Profile", systemImage: "pencil")
+                        }
+                        Button { showProfilePreview = true } label: {
+                            Label("Preview Profile", systemImage: "eye")
+                        }
+                        Button { showQRSheet = true } label: {
+                            Label("QR Code", systemImage: "qrcode")
+                        }
+                        Button { showShareSheet = true } label: {
+                            Label("Share Profile", systemImage: "square.and.arrow.up")
+                        }
+                        Divider()
+                        Button { showStatsSheet = true } label: {
+                            Label("Analytics", systemImage: "chart.bar")
+                        }
+                        Button { showSettingsSheet = true } label: {
+                            Label("Settings", systemImage: "gear")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            Task { await auth.signOut() }
+                        } label: {
+                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
                     } label: {
-                        Image(systemName: "gear")
+                        Image(systemName: "ellipsis.circle.fill")
+                            .font(.title3)
                             .foregroundStyle(AppTheme.accent)
+                            .symbolEffect(.bounce, value: showEditSheet)
                     }
                 }
             }
