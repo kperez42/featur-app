@@ -23,6 +23,9 @@ struct ProfileView: View {
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Profile", screenClass: "EnhancedProfileView")
+
             if let uid = auth.user?.uid {
                 await profileViewModel.loadProfile(uid: uid)
             }

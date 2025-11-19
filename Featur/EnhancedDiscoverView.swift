@@ -76,19 +76,7 @@ struct EnhancedDiscoverView: View {
                 }
                 .padding(.bottom, 80)
             }
-            
-            // Floating Banner Ad
-            VStack {
-                Spacer()
-                BannerAdPlaceholder()
-                    .frame(height: 50)
-                    .background(
-                        AppTheme.card
-                            .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
-                    )
-            }
-            .ignoresSafeArea(edges: .bottom)
-            
+
             // Error Toast
             if let error = viewModel.errorMessage {
                 VStack {
@@ -117,6 +105,9 @@ struct EnhancedDiscoverView: View {
             ImprovedFilterSheet(viewModel: viewModel)
         }
         .task {
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Discover", screenClass: "EnhancedDiscoverView")
+
             await viewModel.loadProfiles()
         }
         .refreshable {
@@ -176,6 +167,12 @@ struct EnhancedDiscoverView: View {
                         withAnimation(.spring(response: 0.3)) {
                             selectedCategory = category
                             Task { await viewModel.filterByCategory(category) }
+
+                            // Track analytics
+                            AnalyticsManager.shared.trackFilterApplied(
+                                filterType: "category",
+                                value: category
+                            )
                         }
                         Haptics.impact(.medium)
                     }
@@ -307,7 +304,14 @@ struct EnhancedDiscoverView: View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
             ForEach(viewModel.filteredProfiles) { profile in
                 NavigationLink {
-                    ProfileDetailPlaceholder(profile: profile)
+                    ProfileDetailView(profile: profile)
+                        .onAppear {
+                            // Track profile view analytics
+                            AnalyticsManager.shared.trackProfileView(
+                                userId: profile.uid,
+                                source: "discover"
+                            )
+                        }
                 } label: {
                     DiscoverProfileCard(profile: profile)
                 }
@@ -365,14 +369,34 @@ struct EnhancedDiscoverView: View {
     
     
     // MARK: - Error Toast
-    
+
     private func errorToast(_ message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundStyle(.white)
-            .padding()
-            .background(.red, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Button {
+                Task {
+                    await viewModel.loadProfiles()
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding()
+        .background(.red, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
     
     // MARK: - Helper
@@ -757,22 +781,31 @@ final class DiscoverViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var errorMessage: String?
-    
+
     @Published var currentSort: SortOption = .relevance
     @Published var currentFilter: String?
     @Published var currentSearchQuery: String = ""
-    
+
     @Published var activeFilters = DiscoverFilters()
     @Published var selectedContentStyles: Set<UserProfile.ContentStyle> = []
     @Published var selectedCollabTypes: Set<UserProfile.CollaborationPreferences.CollabType> = []
-    
+
     private let service = FirebaseService()
     private var loadTask: Task<Void, Never>?
+    private var searchTask: Task<Void, Never>?
     private var currentPage = 0
     private let pageSize = 20
+
+    // Search optimization
+    private var searchCache: [String: (results: [UserProfile], timestamp: Date)] = [:]
+    private let cacheValidityDuration: TimeInterval = 300 // 5 minutes
     
     var totalProfiles: Int { filteredProfiles.count }
-    var onlineCount: Int { filteredProfiles.filter { $0.isOnline }.count }
+    var onlineCount: Int {
+        filteredProfiles.filter { profile in
+            PresenceManager.shared.isOnline(userId: profile.uid)
+        }.count
+    }
     var newTodayCount: Int { filteredProfiles.filter { Calendar.current.isDateInToday($0.createdAt) }.count }
     
     var hasActiveFilters: Bool {
@@ -817,26 +850,35 @@ final class DiscoverViewModel: ObservableObject {
             do {
                 //  Step 1: Get current user ID from Firebase Auth
                 guard let currentUserId = Auth.auth().currentUser?.uid else {
-                    print(" No logged-in user found")
-                    isLoading = false
-                    return
+                    throw NSError(domain: "DiscoverViewModel", code: -1,
+                                 userInfo: [NSLocalizedDescriptionKey: "User not logged in"])
                 }
 
                 //  Step 2: Fetch the user's profile from Firestore
                 guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
-                    print(" Could not fetch current user profile")
-                    isLoading = false
-                    return
+                    throw NSError(domain: "DiscoverViewModel", code: -2,
+                                 userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
                 }
 
+                //  Step 2.5: Fetch swiped user IDs to exclude them from discovery
+                let swipedUserIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
+
                 //  Step 3: Fetch discoverable profiles using that user
-                allProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: pageSize)
+                allProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: 100, excludeUserIds: swipedUserIds)
 
                 guard !Task.isCancelled else { return }
+
+                // Step 3.5: Fetch online status for all profiles
+                if !allProfiles.isEmpty {
+                    let userIds = allProfiles.map { $0.uid }
+                    await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+                }
 
                 // Step 4: Apply filters & finish
                 applyFilters()
                 isLoading = false
+
+                print("✅ Loaded \(filteredProfiles.count) profiles for Discover")
 
             } catch {
                 guard !Task.isCancelled else { return }
@@ -845,11 +887,25 @@ final class DiscoverViewModel: ObservableObject {
                 allProfiles = []
                 filteredProfiles = []
 
-                errorMessage = "Unable to load profiles. Please check your connection."
+                // Provide specific error messages based on error type
+                if let nsError = error as NSError? {
+                    if nsError.domain == NSURLErrorDomain {
+                        errorMessage = "No internet connection"
+                    } else if nsError.domain == "DiscoverViewModel" {
+                        errorMessage = nsError.localizedDescription
+                    } else {
+                        errorMessage = "Failed to load creators"
+                    }
+                } else {
+                    errorMessage = "Failed to load creators"
+                }
 
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                if !Task.isCancelled {
-                    errorMessage = nil
+                // Don't auto-dismiss critical errors
+                if errorMessage != "No internet connection" {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    if !Task.isCancelled {
+                        errorMessage = nil
+                    }
                 }
 
                 print("❌ Error loading profiles: \(error.localizedDescription)")
@@ -858,249 +914,60 @@ final class DiscoverViewModel: ObservableObject {
     }
 
 
-    /**
-    #if DEBUG
-    // MARK: - 🧪 TEST DATA
-    func loadTestProfiles() {
-        allProfiles = [
-            UserProfile(
-                id: "discover1",
-                uid: "discover1",
-                displayName: "Emma Rodriguez",
-                age: 23,
-                bio: "Travel vlogger ✈️ Exploring the world one video at a time!",
-                location: UserProfile.Location(city: "Austin", state: "TX", country: "USA", coordinates: nil),
-                interests: ["Travel", "Photography", "Lifestyle"],
-                contentStyles: [.fashion, .art],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@emmatravels", followerCount: 89000, isVerified: false),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@emmaontheroad", followerCount: 52000, isVerified: true),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@EmmaRodriguez", followerCount: 145000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 89000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.contentSeries, .brandDeal],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 30),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover2",
-                uid: "discover2",
-                displayName: "Jake Morrison",
-                age: 27,
-                bio: "Tech reviewer 📱 Latest gadgets and honest reviews!",
-                location: UserProfile.Location(city: "Seattle", state: "WA", country: "USA", coordinates: nil),
-                interests: ["Technology", "Gaming", "Reviews"],
-                contentStyles: [.tech, .gaming],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@jaketech", followerCount: 210000, isVerified: true),
-                    instagram: nil,
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@JakeMorrisonTech", followerCount: 380000, isVerified: true),
-                    twitch: UserProfile.SocialLinks.SocialAccount(username: "jaketech", followerCount: 45000, isVerified: false),
-                    spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 210000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.brandDeal, .twitchStream, .contentSeries],
-                    availability: [.weekdays, .weekends],
-                    responseTime: .moderate
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 60),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover3",
-                uid: "discover3",
-                displayName: "Sophia Lee",
-                age: 21,
-                bio: "Dance & choreography 💃 Let's create something amazing!",
-                location: UserProfile.Location(city: "Los Angeles", state: "CA", country: "USA", coordinates: nil),
-                interests: ["Dance", "Music", "Fitness"],
-                contentStyles: [.dance, .music, .fitness],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@sophiadance", followerCount: 675000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@sophialee", followerCount: 320000, isVerified: true),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@SophiaLeeChoreography", followerCount: 150000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 675000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.musicCollab, .tiktokLive, .contentSeries],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover4",
-                uid: "discover4",
-                displayName: "Michael Chen",
-                age: 29,
-                bio: "Comedy & sketches 😂 Making people laugh daily!",
-                location: UserProfile.Location(city: "Chicago", state: "IL", country: "USA", coordinates: nil),
-                interests: ["Comedy", "Acting", "Writing"],
-                contentStyles: [.comedy, .editing],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@michaelcomedy", followerCount: 420000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@mikechencomedy", followerCount: 185000, isVerified: false),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@MichaelChenComedy", followerCount: 290000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 420000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.contentSeries, .podcastGuest],
-                    availability: [.weekends],
-                    responseTime: .moderate
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 45),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover5",
-                uid: "discover5",
-                displayName: "Olivia Martinez",
-                age: 25,
-                bio: "Pet content creator 🐾 Dogs, cats, and everything cute!",
-                location: UserProfile.Location(city: "Denver", state: "CO", country: "USA", coordinates: nil),
-                interests: ["Pets", "Animals", "Lifestyle"],
-                contentStyles: [.pet, .comedy],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@oliviapets", followerCount: 550000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@oliviaandpets", followerCount: 380000, isVerified: true),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@OliviaPetLife", followerCount: 205000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 550000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.brandDeal, .contentSeries],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 15),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover6",
-                uid: "discover6",
-                displayName: "David Park",
-                age: 26,
-                bio: "Sports content & commentary ⚽ Game highlights and analysis!",
-                location: UserProfile.Location(city: "Boston", state: "MA", country: "USA", coordinates: nil),
-                interests: ["Sports", "Fitness", "Gaming"],
-                contentStyles: [.sports, .gaming],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@davidsports", followerCount: 98000, isVerified: false),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@davidparksp", followerCount: 75000, isVerified: false),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@DavidParkSports", followerCount: 175000, isVerified: true),
-                    twitch: UserProfile.SocialLinks.SocialAccount(username: "davidparksports", followerCount: 32000, isVerified: false),
-                    spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: false,
-                followerCount: 98000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.twitchStream, .podcastGuest],
-                    availability: [.weekends],
-                    responseTime: .slow
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 90),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover7",
-                uid: "discover7",
-                displayName: "Isabella Santos",
-                age: 24,
-                bio: "Makeup artist & tutorials 💄 Glam looks and everyday beauty!",
-                location: UserProfile.Location(city: "Miami", state: "FL", country: "USA", coordinates: nil),
-                interests: ["Beauty", "Fashion", "Photography"],
-                contentStyles: [.beauty, .fashion],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@isabellamakeup", followerCount: 780000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@isabellasantos", followerCount: 620000, isVerified: true),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@IsabellaSantosBeauty", followerCount: 340000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 780000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.brandDeal, .tiktokLive, .contentSeries],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover8",
-                uid: "discover8",
-                displayName: "Ryan Kim",
-                age: 28,
-                bio: "Fitness coach & nutrition 💪 Helping you reach your goals!",
-                location: UserProfile.Location(city: "San Diego", state: "CA", country: "USA", coordinates: nil),
-                interests: ["Fitness", "Health", "Nutrition"],
-                contentStyles: [.fitness, .cooking],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@ryanfitcoach", followerCount: 340000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@ryankimfit", followerCount: 290000, isVerified: true),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@RyanKimFitness", followerCount: 185000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 340000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.brandDeal, .contentSeries],
-                    availability: [.weekdays],
-                    responseTime: .moderate
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 20),
-                updatedAt: Date()
-            )
-        ]
-        filteredProfiles = allProfiles
-    }
-    #endif
-    */
     func loadMore() async {
         guard !isLoadingMore else { return }
-        
+
         isLoadingMore = true
         currentPage += 1
-        
+
         do {
-            // You can optionally pass the current user for consistency
-            guard let currentUserId = Auth.auth().currentUser?.uid,
-                  let currentUser = try await service.fetchProfile(uid: currentUserId) else {
-                print("⚠️ Missing current user while loading more profiles.")
+            guard let currentUserId = Auth.auth().currentUser?.uid else {
+                errorMessage = "Please sign in to continue"
                 isLoadingMore = false
                 return
             }
 
-            // ✅ Fetch more profiles (real Firestore data)
-            let newProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: pageSize)
-            allProfiles.append(contentsOf: newProfiles)
-            applyFilters()
+            guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
+                errorMessage = "User profile not found"
+                isLoadingMore = false
+                return
+            }
+
+            // Fetch swiped users to exclude
+            let swipedUserIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
+
+            // Fetch more profiles
+            let newProfiles = try await service.fetchDiscoverProfiles(
+                for: currentUser,
+                limit: 50,
+                excludeUserIds: swipedUserIds
+            )
+
+            // Fetch online status for new profiles
+            if !newProfiles.isEmpty {
+                let userIds = newProfiles.map { $0.uid }
+                await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+
+                // Add new profiles to existing list
+                allProfiles.append(contentsOf: newProfiles)
+                applyFilters()
+
+                print("✅ Loaded \(newProfiles.count) more profiles")
+            }
+
         } catch {
+            if let nsError = error as NSError?, nsError.domain == NSURLErrorDomain {
+                errorMessage = "Connection lost"
+            } else {
+                errorMessage = "Failed to load more"
+            }
+
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            errorMessage = nil
+
             print("❌ Error loading more: \(error)")
         }
-        
+
         isLoadingMore = false
     }
 
@@ -1114,31 +981,112 @@ final class DiscoverViewModel: ObservableObject {
     }
     
     func search(query: String) async {
+        // Cancel any existing search task (debouncing)
+        searchTask?.cancel()
+
         currentSearchQuery = query
-        
-        if !query.isEmpty {
+
+        // If query is empty, show all profiles with filters
+        if query.isEmpty {
+            applyFilters()
+            return
+        }
+
+        // Minimum query length
+        guard query.count >= 2 else {
+            filteredProfiles = []
+            return
+        }
+
+        searchTask = Task {
+            // Debounce: wait 300ms before searching
+            try? await Task.sleep(nanoseconds: 300_000_000)
+
+            guard !Task.isCancelled else { return }
+
+            // Check cache first
+            let cacheKey = "\(query)_\(currentFilter ?? "")"
+            if let cached = searchCache[cacheKey],
+               Date().timeIntervalSince(cached.timestamp) < cacheValidityDuration {
+                print("✅ Using cached search results for '\(query)'")
+                filteredProfiles = cached.results
+                applySorting()
+                return
+            }
+
+            // Perform search
             do {
                 let results = try await service.searchProfiles(
                     query: query,
                     filters: currentFilter.map { [$0] }
                 )
+
+                guard !Task.isCancelled else { return }
+
+                // Cache the results
+                searchCache[cacheKey] = (results, Date())
+
+                // Limit cache size to prevent memory issues
+                if searchCache.count > 20 {
+                    // Remove oldest entries
+                    let sortedKeys = searchCache.keys.sorted {
+                        searchCache[$0]!.timestamp < searchCache[$1]!.timestamp
+                    }
+                    for key in sortedKeys.prefix(5) {
+                        searchCache.removeValue(forKey: key)
+                    }
+                }
+
                 filteredProfiles = results
                 applySorting()
+
+                // Track analytics
+                await AnalyticsManager.shared.trackSearch(query: query, resultsCount: results.count)
+
+                print("✅ Search completed: \(results.count) results for '\(query)'")
+
             } catch {
+                guard !Task.isCancelled else { return }
                 errorMessage = "Search failed"
+                print("❌ Search error: \(error)")
             }
-        } else {
-            applyFilters()
         }
+    }
+
+    /// Clear the search cache (useful when data changes)
+    func clearSearchCache() {
+        searchCache.removeAll()
+        print("🗑️ Search cache cleared")
     }
     
     func sortBy(_ option: SortOption) {
         currentSort = option
         applySorting()
+
+        // Track analytics
+        let sortValue: String
+        switch option {
+        case .relevance: sortValue = "relevance"
+        case .distance: sortValue = "distance"
+        case .followers: sortValue = "followers"
+        case .newest: sortValue = "newest"
+        }
+        AnalyticsManager.shared.trackFilterApplied(filterType: "sort", value: sortValue)
     }
-    
+
     func applyAdvancedFilters() async {
         applyFilters()
+
+        // Track analytics for advanced filters
+        if activeFilters.verifiedOnly {
+            AnalyticsManager.shared.trackFilterApplied(filterType: "verified", value: "true")
+        }
+        if activeFilters.onlineOnly {
+            AnalyticsManager.shared.trackFilterApplied(filterType: "online", value: "true")
+        }
+        if activeFilters.maxDistance < 1000 {
+            AnalyticsManager.shared.trackFilterApplied(filterType: "distance", value: "\(Int(activeFilters.maxDistance))mi")
+        }
     }
     
     func clearAllFilters() {
@@ -1209,7 +1157,9 @@ final class DiscoverViewModel: ObservableObject {
         }
         
         if activeFilters.onlineOnly {
-            results = results.filter { $0.isOnline }
+            results = results.filter { profile in
+                PresenceManager.shared.isOnline(userId: profile.uid)
+            }
         }
         
         if activeFilters.maxDistance < 1000 {

@@ -39,12 +39,76 @@ extension UserProfile.CollaborationPreferences.ResponseTime {
     }
 }
 
-// MARK: - Online Status (Mock)
+// MARK: - Presence Manager
 
-extension UserProfile {
-    var isOnline: Bool {
-        // TODO: Replace with real online status from Firebase
-        Bool.random()
+/// Singleton manager for caching and tracking user online status
+@MainActor
+class PresenceManager: ObservableObject {
+    static let shared = PresenceManager()
+
+    @Published private(set) var onlineStatusCache: [String: (isOnline: Bool, lastChecked: Date)] = [:]
+    private let cacheValidityDuration: TimeInterval = 60 // 1 minute cache
+
+    private let service = FirebaseService()
+
+    private init() {}
+
+    /// Check if user is online (uses cache if available)
+    func isOnline(userId: String) -> Bool {
+        // Check cache first
+        if let cached = onlineStatusCache[userId],
+           Date().timeIntervalSince(cached.lastChecked) < cacheValidityDuration {
+            return cached.isOnline
+        }
+
+        // Return false as default (will be updated asynchronously)
+        return false
+    }
+
+    /// Fetch and cache online status for a user
+    func fetchOnlineStatus(userId: String) async {
+        do {
+            let isOnline = try await service.isUserOnline(userId: userId)
+            onlineStatusCache[userId] = (isOnline, Date())
+        } catch {
+            print("❌ Error fetching online status: \(error)")
+        }
+    }
+
+    /// Batch fetch online status for multiple users
+    func fetchOnlineStatus(userIds: [String]) async {
+        await withTaskGroup(of: Void.self) { group in
+            for userId in userIds {
+                group.addTask {
+                    await self.fetchOnlineStatus(userId: userId)
+                }
+            }
+        }
+    }
+
+    /// Update current user's presence to online
+    func updatePresence(userId: String) async {
+        do {
+            try await service.updatePresence(userId: userId)
+            onlineStatusCache[userId] = (true, Date())
+        } catch {
+            print("❌ Error updating presence: \(error)")
+        }
+    }
+
+    /// Set current user as offline
+    func setOffline(userId: String) async {
+        do {
+            try await service.setOffline(userId: userId)
+            onlineStatusCache[userId] = (false, Date())
+        } catch {
+            print("❌ Error setting offline: \(error)")
+        }
+    }
+
+    /// Clear cache
+    func clearCache() {
+        onlineStatusCache.removeAll()
     }
 }
 

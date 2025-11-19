@@ -738,7 +738,7 @@ private struct MainProfileContent: View {
         var completionPercentage: Double {
             var score = 0.0
             if profile.profileImageURL != nil { score += 20 }
-            if profile.bio != nil && !profile.bio!.isEmpty { score += 15 }
+            if let bio = profile.bio, !bio.isEmpty { score += 15 }
             if !profile.contentStyles.isEmpty { score += 15 }
             if !(profile.mediaURLs ?? []).isEmpty {
                 score += 15
@@ -823,7 +823,7 @@ private struct MainProfileContent: View {
         
         var suggestions: [String] {
             var tips: [String] = []
-            if profile.bio == nil || profile.bio!.isEmpty { tips.append("Add a bio") }
+            if profile.bio?.isEmpty ?? true { tips.append("Add a bio") }
             if (profile.mediaURLs ?? []).isEmpty { tips.append("Upload content") }
             if profile.socialLinks?.instagram == nil && profile.socialLinks?.tiktok  == nil {
                 tips.append("Connect social accounts")
@@ -1683,8 +1683,8 @@ private struct MainProfileContent: View {
     private struct FeaturedContentCard: View {
         let imageURL: String
         let index: Int
-        
-        @State private var isLiked = Bool.random()
+
+        @State private var isLiked = false
         
         var body: some View {
             ZStack(alignment: .bottomLeading) {
@@ -2208,14 +2208,19 @@ private struct MainProfileContent: View {
                             )
                             .frame(width: 280, height: 280)
                             .shadow(color: AppTheme.accent.opacity(0.3), radius: 20, y: 10)
-                        
+
                         RoundedRectangle(cornerRadius: 20)
                             .fill(.white)
                             .frame(width: 240, height: 240)
-                        
-                        Image(systemName: "qrcode")
-                            .font(.system(size: 120))
-                            .foregroundStyle(.black)
+
+                        if let qrImage = qrImage {
+                            Image(uiImage: qrImage)
+                                .resizable()
+                                .interpolation(.none)
+                                .frame(width: 220, height: 220)
+                        } else {
+                            ProgressView()
+                        }
                     }
                     
                     VStack(spacing: 8) {
@@ -2243,8 +2248,10 @@ private struct MainProfileContent: View {
                     
                     HStack(spacing: 16) {
                         Button {
-                            // Download QR
-                            Haptics.impact(.medium)
+                            if let qrImage = qrImage {
+                                UIImageWriteToSavedPhotosAlbum(qrImage, nil, nil, nil)
+                                Haptics.notify(.success)
+                            }
                         } label: {
                             HStack {
                                 Image(systemName: "square.and.arrow.down")
@@ -2280,6 +2287,30 @@ private struct MainProfileContent: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Done") { dismiss() }
+                    }
+                }
+                .task {
+                    // Generate QR code with profile URL
+                    let profileURL = "featur://profile/\(profile.uid)"
+
+                    // Try to load profile image for center
+                    var centerImage: UIImage?
+                    if let imageURL = profile.profileImageURL,
+                       let url = URL(string: imageURL),
+                       let imageData = try? Data(contentsOf: url) {
+                        centerImage = UIImage(data: imageData)
+                    }
+
+                    // Generate QR code
+                    qrImage = QRCodeGenerator.generateStylized(
+                        from: profileURL,
+                        centerImage: centerImage,
+                        size: CGSize(width: 512, height: 512)
+                    )
+                }
+                .sheet(isPresented: $showShareSheet) {
+                    if let qrImage = qrImage {
+                        ShareSheet(items: [qrImage])
                     }
                 }
             }
@@ -3386,9 +3417,10 @@ private struct MainProfileContent: View {
         static func generateVisitors() -> [Visitor] {
             let names = ["Emma Wilson", "James Lee", "Sofia Garcia", "Noah Kim", "Olivia Brown", "Liam Chen", "Ava Martinez", "Mason Taylor"]
             let times = ["2 min ago", "15 min ago", "1 hour ago", "3 hours ago", "5 hours ago", "1 day ago", "2 days ago", "3 days ago"]
-            
-            return zip(names, times).map { name, time in
-                Visitor(name: name, time: time, isVerified: Bool.random())
+            let verifiedStatus = [true, false, true, false, false, true, false, true]
+
+            return zip(zip(names, times), verifiedStatus).map { nameTime, verified in
+                Visitor(name: nameTime.0, time: nameTime.1, isVerified: verified)
             }
         }
     }
