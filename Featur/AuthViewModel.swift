@@ -8,11 +8,13 @@ import os.log
 @MainActor
 final class AuthViewModel: NSObject, ObservableObject {
     @Published var user: User?
+    @Published var userProfile: UserProfile? // Firestore profile
     @Published var errorMessage: String?
+    @Published var isLoadingProfile = false
     private var currentNonce: String?
     private var authHandle: AuthStateDidChangeListenerHandle?
 
-
+    private let service = FirebaseService()
     private let log = Logger(subsystem: "featur-app.Featur", category: "Auth")
     
     override init() {
@@ -28,10 +30,14 @@ final class AuthViewModel: NSObject, ObservableObject {
             Task { @MainActor in
                 self?.user = user
 
-                // Update presence when user signs in
+                // Load user profile from Firestore when signed in
                 if let userId = user?.uid {
+                    await self?.loadUserProfile(userId: userId)
                     await PresenceManager.shared.updatePresence(userId: userId)
                     print("✅ User signed in - presence updated: \(userId)")
+                } else {
+                    // Clear profile when signed out
+                    self?.userProfile = nil
                 }
             }
         }
@@ -132,10 +138,37 @@ final class AuthViewModel: NSObject, ObservableObject {
 
             try Auth.auth().signOut()
             self.user = nil
+            self.userProfile = nil
             self.errorMessage = nil
             self.currentNonce = nil
         } catch {
             self.errorMessage = "Sign out failed"
+        }
+    }
+
+    // MARK: - Profile Loading
+
+    /// Load user profile from Firestore
+    private func loadUserProfile(userId: String) async {
+        isLoadingProfile = true
+        defer { isLoadingProfile = false }
+
+        do {
+            // Fetch the user's profile from Firestore
+            let profile = try await service.fetchProfile(forUser: userId)
+            self.userProfile = profile
+            print("✅ User profile loaded: \(profile.displayName)")
+
+            // Set user properties for analytics
+            AnalyticsManager.shared.setUserProperty(name: "account_type", value: profile.accountType.rawValue)
+            if !profile.contentStyles.isEmpty {
+                AnalyticsManager.shared.setUserProperty(name: "content_styles", value: profile.contentStyles.joined(separator: ","))
+            }
+
+        } catch {
+            print("⚠️ Failed to load user profile: \(error.localizedDescription)")
+            // Profile might not exist for new users - this is expected
+            // We'll handle profile creation in the UI flow
         }
     }
     // MARK: - Helpers / Diagnostics
