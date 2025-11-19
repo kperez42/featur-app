@@ -176,6 +176,12 @@ struct EnhancedDiscoverView: View {
                         withAnimation(.spring(response: 0.3)) {
                             selectedCategory = category
                             Task { await viewModel.filterByCategory(category) }
+
+                            // Track analytics
+                            AnalyticsManager.shared.trackFilterApplied(
+                                filterType: "category",
+                                value: category
+                            )
                         }
                         Haptics.impact(.medium)
                     }
@@ -308,6 +314,13 @@ struct EnhancedDiscoverView: View {
             ForEach(viewModel.filteredProfiles) { profile in
                 NavigationLink {
                     ProfileDetailPlaceholder(profile: profile)
+                        .onAppear {
+                            // Track profile view analytics
+                            AnalyticsManager.shared.trackProfileView(
+                                userId: profile.uid,
+                                source: "discover"
+                            )
+                        }
                 } label: {
                     DiscoverProfileCard(profile: profile)
                 }
@@ -842,33 +855,35 @@ final class DiscoverViewModel: ObservableObject {
             do {
                 //  Step 1: Get current user ID from Firebase Auth
                 guard let currentUserId = Auth.auth().currentUser?.uid else {
-                    print(" No logged-in user found")
-                    isLoading = false
-                    return
+                    throw NSError(domain: "DiscoverViewModel", code: -1,
+                                 userInfo: [NSLocalizedDescriptionKey: "User not logged in"])
                 }
 
                 //  Step 2: Fetch the user's profile from Firestore
                 guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
-                    print(" Could not fetch current user profile")
-                    isLoading = false
-                    return
+                    throw NSError(domain: "DiscoverViewModel", code: -2,
+                                 userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
                 }
 
                 //  Step 2.5: Fetch swiped user IDs to exclude them from discovery
                 let swipedUserIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
 
                 //  Step 3: Fetch discoverable profiles using that user
-                allProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: pageSize, excludeUserIds: swipedUserIds)
+                allProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: 100, excludeUserIds: swipedUserIds)
 
                 guard !Task.isCancelled else { return }
 
                 // Step 3.5: Fetch online status for all profiles
-                let userIds = allProfiles.map { $0.uid }
-                await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+                if !allProfiles.isEmpty {
+                    let userIds = allProfiles.map { $0.uid }
+                    await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+                }
 
                 // Step 4: Apply filters & finish
                 applyFilters()
                 isLoading = false
+
+                print("✅ Loaded \(filteredProfiles.count) profiles for Discover")
 
             } catch {
                 guard !Task.isCancelled else { return }
@@ -881,6 +896,8 @@ final class DiscoverViewModel: ObservableObject {
                 if let nsError = error as NSError? {
                     if nsError.domain == NSURLErrorDomain {
                         errorMessage = "No internet connection"
+                    } else if nsError.domain == "DiscoverViewModel" {
+                        errorMessage = nsError.localizedDescription
                     } else {
                         errorMessage = "Failed to load creators"
                     }
@@ -888,9 +905,12 @@ final class DiscoverViewModel: ObservableObject {
                     errorMessage = "Failed to load creators"
                 }
 
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                if !Task.isCancelled {
-                    errorMessage = nil
+                // Don't auto-dismiss critical errors
+                if errorMessage != "No internet connection" {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    if !Task.isCancelled {
+                        errorMessage = nil
+                    }
                 }
 
                 print("❌ Error loading profiles: \(error.localizedDescription)")
@@ -1121,27 +1141,58 @@ final class DiscoverViewModel: ObservableObject {
     */
     func loadMore() async {
         guard !isLoadingMore else { return }
-        
+
         isLoadingMore = true
         currentPage += 1
-        
+
         do {
-            // You can optionally pass the current user for consistency
-            guard let currentUserId = Auth.auth().currentUser?.uid,
-                  let currentUser = try await service.fetchProfile(uid: currentUserId) else {
-                print("⚠️ Missing current user while loading more profiles.")
+            guard let currentUserId = Auth.auth().currentUser?.uid else {
+                errorMessage = "Please sign in to continue"
                 isLoadingMore = false
                 return
             }
 
-            // ✅ Fetch more profiles (real Firestore data)
-            let newProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: pageSize)
-            allProfiles.append(contentsOf: newProfiles)
-            applyFilters()
+            guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
+                errorMessage = "User profile not found"
+                isLoadingMore = false
+                return
+            }
+
+            // Fetch swiped users to exclude
+            let swipedUserIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
+
+            // Fetch more profiles
+            let newProfiles = try await service.fetchDiscoverProfiles(
+                for: currentUser,
+                limit: 50,
+                excludeUserIds: swipedUserIds
+            )
+
+            // Fetch online status for new profiles
+            if !newProfiles.isEmpty {
+                let userIds = newProfiles.map { $0.uid }
+                await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+
+                // Add new profiles to existing list
+                allProfiles.append(contentsOf: newProfiles)
+                applyFilters()
+
+                print("✅ Loaded \(newProfiles.count) more profiles")
+            }
+
         } catch {
+            if let nsError = error as NSError?, nsError.domain == NSURLErrorDomain {
+                errorMessage = "Connection lost"
+            } else {
+                errorMessage = "Failed to load more"
+            }
+
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            errorMessage = nil
+
             print("❌ Error loading more: \(error)")
         }
-        
+
         isLoadingMore = false
     }
 
@@ -1236,10 +1287,31 @@ final class DiscoverViewModel: ObservableObject {
     func sortBy(_ option: SortOption) {
         currentSort = option
         applySorting()
+
+        // Track analytics
+        let sortValue: String
+        switch option {
+        case .relevance: sortValue = "relevance"
+        case .distance: sortValue = "distance"
+        case .followers: sortValue = "followers"
+        case .newest: sortValue = "newest"
+        }
+        AnalyticsManager.shared.trackFilterApplied(filterType: "sort", value: sortValue)
     }
-    
+
     func applyAdvancedFilters() async {
         applyFilters()
+
+        // Track analytics for advanced filters
+        if activeFilters.verifiedOnly {
+            AnalyticsManager.shared.trackFilterApplied(filterType: "verified", value: "true")
+        }
+        if activeFilters.onlineOnly {
+            AnalyticsManager.shared.trackFilterApplied(filterType: "online", value: "true")
+        }
+        if activeFilters.maxDistance < 1000 {
+            AnalyticsManager.shared.trackFilterApplied(filterType: "distance", value: "\(Int(activeFilters.maxDistance))mi")
+        }
     }
     
     func clearAllFilters() {
