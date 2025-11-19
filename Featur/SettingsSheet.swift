@@ -671,7 +671,7 @@ struct EditAccountView: View {
                                     .frame(width: 120, height: 120)
                                     .clipShape(Circle())
                                     .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 2))
-                            } else if let photoURL = auth.user?.profileImageURL,
+                            } else if let photoURL = auth.userProfile?.profileImageURL,
                                       !photoURL.isEmpty {
                                 AsyncImage(url: URL(string: photoURL)) { image in
                                     image
@@ -758,7 +758,7 @@ struct EditAccountView: View {
                 HStack {
                     Text("User ID")
                     Spacer()
-                    Text(auth.user?.uid.prefix(8) ?? "N/A")
+                    Text(auth.userProfile?.uid.prefix(8) ?? "N/A")
                         .foregroundStyle(.secondary)
                         .font(.caption.monospaced())
                 }
@@ -783,7 +783,7 @@ struct EditAccountView: View {
                 TextField("Display Name", text: $viewModel.displayName)
                     .textInputAutocapitalization(.words)
 
-                if viewModel.displayName != (auth.user?.displayName ?? "") {
+                if viewModel.displayName != (auth.userProfile?.displayName ?? "") {
                     Button("Save Changes") {
                         Task {
                             await viewModel.updateDisplayName()
@@ -798,7 +798,7 @@ struct EditAccountView: View {
             // Media Gallery Section
             Section {
                 // Gallery Grid
-                if let mediaURLs = auth.user?.mediaURLs, !mediaURLs.isEmpty {
+                if let mediaURLs = auth.userProfile?.mediaURLs, !mediaURLs.isEmpty {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
                             ZStack(alignment: .topTrailing) {
@@ -850,7 +850,7 @@ struct EditAccountView: View {
                         }
                     }
                 }
-                .disabled(viewModel.isUploadingMedia || (auth.user?.mediaURLs?.count ?? 0) >= 6)
+                .disabled(viewModel.isUploadingMedia || (auth.userProfile?.mediaURLs?.count ?? 0) >= 6)
 
                 if viewModel.isUploadingMedia {
                     HStack {
@@ -878,7 +878,7 @@ struct EditAccountView: View {
         .navigationTitle("Edit Account")
         .onAppear {
             viewModel.auth = auth
-            viewModel.displayName = auth.user?.displayName ?? ""
+            viewModel.displayName = auth.userProfile?.displayName ?? ""
         }
         .alert("Upload Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
@@ -985,7 +985,7 @@ final class EditAccountViewModel: ObservableObject {
             let photoURL = try await service.uploadProfilePhoto(userId: userId, imageData: compressedData)
 
             // Update user profile in Firestore
-            guard var profile = auth?.user else {
+            guard var profile = auth?.userProfile else {
                 throw NSError(domain: "EditAccount", code: -1, userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
             }
 
@@ -993,7 +993,7 @@ final class EditAccountViewModel: ObservableObject {
             try await service.updateProfile(profile)
 
             // Update local auth state
-            auth?.user?.profileImageURL = photoURL
+            auth?.userProfile?.profileImageURL = photoURL
 
             // Success
             isUploading = false
@@ -1048,7 +1048,7 @@ final class EditAccountViewModel: ObservableObject {
 
     func updateDisplayName() async {
         guard let userId = Auth.auth().currentUser?.uid,
-              var profile = auth?.user,
+              var profile = auth?.userProfile,
               !displayName.isEmpty else {
             return
         }
@@ -1060,7 +1060,7 @@ final class EditAccountViewModel: ObservableObject {
             try await service.updateProfile(profile)
 
             // Update local auth state
-            auth?.user?.displayName = displayName
+            auth?.userProfile?.displayName = displayName
 
             isUpdating = false
             print("✅ Display name updated")
@@ -1083,7 +1083,7 @@ final class EditAccountViewModel: ObservableObject {
         }
 
         // Check if we're at limit
-        let currentCount = auth?.user?.mediaURLs?.count ?? 0
+        let currentCount = auth?.userProfile?.mediaURLs?.count ?? 0
         let availableSlots = 6 - currentCount
 
         if availableSlots <= 0 {
@@ -1133,7 +1133,7 @@ final class EditAccountViewModel: ObservableObject {
 
             // Update profile with new URLs
             if !uploadedURLs.isEmpty {
-                guard var profile = auth?.user else {
+                guard var profile = auth?.userProfile else {
                     throw NSError(domain: "EditAccount", code: -1, userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
                 }
 
@@ -1144,7 +1144,7 @@ final class EditAccountViewModel: ObservableObject {
                 try await service.updateProfile(profile)
 
                 // Update local auth state
-                auth?.user?.mediaURLs = currentMediaURLs
+                auth?.userProfile?.mediaURLs = currentMediaURLs
 
                 // Track analytics
                 AnalyticsManager.shared.trackMediaUpload(type: "gallery", count: uploadedURLs.count)
@@ -1173,7 +1173,7 @@ final class EditAccountViewModel: ObservableObject {
     }
 
     func deleteMedia(at index: Int) async {
-        guard var profile = auth?.user,
+        guard var profile = auth?.userProfile,
               var mediaURLs = profile.mediaURLs,
               index < mediaURLs.count else {
             return
@@ -1190,7 +1190,7 @@ final class EditAccountViewModel: ObservableObject {
             try await service.updateProfile(profile)
 
             // Update local auth state
-            auth?.user?.mediaURLs = mediaURLs
+            auth?.userProfile?.mediaURLs = mediaURLs
 
             // Delete from Firebase Storage to save space
             do {
