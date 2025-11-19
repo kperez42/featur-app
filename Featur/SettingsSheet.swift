@@ -405,7 +405,7 @@ final class SettingsViewModel: ObservableObject {
 
         } catch {
             print("❌ Error deleting account: \(error)")
-            throw error
+            // Note: Error is logged but not thrown since this is called from UI
         }
     }
     
@@ -446,23 +446,32 @@ final class SettingsViewModel: ObservableObject {
 
             // User profile
             if let profile = try await service.fetchProfile(uid: userId) {
-                exportData["profile"] = [
-                    "uid": profile.uid,
-                    "displayName": profile.displayName,
-                    "age": profile.age ?? "N/A",
-                    "bio": profile.bio ?? "",
-                    "location": [
-                        "city": profile.location?.city ?? "",
-                        "state": profile.location?.state ?? "",
-                        "country": profile.location?.country ?? ""
-                    ],
-                    "interests": profile.interests ?? [],
-                    "contentStyles": profile.contentStyles.map { $0.rawValue },
-                    "isVerified": profile.isVerified ?? false,
-                    "followerCount": profile.followerCount ?? 0,
-                    "createdAt": ISO8601DateFormatter().string(from: profile.createdAt),
-                    "updatedAt": ISO8601DateFormatter().string(from: profile.updatedAt)
+                // Break up complex expression for faster type-checking
+                let locationData: [String: String] = [
+                    "city": profile.location?.city ?? "",
+                    "state": profile.location?.state ?? "",
+                    "country": profile.location?.country ?? ""
                 ]
+
+                let contentStylesArray = profile.contentStyles.map { $0.rawValue }
+                let formatter = ISO8601DateFormatter()
+                let createdAtString = formatter.string(from: profile.createdAt)
+                let updatedAtString = formatter.string(from: profile.updatedAt)
+
+                var profileData: [String: Any] = [:]
+                profileData["uid"] = profile.uid
+                profileData["displayName"] = profile.displayName
+                profileData["age"] = profile.age ?? "N/A"
+                profileData["bio"] = profile.bio ?? ""
+                profileData["location"] = locationData
+                profileData["interests"] = profile.interests ?? []
+                profileData["contentStyles"] = contentStylesArray
+                profileData["isVerified"] = profile.isVerified ?? false
+                profileData["followerCount"] = profile.followerCount ?? 0
+                profileData["createdAt"] = createdAtString
+                profileData["updatedAt"] = updatedAtString
+
+                exportData["profile"] = profileData
             }
 
             // Swipe history
