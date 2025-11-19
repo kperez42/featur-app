@@ -324,6 +324,23 @@ final class SettingsViewModel: ObservableObject {
             let service = FirebaseService()
             let db = Firestore.firestore()
 
+            // Get user profile to retrieve media URLs before deletion
+            var mediaURLsToDelete: [String] = []
+            if let userProfile = try? await service.fetchProfile(forUser: userId) {
+                // Collect profile photo URL
+                if let profilePhotoURL = userProfile.profilePhotoURL {
+                    mediaURLsToDelete.append(profilePhotoURL)
+                }
+                // Collect gallery media URLs
+                if let mediaURLs = userProfile.mediaURLs {
+                    mediaURLsToDelete.append(contentsOf: mediaURLs)
+                }
+                // Collect gallery photos
+                for gallery in userProfile.galleries {
+                    mediaURLsToDelete.append(contentsOf: gallery.photoURLs)
+                }
+            }
+
             // Delete user profile
             try await db.collection("users").document(userId).delete()
             print("✅ Deleted user profile")
@@ -368,7 +385,20 @@ final class SettingsViewModel: ObservableObject {
             }
             print("✅ Deleted \(conversations.documents.count) conversations")
 
-            // Step 2: Delete Firebase Auth account
+            // Step 2: Delete all media from Firebase Storage
+            if !mediaURLsToDelete.isEmpty {
+                for url in mediaURLsToDelete {
+                    do {
+                        try await service.deleteMedia(url: url)
+                    } catch {
+                        // Log error but don't fail the whole deletion
+                        print("⚠️ Failed to delete media (non-critical): \(url)")
+                    }
+                }
+                print("✅ Deleted \(mediaURLsToDelete.count) media files from Storage")
+            }
+
+            // Step 3: Delete Firebase Auth account
             try await currentUser.delete()
             print("✅ Deleted Firebase Auth account")
 
@@ -1166,8 +1196,15 @@ final class EditAccountViewModel: ObservableObject {
             // Update local auth state
             auth?.user?.mediaURLs = mediaURLs
 
-            // TODO: Optionally delete from Firebase Storage to save space
-            // This would require adding a deleteMedia method to FirebaseService
+            // Delete from Firebase Storage to save space
+            do {
+                try await service.deleteMedia(url: urlToDelete)
+                print("✅ Deleted media from Storage and Firestore")
+            } catch {
+                // Don't fail the whole operation if Storage deletion fails
+                // The URL is already removed from Firestore, which is the critical part
+                print("⚠️ Failed to delete from Storage (non-critical): \(error.localizedDescription)")
+            }
 
             print("✅ Deleted media at index \(index)")
 

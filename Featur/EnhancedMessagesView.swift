@@ -4,10 +4,11 @@ import FirebaseFirestore
 struct EnhancedMessagesView: View {
     @StateObject private var viewModel = MessagesViewModel()
     @EnvironmentObject var auth: AuthViewModel
+    @EnvironmentObject var appState: AppStateManager
     @State private var showNewChat = false
-    @State private var openConversation: Conversation? = nil
+    @State private var navigateToConversation: Conversation? = nil
+    @State private var showChatView = false
 
-    
     var body: some View {
         Group {
             if auth.user == nil {
@@ -48,9 +49,43 @@ struct EnhancedMessagesView: View {
         .onChange(of: auth.user?.uid ?? "") { newValue in
             guard !newValue.isEmpty else { return }
             Task { await viewModel.loadConversations(userId: newValue) }
-        
         }
+        .onChange(of: appState.pendingMatchedUserId) { _, matchedUserId in
+            guard let userId = matchedUserId,
+                  let currentUserId = auth.user?.uid else { return }
 
+            Task {
+                await handlePendingMatch(currentUserId: currentUserId, matchedUserId: userId)
+            }
+        }
+        .sheet(isPresented: $showChatView) {
+            if let conversation = navigateToConversation {
+                ChatView(conversation: conversation)
+            }
+        }
+    }
+
+    private func handlePendingMatch(currentUserId: String, matchedUserId: String) async {
+        do {
+            // Create or get existing conversation
+            let conversation = try await viewModel.service.getOrCreateConversation(
+                userA: currentUserId,
+                userB: matchedUserId
+            )
+
+            // Navigate to the conversation
+            navigateToConversation = conversation
+            showChatView = true
+
+            // Clear the pending match
+            appState.pendingMatchedUserId = nil
+
+            print("✅ Navigated to conversation with matched user")
+
+        } catch {
+            print("❌ Error creating conversation for match: \(error)")
+            appState.pendingMatchedUserId = nil
+        }
     }
     
     private var conversationsList: some View {

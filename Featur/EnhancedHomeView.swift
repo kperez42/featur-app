@@ -5,7 +5,8 @@ import FirebaseAuth
 struct EnhancedHomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @EnvironmentObject var auth: AuthViewModel
-    
+    @EnvironmentObject var appState: AppStateManager
+
     @State private var swipeCount = 0
     @State private var showFilters = false
     @State private var selectedProfile: UserProfile? = nil
@@ -97,7 +98,9 @@ struct EnhancedHomeView: View {
         }
         .alert("It's a Match! 🎉", isPresented: $viewModel.showMatchAlert) {
             Button("Send Message") {
-                // Navigate to chat
+                if let match = viewModel.lastMatch {
+                    appState.navigateToChat(withUserId: match.uid)
+                }
             }
             Button("Keep Swiping", role: .cancel) { }
         } message: {

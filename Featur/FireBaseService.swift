@@ -524,6 +524,31 @@ final class FirebaseService: ObservableObject {
         let path = "profile_photos/\(userId)/\(UUID().uuidString).jpg"
         return try await uploadMedia(data: imageData, path: path)
     }
+
+    func uploadProfilePhoto(userId: String, image: UIImage) async throws -> String {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw NSError(domain: "FirebaseService", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
+        }
+        return try await uploadProfilePhoto(userId: userId, imageData: imageData)
+    }
+
+    /// Delete media from Firebase Storage using its download URL
+    func deleteMedia(url: String) async throws {
+        guard !url.isEmpty else {
+            print("⚠️ deleteMedia: Empty URL")
+            return
+        }
+
+        do {
+            let storageRef = storage.reference(forURL: url)
+            try await storageRef.delete()
+            print("✅ Deleted media from Storage: \(url)")
+        } catch {
+            print("❌ Error deleting media from Storage: \(error.localizedDescription)")
+            throw error
+        }
+    }
     /// Calculates how similar two user profiles are based on shared traits.
     ///
     /// - Parameters:
