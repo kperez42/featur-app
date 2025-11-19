@@ -613,21 +613,100 @@ final class ChatViewModel: ObservableObject {
 
 struct NewChatView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = NewChatViewModel()
     @State private var searchText = ""
-    
+
+    var filteredMatches: [(match: Match, profile: UserProfile?)] {
+        if searchText.isEmpty {
+            return viewModel.matches
+        } else {
+            return viewModel.matches.filter { match in
+                guard let profile = match.profile else { return false }
+                return profile.displayName.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            VStack {
+            VStack(spacing: 0) {
                 SearchBar(text: $searchText, placeholder: "Search connections")
-                
-                Text("Select from your matches")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                
-                // List matches here
-                Spacer()
+                    .padding()
+
+                if viewModel.isLoading {
+                    ProgressView()
+                        .frame(maxHeight: .infinity)
+                } else if viewModel.matches.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "person.2.slash")
+                            .font(.system(size: 50))
+                            .foregroundStyle(.secondary)
+                        Text("No Matches Yet")
+                            .font(.headline)
+                        Text("Start swiping to find collaborators!")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(filteredMatches.indices, id: \.self) { index in
+                                if let profile = filteredMatches[index].profile {
+                                    Button {
+                                        Task {
+                                            await viewModel.createConversation(with: profile)
+                                            dismiss()
+                                        }
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            // Profile Photo
+                                            AsyncImage(url: URL(string: profile.profilePhotoURL ?? "")) { image in
+                                                image
+                                                    .resizable()
+                                                    .scaledToFill()
+                                            } placeholder: {
+                                                Circle()
+                                                    .fill(AppTheme.accent.opacity(0.2))
+                                                    .overlay {
+                                                        Text(profile.displayName.prefix(1))
+                                                            .font(.title2.bold())
+                                                            .foregroundStyle(AppTheme.accent)
+                                                    }
+                                            }
+                                            .frame(width: 50, height: 50)
+                                            .clipShape(Circle())
+
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(profile.displayName)
+                                                    .font(.headline)
+                                                    .foregroundStyle(.primary)
+
+                                                if !profile.bio.isEmpty {
+                                                    Text(profile.bio)
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                        .lineLimit(1)
+                                                }
+                                            }
+
+                                            Spacer()
+
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .padding()
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    Divider()
+                                        .padding(.leading, 76)
+                                }
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle("New Message")
             .navigationBarTitleDisplayMode(.inline)
@@ -637,6 +716,79 @@ struct NewChatView: View {
                 }
             }
             .background(AppTheme.bg)
+            .task {
+                await viewModel.loadMatches()
+            }
+            .alert("Error", isPresented: $viewModel.showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(viewModel.errorMessage)
+            }
+        }
+    }
+}
+
+// MARK: - New Chat View Model
+
+@MainActor
+final class NewChatViewModel: ObservableObject {
+    @Published var matches: [(match: Match, profile: UserProfile?)] = []
+    @Published var isLoading = false
+    @Published var showError = false
+    @Published var errorMessage = ""
+
+    private let service = FirebaseService()
+
+    func loadMatches() async {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            errorMessage = "Please sign in to continue"
+            showError = true
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            // Fetch all active matches
+            let fetchedMatches = try await service.fetchMatches(userId: userId)
+            print("✅ Loaded \(fetchedMatches.count) matches for new chat")
+
+            // Fetch profiles for each match
+            var matchesWithProfiles: [(match: Match, profile: UserProfile?)] = []
+            for match in fetchedMatches {
+                let otherUserId = match.userId1 == userId ? match.userId2 : match.userId1
+                let profile = try? await service.fetchProfile(forUser: otherUserId)
+                matchesWithProfiles.append((match: match, profile: profile))
+            }
+
+            matches = matchesWithProfiles
+
+        } catch {
+            errorMessage = "Failed to load matches: \(error.localizedDescription)"
+            showError = true
+            print("❌ Error loading matches: \(error)")
+        }
+    }
+
+    func createConversation(with profile: UserProfile) async {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+
+        do {
+            let conversation = try await service.getOrCreateConversation(
+                userA: currentUserId,
+                userB: profile.uid
+            )
+
+            print("✅ Conversation created/retrieved: \(conversation.id ?? "unknown")")
+
+            // Track analytics
+            AnalyticsManager.shared.trackConversationStarted(withUserId: profile.uid)
+
+        } catch {
+            errorMessage = "Failed to create conversation: \(error.localizedDescription)"
+            showError = true
+            print("❌ Error creating conversation: \(error)")
         }
     }
 }
