@@ -38,11 +38,12 @@ struct EnhancedMessagesView: View {
             NewChatView()
         }
         .task {
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Messages", screenClass: "EnhancedMessagesView")
+
             if let userId = auth.user?.uid {
                 await viewModel.loadConversations(userId: userId)
-                
             }
-            
         }
         .onChange(of: auth.user?.uid ?? "") { newValue in
             guard !newValue.isEmpty else { return }

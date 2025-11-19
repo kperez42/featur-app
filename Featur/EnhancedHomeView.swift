@@ -84,7 +84,10 @@ struct EnhancedHomeView: View {
             }
         }
         .task {
-           // fetch the latest profiles using current user id, if nil default to an empty string
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Home", screenClass: "EnhancedHomeView")
+
+            // fetch the latest profiles using current user id, if nil default to an empty string
             await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
         }
         .refreshable {

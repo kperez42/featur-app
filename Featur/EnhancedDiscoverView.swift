@@ -105,6 +105,9 @@ struct EnhancedDiscoverView: View {
             ImprovedFilterSheet(viewModel: viewModel)
         }
         .task {
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Discover", screenClass: "EnhancedDiscoverView")
+
             await viewModel.loadProfiles()
         }
         .refreshable {

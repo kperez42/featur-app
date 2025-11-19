@@ -84,6 +84,9 @@ struct FeaturedView: View {
             GetFeaturedSheet()
         }
         .task {
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Featured", screenClass: "FeaturedView")
+
             await viewModel.loadFeatured()
         }
         .refreshable {
