@@ -155,14 +155,14 @@ final class AuthViewModel: NSObject, ObservableObject {
 
         do {
             // Fetch the user's profile from Firestore
-            let profile = try await service.fetchProfile(forUser: userId)
+            let profile = try await service.fetchProfile(uid: userId)
             self.userProfile = profile
             print("✅ User profile loaded: \(profile.displayName)")
 
             // Set user properties for analytics
-            AnalyticsManager.shared.setUserProperty(name: "account_type", value: profile.accountType.rawValue)
             if !profile.contentStyles.isEmpty {
-                AnalyticsManager.shared.setUserProperty(name: "content_styles", value: profile.contentStyles.joined(separator: ","))
+                let stylesString = profile.contentStyles.map { $0.rawValue }.joined(separator: ",")
+                AnalyticsManager.shared.setUserProperty(name: "content_styles", value: stylesString)
             }
 
         } catch {

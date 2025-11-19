@@ -881,7 +881,7 @@ final class NewChatViewModel: ObservableObject {
             var matchesWithProfiles: [(match: Match, profile: UserProfile?)] = []
             for match in fetchedMatches {
                 let otherUserId = match.userId1 == userId ? match.userId2 : match.userId1
-                let profile = try? await service.fetchProfile(forUser: otherUserId)
+                let profile = try? await service.fetchProfile(uid: otherUserId)
                 matchesWithProfiles.append((match: match, profile: profile))
             }
 

@@ -326,18 +326,14 @@ final class SettingsViewModel: ObservableObject {
 
             // Get user profile to retrieve media URLs before deletion
             var mediaURLsToDelete: [String] = []
-            if let userProfile = try? await service.fetchProfile(forUser: userId) {
+            if let userProfile = try? await service.fetchProfile(uid: userId) {
                 // Collect profile photo URL
-                if let profilePhotoURL = userProfile.profilePhotoURL {
-                    mediaURLsToDelete.append(profilePhotoURL)
+                if let profileImageURL = userProfile.profileImageURL {
+                    mediaURLsToDelete.append(profileImageURL)
                 }
                 // Collect gallery media URLs
                 if let mediaURLs = userProfile.mediaURLs {
                     mediaURLsToDelete.append(contentsOf: mediaURLs)
-                }
-                // Collect gallery photos
-                for gallery in userProfile.galleries {
-                    mediaURLsToDelete.append(contentsOf: gallery.photoURLs)
                 }
             }
 
