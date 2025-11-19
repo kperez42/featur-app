@@ -246,7 +246,9 @@ private struct MainProfileContent: View {
                 EnhancedStatsSheet(profile: profile)
             }
             .fullScreenCover(isPresented: $showProfilePreview) {
-                ProfilePreviewView(profile: profile)
+                if let currentProfile = viewModel.profile {
+                    ProfilePreviewView(profile: currentProfile)
+                }
             }
         }
     }
@@ -2234,8 +2236,8 @@ private struct MainProfileContent: View {
                     }
                 }
                 .task {
-                    // Generate QR code with profile URL
-                    let profileURL = "featur://profile/\(profile.uid)"
+                    // Generate QR code with real HTTPS URL
+                    let profileURL = "https://featur.app/profile/\(profile.uid)"
 
                     // Try to load profile image for center
                     var centerImage: UIImage?
@@ -2450,19 +2452,155 @@ private struct MainProfileContent: View {
     struct ProfilePreviewView: View {
         let profile: UserProfile
         @Environment(\.dismiss) var dismiss
-        
+
         var body: some View {
             NavigationStack {
-                ProfileDetailView(profile: profile)
-                    .navigationTitle("Preview")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button("Done") {
-                                dismiss()
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Profile Image - properly sized, not zoomed
+                        if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: UIScreen.main.bounds.width, height: 300)
+                                        .clipped()
+                                case .failure(_):
+                                    Rectangle()
+                                        .fill(AppTheme.accent.opacity(0.2))
+                                        .frame(height: 300)
+                                case .empty:
+                                    Rectangle()
+                                        .fill(AppTheme.accent.opacity(0.2))
+                                        .frame(height: 300)
+                                        .overlay(ProgressView())
+                                @unknown default:
+                                    Rectangle()
+                                        .fill(AppTheme.accent.opacity(0.2))
+                                        .frame(height: 300)
+                                }
                             }
+                        } else {
+                            Rectangle()
+                                .fill(AppTheme.accent.opacity(0.2))
+                                .frame(height: 300)
+                        }
+
+                        VStack(spacing: 20) {
+                            // Name with verification
+                            HStack {
+                                Text(profile.displayName)
+                                    .font(.system(size: 28, weight: .bold))
+                                if profile.isVerified ?? false {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .foregroundStyle(.blue)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            // Bio
+                            if let bio = profile.bio, !bio.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("About")
+                                        .font(.headline)
+                                    Text(bio)
+                                        .font(.body)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
+                            // Content Styles
+                            if !profile.contentStyles.isEmpty {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Content Styles")
+                                        .font(.headline)
+                                    FlowLayout(spacing: 8) {
+                                        ForEach(profile.contentStyles, id: \.self) { style in
+                                            Text(style.rawValue)
+                                                .font(.caption)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                                                .foregroundStyle(AppTheme.accent)
+                                        }
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
+                            // Social Links
+                            VStack(alignment: .leading, spacing: 12) {
+                                if profile.instagramHandle != nil || profile.tiktokHandle != nil ||
+                                   profile.youtubeHandle != nil || profile.twitchHandle != nil {
+                                    Text("Social Links")
+                                        .font(.headline)
+
+                                    VStack(spacing: 8) {
+                                        if let handle = profile.instagramHandle {
+                                            HStack {
+                                                Image(systemName: "camera.fill")
+                                                    .foregroundStyle(.purple)
+                                                Text("@\(handle)")
+                                                Spacer()
+                                            }
+                                            .padding(12)
+                                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                                        }
+
+                                        if let handle = profile.tiktokHandle {
+                                            HStack {
+                                                Image(systemName: "music.note")
+                                                    .foregroundStyle(.black)
+                                                Text("@\(handle)")
+                                                Spacer()
+                                            }
+                                            .padding(12)
+                                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                                        }
+
+                                        if let handle = profile.youtubeHandle {
+                                            HStack {
+                                                Image(systemName: "play.rectangle.fill")
+                                                    .foregroundStyle(.red)
+                                                Text("@\(handle)")
+                                                Spacer()
+                                            }
+                                            .padding(12)
+                                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                                        }
+
+                                        if let handle = profile.twitchHandle {
+                                            HStack {
+                                                Image(systemName: "tv.fill")
+                                                    .foregroundStyle(.purple)
+                                                Text("@\(handle)")
+                                                Spacer()
+                                            }
+                                            .padding(12)
+                                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+                                        }
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding()
+                        .padding(.bottom, 100)
+                    }
+                }
+                .background(AppTheme.bg)
+                .navigationTitle("Preview")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Done") {
+                            dismiss()
                         }
                     }
+                }
             }
         }
     }
