@@ -147,3 +147,17 @@ struct FeaturedCreator: Identifiable, Codable {
     var highlightText: String?
     var priority: Int
 }
+
+// MARK: - Testimonial Model
+struct Testimonial: Identifiable, Codable {
+    @DocumentID var id: String?
+    var profileUserId: String // User who receives the testimonial
+    var authorUserId: String // User who writes the testimonial
+    var authorName: String
+    var authorImageURL: String?
+    var authorRole: String? // e.g., "Content Creator", "Video Editor"
+    var rating: Int // 1-5 stars
+    var text: String
+    var createdAt: Date
+    var isVerified: Bool // True if they actually collaborated
+}
