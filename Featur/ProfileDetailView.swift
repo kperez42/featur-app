@@ -839,7 +839,12 @@ struct ReportSheet: View {
     @Environment(\.dismiss) var dismiss
     @State private var selectedReason = ""
     @State private var details = ""
-    
+    @State private var isSubmitting = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    private let service = FirebaseService()
+
     let reasons = [
         "Inappropriate content",
         "Spam or scam",
@@ -873,12 +878,52 @@ struct ReportSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Submit") {
-                        // Submit report
-                        dismiss()
+                        Task {
+                            await submitReport()
+                        }
                     }
-                    .disabled(selectedReason.isEmpty)
+                    .disabled(selectedReason.isEmpty || isSubmitting)
                 }
             }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+        }
+    }
+
+    private func submitReport() async {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        do {
+            // Create report document in Firestore
+            let report: [String: Any] = [
+                "reportedUserId": profile.uid,
+                "reportedBy": currentUserId,
+                "reason": selectedReason,
+                "details": details,
+                "timestamp": FieldValue.serverTimestamp(),
+                "status": "pending"
+            ]
+
+            try await Firestore.firestore().collection("reports").addDocument(data: report)
+
+            print("✅ Report submitted successfully")
+
+            // Track analytics
+            AnalyticsManager.shared.trackError(error: "profile_reported", context: selectedReason)
+
+            Haptics.notify(.success)
+            dismiss()
+
+        } catch {
+            errorMessage = "Failed to submit report: \(error.localizedDescription)"
+            showError = true
+            print("❌ Error submitting report: \(error)")
         }
     }
 }
