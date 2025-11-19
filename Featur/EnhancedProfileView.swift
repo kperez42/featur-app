@@ -2485,12 +2485,41 @@ private struct MainProfileContent: View {
         var body: some View {
             VStack(spacing: 20) {
                 PreviewNameSection(profile: profile)
+                PreviewActionButtons()
                 PreviewBioSection(bio: profile.bio)
                 PreviewContentStylesSection(styles: profile.contentStyles)
                 PreviewSocialLinksSection(profile: profile)
             }
             .padding()
             .padding(.bottom, 100)
+        }
+    }
+
+    struct PreviewActionButtons: View {
+        var body: some View {
+            HStack(spacing: 12) {
+                // Like Button (preview only - non-functional)
+                HStack {
+                    Image(systemName: "heart")
+                    Text("Like")
+                }
+                .font(.headline)
+                .foregroundStyle(AppTheme.accent)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+
+                // Message Button (preview only - non-functional)
+                HStack {
+                    Image(systemName: "message.fill")
+                    Text("Message")
+                }
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+            }
         }
     }
 
