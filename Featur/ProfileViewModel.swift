@@ -48,11 +48,11 @@ final class ProfileViewModel: ObservableObject {
         do {
             var profileToSave = updatedProfile
             profileToSave.updatedAt = Date()
-            
-            try db.collection("users")
+
+            try await db.collection("users")
                 .document(updatedProfile.uid)
                 .setData(from: profileToSave, merge: true)
-            
+
             self.profile = profileToSave
             print("✅ Profile updated successfully")
         } catch {
@@ -70,10 +70,10 @@ final class ProfileViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            try db.collection("users")
+            try await db.collection("users")
                 .document(newProfile.uid)
                 .setData(from: newProfile)
-            
+
             self.profile = newProfile
             self.needsSetup = false
             print("✅ Profile created successfully")
@@ -135,7 +135,7 @@ final class ProfileViewModel: ObservableObject {
             try await db.collection("users")
                 .document(userId)
                 .updateData([
-                    "mediaURLs": FieldValue.arrayUnion([url])
+                    "mediaURLs": FirebaseFirestore.FieldValue.arrayUnion([url])
                 ])
             
             // Update local profile
