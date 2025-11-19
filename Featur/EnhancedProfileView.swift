@@ -4437,205 +4437,204 @@ final class TestimonialsViewModel: ObservableObject {
 }
 
 // MARK: - All Testimonials Sheet
-extension EnhancedProfileView.MainProfileContent {
-    struct AllTestimonialsSheet: View {
-        let profile: UserProfile
-        @ObservedObject var viewModel: TestimonialsViewModel
-        @Environment(\.dismiss) var dismiss
-        @EnvironmentObject var auth: AuthViewModel
+struct AllTestimonialsSheet: View {
+    let profile: UserProfile
+    @ObservedObject var viewModel: TestimonialsViewModel
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var auth: AuthViewModel
 
-        @State private var showAddTestimonial = false
+    @State private var showAddTestimonial = false
 
-        var body: some View {
-            NavigationStack {
-                ScrollView {
-                    VStack(spacing: 16) {
-                        if !viewModel.testimonials.isEmpty {
-                            // Summary Card
-                            VStack(spacing: 12) {
-                                HStack(spacing: 4) {
-                                    ForEach(0..<5) { index in
-                                        Image(systemName: index < Int(viewModel.averageRating.rounded()) ? "star.fill" : "star")
-                                            .font(.title2)
-                                            .foregroundStyle(.yellow)
-                                    }
-                                }
-
-                                Text(String(format: "%.1f out of 5", viewModel.averageRating))
-                                    .font(.headline)
-
-                                Text("\(viewModel.testimonials.count) testimonials")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-                            .padding(.horizontal)
-
-                            // All testimonials
-                            VStack(spacing: 12) {
-                                ForEach(viewModel.testimonials) { testimonial in
-                                    TestimonialCard(testimonial: testimonial)
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    if !viewModel.testimonials.isEmpty {
+                        // Summary Card
+                        VStack(spacing: 12) {
+                            HStack(spacing: 4) {
+                                ForEach(0..<5) { index in
+                                    Image(systemName: index < Int(viewModel.averageRating.rounded()) ? "star.fill" : "star")
+                                        .font(.title2)
+                                        .foregroundStyle(.yellow)
                                 }
                             }
-                            .padding(.horizontal)
-                        } else {
-                            VStack(spacing: 16) {
-                                Image(systemName: "quote.bubble")
-                                    .font(.system(size: 60))
-                                    .foregroundStyle(.secondary)
-                                Text("No testimonials yet")
-                                    .font(.headline)
-                                Text("Be the first to leave a testimonial!")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding()
-                        }
-                    }
-                    .padding(.vertical)
-                }
-                .background(AppTheme.bg)
-                .navigationTitle("Testimonials")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Done") { dismiss() }
-                    }
 
-                    ToolbarItem(placement: .topBarTrailing) {
-                        if let currentUserId = auth.user?.uid, currentUserId != profile.uid {
-                            Button {
-                                showAddTestimonial = true
-                            } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .foregroundStyle(AppTheme.accent)
+                            Text(String(format: "%.1f out of 5", viewModel.averageRating))
+                                .font(.headline)
+
+                            Text("\(viewModel.testimonials.count) testimonials")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal)
+
+                        // All testimonials
+                        VStack(spacing: 12) {
+                            ForEach(viewModel.testimonials) { testimonial in
+                                TestimonialCard(testimonial: testimonial)
                             }
                         }
+                        .padding(.horizontal)
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "quote.bubble")
+                                .font(.system(size: 60))
+                                .foregroundStyle(.secondary)
+                            Text("No testimonials yet")
+                                .font(.headline)
+                            Text("Be the first to leave a testimonial!")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
                     }
                 }
-                .sheet(isPresented: $showAddTestimonial) {
-                    AddTestimonialSheet(
-                        profile: profile,
-                        viewModel: viewModel
-                    )
+                .padding(.vertical)
+            }
+            .background(AppTheme.bg)
+            .navigationTitle("Testimonials")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Done") { dismiss() }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    if let currentUserId = auth.user?.uid, currentUserId != profile.uid {
+                        Button {
+                            showAddTestimonial = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                    }
                 }
             }
+            .sheet(isPresented: $showAddTestimonial) {
+                AddTestimonialSheet(
+                    profile: profile,
+                    viewModel: viewModel
+                )
+            }
+        }
+        }
+}
+
+// MARK: - Add Testimonial Sheet
+struct AddTestimonialSheet: View {
+    let profile: UserProfile
+    @ObservedObject var viewModel: TestimonialsViewModel
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var auth: AuthViewModel
+
+    @State private var rating: Int = 5
+    @State private var testimonialText: String = ""
+    @State private var isSubmitting: Bool = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Rating") {
+                    HStack {
+                        ForEach(1...5, id: \.self) { star in
+                            Button {
+                                rating = star
+                            } label: {
+                                Image(systemName: star <= rating ? "star.fill" : "star")
+                                    .font(.title2)
+                                    .foregroundStyle(star <= rating ? .yellow : .gray)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+
+                Section("Your Testimonial") {
+                    TextEditor(text: $testimonialText)
+                        .frame(minHeight: 120)
+                } footer: {
+                    Text("Share your experience working with \(profile.displayName)")
+                }
+            }
+            .navigationTitle("Add Testimonial")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Submit") {
+                        Task { await submitTestimonial() }
+                    }
+                    .disabled(testimonialText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
+                }
+            }
+            .disabled(isSubmitting)
         }
     }
 
-    struct AddTestimonialSheet: View {
-        let profile: UserProfile
-        @ObservedObject var viewModel: TestimonialsViewModel
-        @Environment(\.dismiss) var dismiss
-        @EnvironmentObject var auth: AuthViewModel
-
-        @State private var rating: Int = 5
-        @State private var testimonialText: String = ""
-        @State private var isSubmitting: Bool = false
-
-        var body: some View {
-            NavigationStack {
-                Form {
-                    Section("Rating") {
-                        HStack {
-                            ForEach(1...5, id: \.self) { star in
-                                Button {
-                                    rating = star
-                                } label: {
-                                    Image(systemName: star <= rating ? "star.fill" : "star")
-                                        .font(.title2)
-                                        .foregroundStyle(star <= rating ? .yellow : .gray)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                    }
-
-                    Section("Your Testimonial") {
-                        TextEditor(text: $testimonialText)
-                            .frame(minHeight: 120)
-                    } footer: {
-                        Text("Share your experience working with \(profile.displayName)")
-                    }
-                }
-                .navigationTitle("Add Testimonial")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Cancel") { dismiss() }
-                    }
-
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Submit") {
-                            Task { await submitTestimonial() }
-                        }
-                        .disabled(testimonialText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
-                    }
-                }
-                .disabled(isSubmitting)
-            }
+    private func submitTestimonial() async {
+        guard let currentUser = auth.userProfile,
+              let currentUserId = auth.user?.uid else {
+            return
         }
 
-        private func submitTestimonial() async {
-            guard let currentUser = auth.userProfile,
-                  let currentUserId = auth.user?.uid else {
-                return
-            }
+        isSubmitting = true
 
-            isSubmitting = true
+        do {
+            // Check if there's an active conversation (for verified badge)
+            let hasCollab = await checkHasCollaboration(userId: currentUserId, profileUserId: profile.uid)
 
-            do {
-                // Check if there's an active conversation (for verified badge)
-                let hasCollab = await checkHasCollaboration(userId: currentUserId, profileUserId: profile.uid)
+            try await viewModel.addTestimonial(
+                profileUserId: profile.uid,
+                authorUserId: currentUserId,
+                authorName: currentUser.displayName,
+                authorImageURL: currentUser.profileImageURL,
+                authorRole: currentUser.contentStyles.first?.rawValue,
+                rating: rating,
+                text: testimonialText.trimmingCharacters(in: .whitespacesAndNewlines),
+                isVerified: hasCollab
+            )
 
-                try await viewModel.addTestimonial(
-                    profileUserId: profile.uid,
-                    authorUserId: currentUserId,
-                    authorName: currentUser.displayName,
-                    authorImageURL: currentUser.profileImageURL,
-                    authorRole: currentUser.contentStyles.first?.rawValue,
-                    rating: rating,
-                    text: testimonialText.trimmingCharacters(in: .whitespacesAndNewlines),
-                    isVerified: hasCollab
-                )
-
-                dismiss()
-            } catch {
-                print("❌ Error submitting testimonial: \(error)")
-            }
-
-            isSubmitting = false
+            dismiss()
+        } catch {
+            print("❌ Error submitting testimonial: \(error)")
         }
 
-        private func checkHasCollaboration(userId: String, profileUserId: String) async -> Bool {
-            do {
-                let db = FirebaseFirestore.Firestore.firestore()
-                let conversations = try await db.collection("conversations")
-                    .whereField("participantIds", arrayContains: userId)
-                    .getDocuments()
+        isSubmitting = false
+    }
 
-                // Check if any conversation includes both users
-                for doc in conversations.documents {
-                    if let participantIds = doc.data()["participantIds"] as? [String],
-                       participantIds.contains(profileUserId) {
-                        // Check if they've exchanged messages
-                        let messages = try await db.collection("conversations")
-                            .document(doc.documentID)
-                            .collection("messages")
-                            .getDocuments()
+    private func checkHasCollaboration(userId: String, profileUserId: String) async -> Bool {
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let conversations = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .getDocuments()
 
-                        if messages.documents.count >= 3 {
-                            return true
-                        }
+            // Check if any conversation includes both users
+            for doc in conversations.documents {
+                if let participantIds = doc.data()["participantIds"] as? [String],
+                   participantIds.contains(profileUserId) {
+                    // Check if they've exchanged messages
+                    let messages = try await db.collection("conversations")
+                        .document(doc.documentID)
+                        .collection("messages")
+                        .getDocuments()
+
+                    if messages.documents.count >= 3 {
+                        return true
                     }
                 }
-                return false
-            } catch {
-                return false
             }
+            return false
+        } catch {
+            return false
         }
     }
 }
