@@ -2208,14 +2208,19 @@ private struct MainProfileContent: View {
                             )
                             .frame(width: 280, height: 280)
                             .shadow(color: AppTheme.accent.opacity(0.3), radius: 20, y: 10)
-                        
+
                         RoundedRectangle(cornerRadius: 20)
                             .fill(.white)
                             .frame(width: 240, height: 240)
-                        
-                        Image(systemName: "qrcode")
-                            .font(.system(size: 120))
-                            .foregroundStyle(.black)
+
+                        if let qrImage = qrImage {
+                            Image(uiImage: qrImage)
+                                .resizable()
+                                .interpolation(.none)
+                                .frame(width: 220, height: 220)
+                        } else {
+                            ProgressView()
+                        }
                     }
                     
                     VStack(spacing: 8) {
@@ -2243,8 +2248,10 @@ private struct MainProfileContent: View {
                     
                     HStack(spacing: 16) {
                         Button {
-                            // Download QR
-                            Haptics.impact(.medium)
+                            if let qrImage = qrImage {
+                                UIImageWriteToSavedPhotosAlbum(qrImage, nil, nil, nil)
+                                Haptics.notify(.success)
+                            }
                         } label: {
                             HStack {
                                 Image(systemName: "square.and.arrow.down")
@@ -2280,6 +2287,30 @@ private struct MainProfileContent: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Done") { dismiss() }
+                    }
+                }
+                .task {
+                    // Generate QR code with profile URL
+                    let profileURL = "featur://profile/\(profile.uid)"
+
+                    // Try to load profile image for center
+                    var centerImage: UIImage?
+                    if let imageURL = profile.profileImageURL,
+                       let url = URL(string: imageURL),
+                       let imageData = try? Data(contentsOf: url) {
+                        centerImage = UIImage(data: imageData)
+                    }
+
+                    // Generate QR code
+                    qrImage = QRCodeGenerator.generateStylized(
+                        from: profileURL,
+                        centerImage: centerImage,
+                        size: CGSize(width: 512, height: 512)
+                    )
+                }
+                .sheet(isPresented: $showShareSheet) {
+                    if let qrImage = qrImage {
+                        ShareSheet(items: [qrImage])
                     }
                 }
             }
