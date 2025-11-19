@@ -26,7 +26,7 @@ struct ProfileDetailView: View {
                 VStack(spacing: 20) {
                     // Name & Basic Info
                     ProfileHeaderInfo(profile: profile)
-                    
+
                     // Action Buttons
                     ActionButtonsRow(
                         profile: profile,
@@ -36,36 +36,18 @@ struct ProfileDetailView: View {
                         onShare: { viewModel.shareProfile(profile: profile) },
                         viewModel: viewModel
                     )
-                    
-                    // Stats
-                    QuickStatsRow(profile: profile)
-                    
+
                     // Bio
                     if let bio = profile.bio, !bio.isEmpty {
                         BioSection(bio: bio)
                     }
-                    
+
                     // Content Styles
                     ContentStylesSection(styles: profile.contentStyles)
-                    
+
                     // Social Links
                     SocialLinksGrid(profile: profile)
-                    
-                    if let prefs = profile.collaborationPreferences {
-                        CollaborationSection(preferences: prefs)
-                    }
 
-                    
-                    // Location
-                    if let location = profile.location {
-                        LocationSection(location: location)
-                    }
-                    
-                    // Interests
-                    if !(profile.interests ?? []).isEmpty {
-                        InterestsSection(interests: (profile.interests ?? []))
-                    }
-                    
                     // Report Button
                     Button {
                         showReportSheet = true
@@ -85,34 +67,6 @@ struct ProfileDetailView: View {
         }
         .background(AppTheme.bg)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        viewModel.shareProfile(profile: profile)
-                    } label: {
-                        Label("Share Profile", systemImage: "square.and.arrow.up")
-                    }
-                    
-                    Button {
-                        viewModel.copyProfileLink(profile: profile)
-                    } label: {
-                        Label("Copy Link", systemImage: "link")
-                    }
-                    
-                    Divider()
-                    
-                    Button(role: .destructive) {
-                        showReportSheet = true
-                    } label: {
-                        Label("Report", systemImage: "exclamationmark.triangle")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .foregroundStyle(AppTheme.accent)
-                }
-            }
-        }
         .sheet(isPresented: $showMessageSheet) {
             MessageSheet(recipientProfile: profile)
         }
@@ -122,36 +76,9 @@ struct ProfileDetailView: View {
         .fullScreenCover(isPresented: $showImageViewer) {
             ImageViewerSheet(mediaURLs: (profile.mediaURLs ?? []), selectedIndex: $selectedImageIndex)
         }
-        .alert("It's a Match! 🎉", isPresented: $viewModel.showMatchAlert) {
-            Button("Send Message") {
-                showMessageSheet = true
-            }
-            Button("Keep Browsing", role: .cancel) { }
-        } message: {
-            Text("You and \(profile.displayName) liked each other!")
-        }
         .task {
-            // Load like status and online status when view appears
             if let currentUserId = Auth.auth().currentUser?.uid {
                 await viewModel.loadLikeStatus(currentUserId: currentUserId, targetUserId: profile.uid)
-            }
-
-            // Fetch online status for this profile
-            await PresenceManager.shared.fetchOnlineStatus(userId: profile.uid)
-        }
-        .overlay(alignment: .bottom) {
-            if viewModel.showCopySuccess {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text("Link copied to clipboard")
-                        .font(.subheadline)
-                }
-                .padding()
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                .padding(.bottom, 100)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.spring(), value: viewModel.showCopySuccess)
             }
         }
     }
@@ -307,45 +234,6 @@ private struct ActionButtonsRow: View {
     }
 }
 
-// MARK: - Quick Stats Row
-private struct QuickStatsRow: View {
-    let profile: UserProfile
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            StatColumn(value: formatNumber(profile.followerCount ?? 0), label: "Followers")
-            
-            Divider()
-                .frame(height: 40)
-            
-            StatColumn(value: "\((profile.mediaURLs ?? []).count)", label: "Posts")
-            
-            Divider()
-                .frame(height: 40)
-            
-            StatColumn(value: "\(Int.random(in: 5...50))", label: "Collabs")
-        }
-        .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-private struct StatColumn: View {
-    let value: String
-    let label: String
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.title2.bold())
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
 // MARK: - Bio Section
 private struct BioSection: View {
     let bio: String
@@ -485,105 +373,11 @@ private struct SocialLinkCard: View {
     }
 }
 
-// MARK: - Collaboration Section
-private struct CollaborationSection: View {
-    let preferences: UserProfile.CollaborationPreferences
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Looking to Collaborate")
-                .font(.headline)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(preferences.lookingFor, id: \.self) { type in
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text(type.rawValue)
-                            .font(.subheadline)
-                    }
-                }
-                
-                Divider()
-                
-                HStack {
-                    Image(systemName: "clock")
-                        .foregroundStyle(AppTheme.accent)
-                    Text(preferences.responseTime.rawValue)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding()
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-        }
-    }
-}
-
-// MARK: - Location Section
-private struct LocationSection: View {
-    let location: UserProfile.Location
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Location")
-                .font(.headline)
-            
-            HStack(spacing: 12) {
-                Image(systemName: "mappin.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(AppTheme.accent)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    if let city = location.city, let state = location.state {
-                        Text("\(city), \(state)")
-                            .font(.subheadline)
-                    }
-                    if let country = location.country {
-                        Text(country)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                Spacer()
-            }
-            .padding()
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-        }
-    }
-}
-
-// MARK: - Interests Section
-private struct InterestsSection: View {
-    let interests: [String]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Interests")
-                .font(.headline)
-            
-            FlowLayout(spacing: 8) {
-                ForEach(interests, id: \.self) { interest in
-                    Text(interest)
-                        .font(.caption)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(AppTheme.card, in: Capsule())
-                }
-            }
-        }
-    }
-}
-
 // MARK: - View Model
 @MainActor
 final class ProfileDetailViewModel: ObservableObject {
     @Published var isLiked = false
-    @Published var showSuccess = false
-    @Published var showMatchAlert = false
     @Published var isLoading = false
-    @Published var showCopySuccess = false
 
     private let service = FirebaseService()
 
@@ -613,22 +407,12 @@ final class ProfileDetailViewModel: ObservableObject {
 
             do {
                 if isLiked {
-                    // Save like
-                    let didMatch = try await service.saveLike(userId: currentUserId, targetUserId: profile.uid)
-
-                    if didMatch {
-                        // Show match alert
-                        showMatchAlert = true
-                        Haptics.notify(.success)
-                    }
+                    _ = try await service.saveLike(userId: currentUserId, targetUserId: profile.uid)
                 } else {
-                    // Remove like
                     try await service.removeLike(userId: currentUserId, targetUserId: profile.uid)
                 }
-
             } catch {
                 print("❌ Error toggling like: \(error)")
-
                 // Revert UI on error
                 withAnimation {
                     isLiked.toggle()
@@ -674,19 +458,6 @@ final class ProfileDetailViewModel: ObservableObject {
         }
     }
 
-    func copyProfileLink(profile: UserProfile) {
-        UIPasteboard.general.string = "https://featur.app/profile/\(profile.uid)"
-        Haptics.notify(.success)
-
-        // Show success feedback
-        showCopySuccess = true
-
-        // Auto-hide after 2 seconds
-        Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            showCopySuccess = false
-        }
-    }
 }
 
 // MARK: - Message Sheet
