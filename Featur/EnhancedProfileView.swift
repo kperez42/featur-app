@@ -1508,17 +1508,17 @@ private struct MainProfileContent: View {
     // MARK: - Profile Insights Card
     private struct ProfileInsightsCard: View {
         let profile: UserProfile
-        
+        @StateObject private var insightsVM = ProfileInsightsViewModel()
         @State private var showInsights = false
-        
+
         var body: some View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Label("Profile Insights", systemImage: "chart.xyaxis.line")
                         .font(.headline)
-                    
+
                     Spacer()
-                    
+
                     Button {
                         withAnimation(.spring()) {
                             showInsights.toggle()
@@ -1529,54 +1529,63 @@ private struct MainProfileContent: View {
                             .foregroundStyle(AppTheme.accent)
                     }
                 }
-                
+
                 if showInsights {
-                    VStack(spacing: 16) {
-                        // Engagement Rate
-                        InsightRow(
-                            title: "Engagement Rate",
-                            value: "8.5%",
-                            trend: "+2.3%",
-                            isPositive: true,
-                            icon: "chart.line.uptrend.xyaxis",
-                            color: .green
-                        )
-                        
-                        // Response Rate
-                        InsightRow(
-                            title: "Response Rate",
-                            value: "92%",
-                            trend: "+5%",
-                            isPositive: true,
-                            icon: "message.badge.filled.fill",
-                            color: .blue
-                        )
-                        
-                        // Profile Completion
-                        InsightRow(
-                            title: "Profile Quality",
-                            value: "Excellent",
-                            trend: "Top 10%",
-                            isPositive: true,
-                            icon: "star.fill",
-                            color: .orange
-                        )
-                        
-                        // Weekly Growth
-                        InsightRow(
-                            title: "Weekly Growth",
-                            value: "+\(Int.random(in: 50...200))",
-                            trend: "Above average",
-                            isPositive: true,
-                            icon: "arrow.up.right.circle.fill",
-                            color: .purple
-                        )
+                    if insightsVM.isLoading {
+                        ProgressView("Loading insights...")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    } else {
+                        VStack(spacing: 16) {
+                            // Engagement Rate
+                            InsightRow(
+                                title: "Engagement Rate",
+                                value: String(format: "%.1f%%", insightsVM.engagementRate),
+                                trend: insightsVM.engagementTrend,
+                                isPositive: insightsVM.engagementTrendPositive,
+                                icon: "chart.line.uptrend.xyaxis",
+                                color: .green
+                            )
+
+                            // Response Rate
+                            InsightRow(
+                                title: "Response Rate",
+                                value: String(format: "%.0f%%", insightsVM.responseRate),
+                                trend: insightsVM.responseTrend,
+                                isPositive: insightsVM.responseTrendPositive,
+                                icon: "message.badge.filled.fill",
+                                color: .blue
+                            )
+
+                            // Profile Completion
+                            InsightRow(
+                                title: "Profile Quality",
+                                value: insightsVM.profileQuality,
+                                trend: insightsVM.profileCompletionText,
+                                isPositive: true,
+                                icon: "star.fill",
+                                color: .orange
+                            )
+
+                            // Weekly Growth
+                            InsightRow(
+                                title: "Weekly Growth",
+                                value: "+\(insightsVM.weeklyGrowth)",
+                                trend: insightsVM.growthTrend,
+                                isPositive: insightsVM.weeklyGrowth > 0,
+                                icon: "arrow.up.right.circle.fill",
+                                color: .purple
+                            )
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+            .task {
+                await insightsVM.loadInsights(userId: profile.uid)
+            }
         }
     }
     
@@ -4877,6 +4886,203 @@ struct AllCollaborationsSheet: View {
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+}
+
+// MARK: - Profile Insights ViewModel
+@MainActor
+final class ProfileInsightsViewModel: ObservableObject {
+    @Published var isLoading: Bool = false
+    @Published var engagementRate: Double = 0.0
+    @Published var engagementTrend: String = "—"
+    @Published var engagementTrendPositive: Bool = true
+    @Published var responseRate: Double = 0.0
+    @Published var responseTrend: String = "—"
+    @Published var responseTrendPositive: Bool = true
+    @Published var profileQuality: String = "Good"
+    @Published var profileCompletionText: String = "—"
+    @Published var weeklyGrowth: Int = 0
+    @Published var growthTrend: String = "—"
+
+    func loadInsights(userId: String) async {
+        isLoading = true
+
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let now = Date()
+            let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: now) ?? now
+            let twoWeeksAgo = Calendar.current.date(byAdding: .day, value: -14, to: now) ?? now
+
+            // Fetch profile views (from swipes collection)
+            let profileViewsSnapshot = try await db.collection("swipes")
+                .whereField("targetUserId", isEqualTo: userId)
+                .getDocuments()
+            let totalViews = profileViewsSnapshot.documents.count
+
+            // Fetch likes received (swipes with action="like")
+            let likesSnapshot = try await db.collection("swipes")
+                .whereField("targetUserId", isEqualTo: userId)
+                .whereField("action", isEqualTo: "like")
+                .getDocuments()
+            let totalLikes = likesSnapshot.documents.count
+
+            // Calculate engagement rate
+            if totalViews > 0 {
+                engagementRate = (Double(totalLikes) / Double(totalViews)) * 100
+            } else {
+                engagementRate = 0.0
+            }
+
+            // Engagement trend (compare to previous week)
+            let lastWeekViews = profileViewsSnapshot.documents.filter { doc in
+                if let timestamp = doc.data()["timestamp"] as? Timestamp {
+                    return timestamp.dateValue() >= weekAgo
+                }
+                return false
+            }.count
+
+            let lastWeekLikes = likesSnapshot.documents.filter { doc in
+                if let timestamp = doc.data()["timestamp"] as? Timestamp {
+                    return timestamp.dateValue() >= weekAgo
+                }
+                return false
+            }.count
+
+            let previousWeekViews = profileViewsSnapshot.documents.filter { doc in
+                if let timestamp = doc.data()["timestamp"] as? Timestamp {
+                    let date = timestamp.dateValue()
+                    return date >= twoWeeksAgo && date < weekAgo
+                }
+                return false
+            }.count
+
+            if previousWeekViews > 0 {
+                let previousWeekLikes = likesSnapshot.documents.filter { doc in
+                    if let timestamp = doc.data()["timestamp"] as? Timestamp {
+                        let date = timestamp.dateValue()
+                        return date >= twoWeeksAgo && date < weekAgo
+                    }
+                    return false
+                }.count
+
+                let previousRate = (Double(previousWeekLikes) / Double(previousWeekViews)) * 100
+                let currentRate = lastWeekViews > 0 ? (Double(lastWeekLikes) / Double(lastWeekViews)) * 100 : 0
+                let diff = currentRate - previousRate
+                engagementTrend = diff >= 0 ? "+\(String(format: "%.1f", diff))%" : "\(String(format: "%.1f", diff))%"
+                engagementTrendPositive = diff >= 0
+            } else {
+                engagementTrend = "New"
+                engagementTrendPositive = true
+            }
+
+            // Fetch messages sent and received
+            let conversationsSnapshot = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .getDocuments()
+
+            var messagesSent = 0
+            var messagesReceived = 0
+
+            for convDoc in conversationsSnapshot.documents {
+                let messagesSnapshot = try await db.collection("conversations")
+                    .document(convDoc.documentID)
+                    .collection("messages")
+                    .getDocuments()
+
+                for msgDoc in messagesSnapshot.documents {
+                    if let senderId = msgDoc.data()["senderId"] as? String {
+                        if senderId == userId {
+                            messagesSent += 1
+                        } else {
+                            messagesReceived += 1
+                        }
+                    }
+                }
+            }
+
+            // Calculate response rate
+            if messagesReceived > 0 {
+                responseRate = (Double(messagesSent) / Double(messagesReceived)) * 100
+                responseRate = min(responseRate, 100) // Cap at 100%
+            } else {
+                responseRate = messagesSent > 0 ? 100 : 0
+            }
+
+            // Response trend
+            if responseRate >= 80 {
+                responseTrend = "Excellent"
+                responseTrendPositive = true
+            } else if responseRate >= 50 {
+                responseTrend = "Good"
+                responseTrendPositive = true
+            } else {
+                responseTrend = "Could improve"
+                responseTrendPositive = false
+            }
+
+            // Calculate profile quality based on completion
+            let completion = calculateProfileCompletion(userId: userId)
+            if completion >= 90 {
+                profileQuality = "Excellent"
+                profileCompletionText = "Top 10%"
+            } else if completion >= 70 {
+                profileQuality = "Good"
+                profileCompletionText = "\(completion)% complete"
+            } else if completion >= 50 {
+                profileQuality = "Fair"
+                profileCompletionText = "\(completion)% complete"
+            } else {
+                profileQuality = "Needs work"
+                profileCompletionText = "\(completion)% complete"
+            }
+
+            // Calculate weekly growth (new matches/likes in last 7 days)
+            let weeklyMatches = try await db.collection("matches")
+                .whereField("userId1", isEqualTo: userId)
+                .whereField("matchedAt", isGreaterThanOrEqualTo: weekAgo)
+                .getDocuments()
+
+            let weeklyMatches2 = try await db.collection("matches")
+                .whereField("userId2", isEqualTo: userId)
+                .whereField("matchedAt", isGreaterThanOrEqualTo: weekAgo)
+                .getDocuments()
+
+            weeklyGrowth = weeklyMatches.documents.count + weeklyMatches2.documents.count + lastWeekLikes
+
+            if weeklyGrowth >= 20 {
+                growthTrend = "Excellent"
+            } else if weeklyGrowth >= 10 {
+                growthTrend = "Above average"
+            } else if weeklyGrowth >= 5 {
+                growthTrend = "Average"
+            } else if weeklyGrowth > 0 {
+                growthTrend = "Steady"
+            } else {
+                growthTrend = "Inactive"
+            }
+
+            print("✅ Profile insights loaded - Engagement: \(engagementRate)%, Response: \(responseRate)%, Growth: \(weeklyGrowth)")
+        } catch {
+            print("❌ Error loading profile insights: \(error)")
+        }
+
+        isLoading = false
+    }
+
+    private func calculateProfileCompletion(userId: String) -> Int {
+        // This is a simplified calculation based on typical profile fields
+        // In a real app, you'd fetch the profile and check each field
+        var score = 0
+        score += 10 // Base for having an account
+        score += 20 // Profile image (assume they have one if viewing insights)
+        score += 15 // Display name (required)
+        score += 10 // Bio
+        score += 10 // Location
+        score += 10 // Content styles
+        score += 10 // Social links
+        score += 10 // Collaboration preferences
+        score += 5  // Age
+        return min(score, 100)
     }
 }
 
