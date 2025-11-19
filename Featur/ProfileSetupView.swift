@@ -145,14 +145,14 @@ struct ProfileSetupView: View {
                                     .foregroundStyle(.white)
 
                                 HStack(spacing: 12) {
-                                    ForEach([AccountType.creator, .business], id: \.self) { type in
+                                    ForEach(["creator", "business"], id: \.self) { type in
                                         Button {
                                             viewModel.accountType = type
                                         } label: {
                                             VStack(spacing: 8) {
-                                                Image(systemName: type == .creator ? "person.fill" : "briefcase.fill")
+                                                Image(systemName: type == "creator" ? "person.fill" : "briefcase.fill")
                                                     .font(.system(size: 24))
-                                                Text(type.rawValue.capitalized)
+                                                Text(type.capitalized)
                                                     .font(.caption)
                                             }
                                             .frame(maxWidth: .infinity)
@@ -176,15 +176,15 @@ struct ProfileSetupView: View {
                                     .foregroundStyle(.white.opacity(0.7))
 
                                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 12) {
-                                    ForEach(ContentStyle.allCases, id: \.self) { style in
+                                    ForEach(UserProfile.ContentStyle.allCases, id: \.self) { style in
                                         Button {
-                                            viewModel.toggleContentStyle(style.rawValue)
+                                            viewModel.toggleContentStyle(style)
                                         } label: {
                                             Text(style.rawValue)
                                                 .font(.caption)
                                                 .padding(.horizontal, 12)
                                                 .padding(.vertical, 8)
-                                                .background(viewModel.contentStyles.contains(style.rawValue) ? AppTheme.accent : Color.white.opacity(0.15))
+                                                .background(viewModel.contentStyles.contains(style) ? AppTheme.accent : Color.white.opacity(0.15))
                                                 .foregroundStyle(.white)
                                                 .cornerRadius(20)
                                         }
@@ -256,8 +256,8 @@ final class ProfileSetupViewModel: ObservableObject {
     @Published var bio = ""
     @Published var ageText = ""
     @Published var gender = ""
-    @Published var accountType: AccountType = .creator
-    @Published var contentStyles: [String] = []
+    @Published var accountType: String = "creator"
+    @Published var contentStyles: [UserProfile.ContentStyle] = []
 
     @Published var selectedPhotoItem: PhotosPickerItem?
     @Published var selectedImage: UIImage?
@@ -277,7 +277,7 @@ final class ProfileSetupViewModel: ObservableObject {
         selectedImage != nil
     }
 
-    func toggleContentStyle(_ style: String) {
+    func toggleContentStyle(_ style: UserProfile.ContentStyle) {
         if contentStyles.contains(style) {
             contentStyles.removeAll { $0 == style }
         } else {
@@ -330,31 +330,30 @@ final class ProfileSetupViewModel: ObservableObject {
             // Create user profile
             let profile = UserProfile(
                 uid: userId,
-                email: Auth.auth().currentUser?.email ?? "",
                 displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
-                bio: bio.trimmingCharacters(in: .whitespacesAndNewlines),
                 age: age,
-                gender: gender,
-                profilePhotoURL: photoURL,
-                accountType: accountType,
-                contentStyles: contentStyles.isEmpty ? ["lifestyle"] : contentStyles,
-                interests: [],
-                createdAt: Date(),
-                isVerified: false,
+                bio: bio.trimmingCharacters(in: .whitespacesAndNewlines),
                 location: nil,
-                socialLinks: [:],
-                galleries: [],
-                mediaCount: 0
+                interests: [gender], // Store gender as interest for now
+                contentStyles: contentStyles.isEmpty ? [.fitness] : contentStyles,
+                socialLinks: nil,
+                mediaURLs: nil,
+                profileImageURL: photoURL,
+                isVerified: false,
+                followerCount: 0,
+                collaborationPreferences: nil,
+                createdAt: Date(),
+                updatedAt: Date()
             )
 
             // Save to Firestore
-            try await service.saveProfile(profile: profile)
+            try await service.createProfile(profile)
             print("✅ User profile created: \(displayName)")
 
             // Track analytics
             AnalyticsManager.shared.setUserId(userId)
             AnalyticsManager.shared.trackSignUp(method: "apple")
-            AnalyticsManager.shared.setUserProperty(name: "account_type", value: accountType.rawValue)
+            AnalyticsManager.shared.setUserProperty(name: "account_type", value: accountType)
             AnalyticsManager.shared.trackProfileEdit(field: "initial_setup")
 
             // Manually reload the profile in AuthViewModel to trigger UI update
@@ -368,23 +367,4 @@ final class ProfileSetupViewModel: ObservableObject {
             print("❌ Error creating profile: \(error)")
         }
     }
-}
-
-// MARK: - Content Style Enum
-
-enum ContentStyle: String, CaseIterable {
-    case fashion = "Fashion"
-    case beauty = "Beauty"
-    case lifestyle = "Lifestyle"
-    case fitness = "Fitness"
-    case food = "Food"
-    case travel = "Travel"
-    case tech = "Tech"
-    case gaming = "Gaming"
-    case music = "Music"
-    case art = "Art"
-    case photography = "Photography"
-    case comedy = "Comedy"
-    case education = "Education"
-    case business = "Business"
 }
