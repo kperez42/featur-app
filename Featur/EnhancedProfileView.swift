@@ -1902,71 +1902,6 @@ private struct MainProfileContent: View {
         }
     }
     
-    private struct TestimonialCard: View {
-        let testimonial: Testimonial
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    if let imageURL = testimonial.authorImageURL, let url = URL(string: imageURL) {
-                        AsyncImage(url: url) { image in
-                            image.resizable().scaledToFill()
-                        } placeholder: {
-                            Circle().fill(AppTheme.accent.opacity(0.3))
-                        }
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
-                    } else {
-                        ZStack {
-                            Circle()
-                                .fill(AppTheme.accent.opacity(0.3))
-                                .frame(width: 40, height: 40)
-
-                            Text(testimonial.authorName.prefix(1))
-                                .font(.headline)
-                                .foregroundStyle(AppTheme.accent)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 4) {
-                            Text(testimonial.authorName)
-                                .font(.subheadline.bold())
-                            if testimonial.isVerified {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(.blue)
-                            }
-                        }
-
-                        if let role = testimonial.authorRole {
-                            Text(role)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Spacer()
-
-                    HStack(spacing: 2) {
-                        ForEach(0..<testimonial.rating, id: \.self) { _ in
-                            Image(systemName: "star.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.yellow)
-                        }
-                    }
-                }
-
-                Text(testimonial.text)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-            }
-            .padding()
-            .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
-        }
-    }
-    
     // MARK: - Activity Timeline Section
     private struct ActivityTimelineSection: View {
         var body: some View {
@@ -4366,6 +4301,72 @@ final class DetailedAnalyticsViewModel: ObservableObject {
     }
 }
 
+// MARK: - Testimonial Card
+struct TestimonialCard: View {
+    let testimonial: Testimonial
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                if let imageURL = testimonial.authorImageURL, let url = URL(string: imageURL) {
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(AppTheme.accent.opacity(0.3))
+                    }
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.accent.opacity(0.3))
+                            .frame(width: 40, height: 40)
+
+                        Text(testimonial.authorName.prefix(1))
+                            .font(.headline)
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(testimonial.authorName)
+                            .font(.subheadline.bold())
+                        if testimonial.isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.blue)
+                        }
+                    }
+
+                    if let role = testimonial.authorRole {
+                        Text(role)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                HStack(spacing: 2) {
+                    ForEach(0..<testimonial.rating, id: \.self) { _ in
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.yellow)
+                    }
+                }
+            }
+
+            Text(testimonial.text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 // MARK: - Testimonials ViewModel
 @MainActor
 final class TestimonialsViewModel: ObservableObject {
@@ -4554,9 +4555,11 @@ struct AddTestimonialSheet: View {
                     .padding(.vertical, 8)
                 }
 
-                Section("Your Testimonial") {
+                Section {
                     TextEditor(text: $testimonialText)
                         .frame(minHeight: 120)
+                } header: {
+                    Text("Your Testimonial")
                 } footer: {
                     Text("Share your experience working with \(profile.displayName)")
                 }
