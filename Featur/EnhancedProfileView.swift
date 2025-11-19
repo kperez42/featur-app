@@ -119,6 +119,33 @@ private struct MainProfileContent: View {
                         .padding(.horizontal)
                         .padding(.top, 20)
 
+                    if let prefs = profile.collaborationPreferences {
+                        // Collaboration Details Card
+                        CollaborationDetailsCard(preferences: prefs)
+                            .padding(.horizontal)
+                            .padding(.top, 20)
+
+                        // 3D Interactive Profile Card
+                        Interactive3DProfileCard(profile: profile)
+                            .padding(.horizontal)
+                            .padding(.top, 20)
+
+                        // Profile Insights Card
+                        ProfileInsightsCard(profile: profile)
+                            .padding(.horizontal)
+                            .padding(.top, 20)
+
+                        // Testimonials Section
+                        TestimonialsSection()
+                            .padding(.horizontal)
+                            .padding(.top, 20)
+
+                        // Collaboration History
+                        CollaborationHistorySection(profile: profile)
+                            .padding(.horizontal)
+                            .padding(.top, 20)
+                    }
+
                     // Bottom Padding
                     Color.clear.frame(height: 100)
                 }
