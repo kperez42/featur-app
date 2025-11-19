@@ -2478,6 +2478,132 @@ private struct MainProfileContent: View {
         }
     }
 
+    // MARK: - Profile Preview Content Sections
+    struct PreviewContentSection: View {
+        let profile: UserProfile
+
+        var body: some View {
+            VStack(spacing: 20) {
+                PreviewNameSection(profile: profile)
+                PreviewBioSection(bio: profile.bio)
+                PreviewContentStylesSection(styles: profile.contentStyles)
+                PreviewSocialLinksSection(profile: profile)
+            }
+            .padding()
+            .padding(.bottom, 100)
+        }
+    }
+
+    struct PreviewNameSection: View {
+        let profile: UserProfile
+
+        var body: some View {
+            HStack {
+                Text(profile.displayName)
+                    .font(.system(size: 28, weight: .bold))
+                if profile.isVerified ?? false {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(.blue)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    struct PreviewBioSection: View {
+        let bio: String?
+
+        var body: some View {
+            Group {
+                if let bio = bio, !bio.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("About")
+                            .font(.headline)
+                        Text(bio)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    struct PreviewContentStylesSection: View {
+        let styles: [UserProfile.ContentStyle]
+
+        var body: some View {
+            Group {
+                if !styles.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Content Styles")
+                            .font(.headline)
+                        FlowLayout(spacing: 8) {
+                            ForEach(styles, id: \.self) { style in
+                                styleTag(style)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+
+        private func styleTag(_ style: UserProfile.ContentStyle) -> some View {
+            Text(style.rawValue)
+                .font(.caption)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                .foregroundStyle(AppTheme.accent)
+        }
+    }
+
+    struct PreviewSocialLinksSection: View {
+        let profile: UserProfile
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                if hasAnySocialLinks {
+                    Text("Social Links")
+                        .font(.headline)
+
+                    VStack(spacing: 8) {
+                        if let handle = profile.instagramHandle {
+                            socialLinkRow(icon: "camera.fill", color: .purple, handle: handle)
+                        }
+                        if let handle = profile.tiktokHandle {
+                            socialLinkRow(icon: "music.note", color: .black, handle: handle)
+                        }
+                        if let handle = profile.youtubeHandle {
+                            socialLinkRow(icon: "play.rectangle.fill", color: .red, handle: handle)
+                        }
+                        if let handle = profile.twitchHandle {
+                            socialLinkRow(icon: "tv.fill", color: .purple, handle: handle)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+
+        private var hasAnySocialLinks: Bool {
+            profile.instagramHandle != nil || profile.tiktokHandle != nil ||
+            profile.youtubeHandle != nil || profile.twitchHandle != nil
+        }
+
+        private func socialLinkRow(icon: String, color: Color, handle: String) -> some View {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundStyle(color)
+                Text("@\(handle)")
+                Spacer()
+            }
+            .padding(12)
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
     // MARK: - Profile Preview View
     struct ProfilePreviewView: View {
         let profile: UserProfile
@@ -2487,110 +2613,8 @@ private struct MainProfileContent: View {
             NavigationStack {
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Profile Image - properly sized, not zoomed
                         PreviewProfileImage(imageURL: profile.profileImageURL)
-
-                        VStack(spacing: 20) {
-                            // Name with verification
-                            HStack {
-                                Text(profile.displayName)
-                                    .font(.system(size: 28, weight: .bold))
-                                if profile.isVerified ?? false {
-                                    Image(systemName: "checkmark.seal.fill")
-                                        .foregroundStyle(.blue)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                            // Bio
-                            if let bio = profile.bio, !bio.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("About")
-                                        .font(.headline)
-                                    Text(bio)
-                                        .font(.body)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-
-                            // Content Styles
-                            if !profile.contentStyles.isEmpty {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Content Styles")
-                                        .font(.headline)
-                                    FlowLayout(spacing: 8) {
-                                        ForEach(profile.contentStyles, id: \.self) { style in
-                                            Text(style.rawValue)
-                                                .font(.caption)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 6)
-                                                .background(AppTheme.accent.opacity(0.15), in: Capsule())
-                                                .foregroundStyle(AppTheme.accent)
-                                        }
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-
-                            // Social Links
-                            VStack(alignment: .leading, spacing: 12) {
-                                if profile.instagramHandle != nil || profile.tiktokHandle != nil ||
-                                   profile.youtubeHandle != nil || profile.twitchHandle != nil {
-                                    Text("Social Links")
-                                        .font(.headline)
-
-                                    VStack(spacing: 8) {
-                                        if let handle = profile.instagramHandle {
-                                            HStack {
-                                                Image(systemName: "camera.fill")
-                                                    .foregroundStyle(.purple)
-                                                Text("@\(handle)")
-                                                Spacer()
-                                            }
-                                            .padding(12)
-                                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
-                                        }
-
-                                        if let handle = profile.tiktokHandle {
-                                            HStack {
-                                                Image(systemName: "music.note")
-                                                    .foregroundStyle(.black)
-                                                Text("@\(handle)")
-                                                Spacer()
-                                            }
-                                            .padding(12)
-                                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
-                                        }
-
-                                        if let handle = profile.youtubeHandle {
-                                            HStack {
-                                                Image(systemName: "play.rectangle.fill")
-                                                    .foregroundStyle(.red)
-                                                Text("@\(handle)")
-                                                Spacer()
-                                            }
-                                            .padding(12)
-                                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
-                                        }
-
-                                        if let handle = profile.twitchHandle {
-                                            HStack {
-                                                Image(systemName: "tv.fill")
-                                                    .foregroundStyle(.purple)
-                                                Text("@\(handle)")
-                                                Spacer()
-                                            }
-                                            .padding(12)
-                                            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
-                                        }
-                                    }
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding()
-                        .padding(.bottom, 100)
+                        PreviewContentSection(profile: profile)
                     }
                 }
                 .background(AppTheme.bg)
