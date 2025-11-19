@@ -52,7 +52,7 @@ struct EnhancedMessagesView: View {
                 Haptics.notify(.success)
             }
         }
-        .onChange(of: auth.user?.uid ?? "") { newValue in
+        .onChange(of: auth.user?.uid ?? "") { _, newValue in
             guard !newValue.isEmpty else { return }
             Task { await viewModel.loadConversations(userId: newValue) }
         }
@@ -149,7 +149,7 @@ struct EnhancedMessagesView: View {
                                             userB: otherId
                                         )
 
-                                        openConversation = conversation
+                                        navigateToConversation = conversation
                                     } catch {
                                         print("❌ Failed to open conversation: \(error)")
                                     }
@@ -169,15 +169,15 @@ struct EnhancedMessagesView: View {
         .overlay(                // ✅ simpler than .background for navigation trigger
             NavigationLink(
                 destination: Group {
-                    if let conv = openConversation {
+                    if let conv = navigateToConversation {
                         ChatView(conversation: conv)
                     } else {
                         EmptyView()
                     }
                 },
                 isActive: Binding(
-                    get: { openConversation != nil },
-                    set: { if !$0 { openConversation = nil } }
+                    get: { navigateToConversation != nil },
+                    set: { if !$0 { navigateToConversation = nil } }
                 ),
                 label: { EmptyView() }      // required label View
             )
@@ -393,7 +393,7 @@ struct ChatView: View {
                         }
                     }
                     .padding()
-                    .onChange(of: viewModel.messages.count) { _ in
+                    .onChange(of: viewModel.messages.count) { _, _ in
                         if let lastMessage = viewModel.messages.last {
                             withAnimation {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
@@ -709,9 +709,9 @@ final class ChatViewModel: ObservableObject {
             senderId: senderId,
             recipientId: recipientId,
             content: content,
+            mediaURL: mediaURL,
             sentAt: Date(),
-            readAt: nil,
-            mediaURL: mediaURL
+            readAt: nil
         )
         
         do {
@@ -784,7 +784,7 @@ struct NewChatView: View {
                                     } label: {
                                         HStack(spacing: 12) {
                                             // Profile Photo
-                                            AsyncImage(url: URL(string: profile.profilePhotoURL ?? "")) { image in
+                                            AsyncImage(url: URL(string: profile.profileImageURL ?? "")) { image in
                                                 image
                                                     .resizable()
                                                     .scaledToFill()
@@ -805,8 +805,8 @@ struct NewChatView: View {
                                                     .font(.headline)
                                                     .foregroundStyle(.primary)
 
-                                                if !profile.bio.isEmpty {
-                                                    Text(profile.bio)
+                                                if let bio = profile.bio, !bio.isEmpty {
+                                                    Text(bio)
                                                         .font(.caption)
                                                         .foregroundStyle(.secondary)
                                                         .lineLimit(1)
@@ -874,7 +874,7 @@ final class NewChatViewModel: ObservableObject {
 
         do {
             // Fetch all active matches
-            let fetchedMatches = try await service.fetchMatches(userId: userId)
+            let fetchedMatches = try await service.fetchMatches(forUser: userId)
             print("✅ Loaded \(fetchedMatches.count) matches for new chat")
 
             // Fetch profiles for each match
