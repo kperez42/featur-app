@@ -220,7 +220,7 @@ private struct ProfileHeaderInfo: View {
                                 .foregroundStyle(.blue)
                         }
                         
-                        if profile.isOnline {
+                        if PresenceManager.shared.isOnline(userId: profile.uid) {
                             HStack(spacing: 4) {
                                 Circle()
                                     .fill(.green)

@@ -39,15 +39,6 @@ extension UserProfile.CollaborationPreferences.ResponseTime {
     }
 }
 
-// MARK: - Online Status
-
-extension UserProfile {
-    var isOnline: Bool {
-        // Check cached online status from PresenceManager
-        PresenceManager.shared.isOnline(userId: self.uid)
-    }
-}
-
 // MARK: - Presence Manager
 
 /// Singleton manager for caching and tracking user online status
@@ -55,7 +46,7 @@ extension UserProfile {
 class PresenceManager: ObservableObject {
     static let shared = PresenceManager()
 
-    private var onlineStatusCache: [String: (isOnline: Bool, lastChecked: Date)] = [:]
+    @Published private(set) var onlineStatusCache: [String: (isOnline: Bool, lastChecked: Date)] = [:]
     private let cacheValidityDuration: TimeInterval = 60 // 1 minute cache
 
     private let service = FirebaseService()

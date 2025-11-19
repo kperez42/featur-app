@@ -801,7 +801,11 @@ final class DiscoverViewModel: ObservableObject {
     private let cacheValidityDuration: TimeInterval = 300 // 5 minutes
     
     var totalProfiles: Int { filteredProfiles.count }
-    var onlineCount: Int { filteredProfiles.filter { $0.isOnline }.count }
+    var onlineCount: Int {
+        filteredProfiles.filter { profile in
+            PresenceManager.shared.isOnline(userId: profile.uid)
+        }.count
+    }
     var newTodayCount: Int { filteredProfiles.filter { Calendar.current.isDateInToday($0.createdAt) }.count }
     
     var hasActiveFilters: Bool {
@@ -1153,7 +1157,9 @@ final class DiscoverViewModel: ObservableObject {
         }
         
         if activeFilters.onlineOnly {
-            results = results.filter { $0.isOnline }
+            results = results.filter { profile in
+                PresenceManager.shared.isOnline(userId: profile.uid)
+            }
         }
         
         if activeFilters.maxDistance < 1000 {
