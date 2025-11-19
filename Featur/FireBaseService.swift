@@ -99,6 +99,26 @@ final class FirebaseService: ObservableObject {
 
     }
 
+    /// Delete a swipe action (for undo functionality)
+    func deleteSwipe(userId: String, targetUserId: String) async throws {
+        guard !userId.isEmpty, !targetUserId.isEmpty else {
+            print("⚠️ deleteSwipe: Missing userId or targetUserId.")
+            return
+        }
+
+        // Find and delete the swipe document
+        let snapshot = try await db.collection("swipes")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("targetUserId", isEqualTo: targetUserId)
+            .getDocuments()
+
+        for document in snapshot.documents {
+            try await document.reference.delete()
+        }
+
+        print("✅ Deleted swipe: \(userId) → \(targetUserId)")
+    }
+
     // Fetch all user IDs that the current user has swiped on
     func fetchSwipedUserIds(forUser userId: String) async throws -> [String] {
         let snapshot = try await db.collection("swipes")

@@ -316,6 +316,12 @@ struct EnhancedHomeView: View {
                             selectedProfile = profile
                             showProfileDetail = true
                             Haptics.impact(.light)
+
+                            // Track profile view analytics
+                            AnalyticsManager.shared.trackProfileView(
+                                userId: profile.uid,
+                                source: "home"
+                            )
                         }
                     )
                     .zIndex(Double(3 - index))
@@ -877,27 +883,41 @@ final class HomeViewModel: ObservableObject {
         errorMessage = nil
 
         do {
+            guard !currentUserId.isEmpty else {
+                throw NSError(domain: "HomeViewModel", code: -1,
+                             userInfo: [NSLocalizedDescriptionKey: "User not logged in"])
+            }
+
             guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
-                throw NSError(domain: "Missing current user profile", code: 0)
+                throw NSError(domain: "HomeViewModel", code: -2,
+                             userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
             }
 
             // Fetch swiped user IDs from Firebase to ensure consistency across tabs
             let swipedIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
             swipedUserIds = Set(swipedIds)
 
-            let fetched = try await service.fetchDiscoverProfiles(
+            // Fetch profiles from Firebase
+            var fetched = try await service.fetchDiscoverProfiles(
                 for: currentUser,
-                limit: 20,
+                limit: 50, // Fetch more to account for filtering
                 excludeUserIds: Array(swipedUserIds)
             )
 
-            profiles = fetched
+            // Apply client-side filters
+            fetched = applyClientFilters(to: fetched)
+
+            // Limit to 20 after filtering
+            profiles = Array(fetched.prefix(20))
 
             // Fetch online status for all profiles
-            let userIds = fetched.map { $0.uid }
-            await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+            if !profiles.isEmpty {
+                let userIds = profiles.map { $0.uid }
+                await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+            }
 
             isLoading = false
+            print("✅ Loaded \(profiles.count) profiles for Home")
 
         } catch {
             isLoading = false
@@ -907,6 +927,8 @@ final class HomeViewModel: ObservableObject {
             if let nsError = error as NSError? {
                 if nsError.domain == NSURLErrorDomain {
                     errorMessage = "No internet connection"
+                } else if nsError.domain == "HomeViewModel" {
+                    errorMessage = nsError.localizedDescription
                 } else {
                     errorMessage = "Failed to load profiles"
                 }
@@ -914,50 +936,75 @@ final class HomeViewModel: ObservableObject {
                 errorMessage = "Failed to load profiles"
             }
 
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            errorMessage = nil
+            // Don't auto-dismiss critical errors
+            if errorMessage != "No internet connection" {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                errorMessage = nil
+            }
 
             print("❌ Error loading profiles: \(error)")
         }
     }
+
+    /// Apply client-side filters to profile list
+    private func applyClientFilters(to profiles: [UserProfile]) -> [UserProfile] {
+        var filtered = profiles
+
+        // Filter by age
+        filtered = filtered.filter { profile in
+            guard let age = profile.age else { return true }
+            return Double(age) >= minAge && Double(age) <= maxAge
+        }
+
+        // Filter by content styles
+        if !selectedContentStyles.isEmpty {
+            filtered = filtered.filter { profile in
+                !Set(profile.contentStyles).isDisjoint(with: selectedContentStyles)
+            }
+        }
+
+        // Filter by verified status
+        if verifiedOnly {
+            filtered = filtered.filter { $0.isVerified == true }
+        }
+
+        return filtered
+    }
     
     func handleSwipe(profile: UserProfile, action: SwipeAction.Action) async {
-        /*
-        // 🧪 TEST: Skip Firebase calls in debug mode
-        #if DEBUG
-        // Just remove from local array for testing
-        swipeHistory.append(SwipeRecord(profile: profile, action: action))
-        if swipeHistory.count > 10 {
-            swipeHistory.removeFirst()
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            errorMessage = "Please sign in to continue"
+            return
         }
-        
-        withAnimation(.spring(response: 0.3)) {
-            profiles.removeAll { $0.id == profile.id }
-        }
-        return
-        #endif
-        */
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-        
+
+        // Optimistically update UI
         swipedUserIds.insert(profile.uid)
-        
+
         let swipe = SwipeAction(
             userId: currentUserId,
             targetUserId: profile.uid,
             action: action,
             timestamp: Date()
         )
-        
-        swipeHistory.append(SwipeRecord(profile: profile, action: action))
+
+        // Add to history for undo
+        let record = SwipeRecord(profile: profile, action: action, swipeData: swipe)
+        swipeHistory.append(record)
         if swipeHistory.count > 10 {
             swipeHistory.removeFirst()
         }
-        
-        do {
-            try await service.recordSwipe(swipe)
-            print("Swipe recorded to Firestore: \(action) → \(profile.displayName) (\(profile.uid))")
 
-            
+        // Remove from UI immediately for smooth experience
+        withAnimation(.spring(response: 0.3)) {
+            profiles.removeAll { $0.id == profile.id }
+        }
+
+        do {
+            // Save swipe to Firebase
+            try await service.recordSwipe(swipe)
+            print("✅ Swipe recorded: \(action.rawValue) → \(profile.displayName)")
+
+            // Check for match on likes
             if action == .like || action == .superLike {
                 let matches = try await service.fetchMatches(forUser: currentUserId)
                 if matches.contains(where: {
@@ -968,18 +1015,27 @@ final class HomeViewModel: ObservableObject {
                     matchesToday += 1
                     hasNewMatches = true
                     Haptics.notify(.success)
+                    print("🎉 Match created with \(profile.displayName)")
                 }
             }
-            
-            withAnimation(.spring(response: 0.3)) {
-                profiles.removeAll { $0.id == profile.id }
-            }
-            
-            if profiles.count < 3 {
+
+            // Preload more profiles when running low
+            if profiles.count < 5 {
                 await loadProfiles(currentUserId: currentUserId)
             }
         } catch {
-            // Provide specific error messages
+            // Rollback on error
+            swipedUserIds.remove(profile.uid)
+
+            // Re-add profile to top of stack
+            withAnimation(.spring(response: 0.3)) {
+                profiles.insert(profile, at: 0)
+            }
+
+            // Remove from history
+            swipeHistory.removeAll { $0.id == record.id }
+
+            // Show error
             if let nsError = error as NSError?, nsError.domain == NSURLErrorDomain {
                 errorMessage = "Connection lost - swipe not saved"
             } else {
@@ -994,26 +1050,52 @@ final class HomeViewModel: ObservableObject {
     }
     
     func undoSwipe(_ record: SwipeRecord) async {
+        guard let currentUserId = Auth.auth().currentUser?.uid,
+              let swipeData = record.swipeData else {
+            print("⚠️ Cannot undo: missing user ID or swipe data")
+            return
+        }
+
+        // Optimistically update UI
         swipedUserIds.remove(record.profile.uid)
         swipeHistory.removeAll { $0.id == record.id }
-        
+
         withAnimation(.spring(response: 0.3)) {
             profiles.insert(record.profile, at: 0)
         }
-        
+
         Haptics.impact(.medium)
+
+        do {
+            // Remove swipe from Firebase
+            try await service.deleteSwipe(
+                userId: swipeData.userId,
+                targetUserId: swipeData.targetUserId
+            )
+            print("✅ Swipe undone: \(record.profile.displayName)")
+        } catch {
+            // Rollback UI on error
+            swipedUserIds.insert(record.profile.uid)
+            swipeHistory.append(record)
+
+            withAnimation(.spring(response: 0.3)) {
+                profiles.removeAll { $0.id == record.profile.id }
+            }
+
+            errorMessage = "Failed to undo swipe"
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            errorMessage = nil
+
+            print("❌ Error undoing swipe: \(error)")
+        }
     }
-    
+
     func refresh(currentUserId: String) async {
         swipedUserIds.removeAll()
         swipeHistory.removeAll()
-        
-        // 🧪 TEST: Reload test data in debug mode
-        #if DEBUG
-        loadTestProfiles()
-        #else
+        matchesToday = 0
+
         await loadProfiles(currentUserId: currentUserId)
-        #endif
     }
     
     func applyFilters() async {
@@ -1029,6 +1111,7 @@ struct SwipeRecord: Identifiable {
     let profile: UserProfile
     let action: SwipeAction.Action
     let timestamp = Date()
+    let swipeData: SwipeAction? // Store for undo functionality
 }
 
 // MARK: - Haptics Helper
