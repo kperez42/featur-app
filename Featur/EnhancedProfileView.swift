@@ -1,6 +1,7 @@
 // EnhancedProfileView.swift - PREMIUM PROFILE PAGE v2.0
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 import PhotosUI
 
 struct EnhancedProfileView: View {
@@ -510,9 +511,10 @@ private struct MainProfileContent: View {
     private struct EnhancedStatsGrid: View {
         let profile: UserProfile
         let onTapStats: () -> Void
-        
+
         @State private var animateNumbers = false
-        
+        @StateObject private var analytics = ProfileAnalyticsViewModel()
+
         var body: some View {
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
@@ -522,36 +524,36 @@ private struct MainProfileContent: View {
                         icon: "person.3.fill",
                         color: .purple,
                         animate: animateNumbers,
-                        trendData: generateTrendData()
+                        trendData: generateRealisticTrendData(currentValue: profile.followerCount ?? 0)
                     )
-                    
+
                     AnimatedStatCard(
                         title: "Matches",
-                        value: Int.random(in: 20...100),
+                        value: analytics.matchCount,
                         icon: "heart.fill",
                         color: .pink,
                         animate: animateNumbers,
-                        trendData: generateTrendData()
+                        trendData: generateRealisticTrendData(currentValue: analytics.matchCount)
                     )
                 }
-                
+
                 HStack(spacing: 12) {
                     AnimatedStatCard(
                         title: "Profile Views",
-                        value: Int.random(in: 500...2000),
+                        value: analytics.profileViewCount,
                         icon: "eye.fill",
                         color: .blue,
                         animate: animateNumbers,
-                        trendData: generateTrendData()
+                        trendData: generateRealisticTrendData(currentValue: analytics.profileViewCount)
                     )
-                    
+
                     AnimatedStatCard(
                         title: "Collabs",
-                        value: Int.random(in: 5...30),
+                        value: analytics.collabCount,
                         icon: "star.fill",
                         color: .orange,
                         animate: animateNumbers,
-                        trendData: generateTrendData()
+                        trendData: generateRealisticTrendData(currentValue: analytics.collabCount)
                     )
                 }
             }
@@ -563,10 +565,25 @@ private struct MainProfileContent: View {
                 }
             }
             .onTapGesture(perform: onTapStats)
+            .task {
+                await analytics.loadAnalytics(userId: profile.uid)
+            }
         }
-        
-        func generateTrendData() -> [Double] {
-            (0..<7).map { _ in Double.random(in: 0.3...1.0) }
+
+        // Generate realistic trend data that shows growth, never negative
+        func generateRealisticTrendData(currentValue: Int) -> [Double] {
+            guard currentValue > 0 else {
+                return Array(repeating: 0.0, count: 7)
+            }
+
+            let doubleValue = Double(currentValue)
+            // Generate a growth curve leading up to current value
+            // Values go from ~60% to 100% of current value over 7 days
+            return (0..<7).map { index in
+                let progress = Double(index) / 6.0  // 0.0 to 1.0
+                let growthFactor = 0.6 + (progress * 0.4)  // 0.6 to 1.0
+                return doubleValue * growthFactor
+            }
         }
     }
     
@@ -3906,4 +3923,85 @@ private struct MainProfileContent: View {
         }
         return "\(number)"
     }
+
+// MARK: - Profile Analytics ViewModel
+@MainActor
+final class ProfileAnalyticsViewModel: ObservableObject {
+    @Published var matchCount: Int = 0
+    @Published var profileViewCount: Int = 0
+    @Published var collabCount: Int = 0
+    @Published var isLoading: Bool = false
+
+    private let service = FirebaseService()
+
+    func loadAnalytics(userId: String) async {
+        isLoading = true
+
+        async let matchesTask = fetchMatchCount(userId: userId)
+        async let viewsTask = fetchProfileViewCount(userId: userId)
+        async let collabsTask = fetchCollabCount(userId: userId)
+
+        let (matches, views, collabs) = await (matchesTask, viewsTask, collabsTask)
+
+        matchCount = matches
+        profileViewCount = views
+        collabCount = collabs
+        isLoading = false
+
+        print("✅ Analytics loaded - Matches: \(matches), Views: \(views), Collabs: \(collabs)")
+    }
+
+    private func fetchMatchCount(userId: String) async -> Int {
+        do {
+            let matches = try await service.fetchMatches(forUser: userId)
+            return matches.count
+        } catch {
+            print("❌ Error fetching match count: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchProfileViewCount(userId: String) async -> Int {
+        do {
+            // Count profile views from swipes collection (likes received)
+            let db = FirebaseFirestore.Firestore.firestore()
+            let snapshot = try await db.collection("swipes")
+                .whereField("targetUserId", isEqualTo: userId)
+                .getDocuments()
+            return snapshot.documents.count
+        } catch {
+            print("❌ Error fetching profile view count: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchCollabCount(userId: String) async -> Int {
+        do {
+            // Count completed conversations as collabs
+            // (Users who have exchanged messages indicate active collaboration interest)
+            let db = FirebaseFirestore.Firestore.firestore()
+            let snapshot = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .getDocuments()
+
+            // Count conversations with more than 5 messages as active collabs
+            var activeCollabs = 0
+            for doc in snapshot.documents {
+                let messageSnapshot = try await db.collection("conversations")
+                    .document(doc.documentID)
+                    .collection("messages")
+                    .getDocuments()
+
+                if messageSnapshot.documents.count >= 5 {
+                    activeCollabs += 1
+                }
+            }
+
+            return activeCollabs
+        } catch {
+            print("❌ Error fetching collab count: \(error)")
+            return 0
+        }
+    }
+}
 
