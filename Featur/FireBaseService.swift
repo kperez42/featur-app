@@ -207,20 +207,39 @@ final class FirebaseService: ObservableObject {
             .getDocuments()
         
         if !reciprocalSwipe.isEmpty {
-            // Create match
-            let match = Match(
-                userId1: userId,
-                userId2: targetUserId,
-                matchedAt: Date(),
-                hasMessaged: false,
-                isActive: true
-            )
-            try db.collection("matches").addDocument(from: match)
-            // Debug statment confirm match
-            print("✅ Match created between \(userId) and \(targetUserId)")
+            // Check if match already exists to avoid duplicates
+            let existingMatches = try await db.collection("matches")
+                .whereField("userId1", isEqualTo: userId)
+                .whereField("userId2", isEqualTo: targetUserId)
+                .whereField("isActive", isEqualTo: true)
+                .getDocuments()
 
-            // Track analytics
-            await AnalyticsManager.shared.trackMatch(matchedUserId: targetUserId)
+            let existingMatchesReverse = try await db.collection("matches")
+                .whereField("userId1", isEqualTo: targetUserId)
+                .whereField("userId2", isEqualTo: userId)
+                .whereField("isActive", isEqualTo: true)
+                .getDocuments()
+
+            if existingMatches.isEmpty && existingMatchesReverse.isEmpty {
+                // Create match
+                let match = Match(
+                    userId1: userId,
+                    userId2: targetUserId,
+                    matchedAt: Date(),
+                    hasMessaged: false,
+                    isActive: true
+                )
+                try db.collection("matches").addDocument(from: match)
+                print("✅ Match created between \(userId) and \(targetUserId)")
+
+                // Track analytics
+                await AnalyticsManager.shared.trackMatch(matchedUserId: targetUserId)
+
+                // IMPORTANT: Automatically create a conversation for the match
+                try await createConversationForMatch(userId1: userId, userId2: targetUserId)
+            } else {
+                print("ℹ️ Match already exists between \(userId) and \(targetUserId)")
+            }
 
         }else{
             // Debug statement no match created
@@ -228,7 +247,17 @@ final class FirebaseService: ObservableObject {
 
         }
     }
-    
+
+    /// Automatically create a conversation when a match happens
+    private func createConversationForMatch(userId1: String, userId2: String) async throws {
+        // Use existing getOrCreateConversation to create the conversation
+        let conversation = try await getOrCreateConversation(userA: userId1, userB: userId2)
+        print("✅ Conversation created for match: \(conversation.id ?? "unknown")")
+
+        // Track analytics
+        await AnalyticsManager.shared.trackConversationStarted(withUserId: userId2)
+    }
+
     func fetchMatches(forUser userId: String) async throws -> [Match] {
         guard !userId.isEmpty else {
                 print("⚠️ fetchMatches: Empty userId. Returning no matches.")

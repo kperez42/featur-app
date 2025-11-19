@@ -313,7 +313,7 @@ struct EnhancedDiscoverView: View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
             ForEach(viewModel.filteredProfiles) { profile in
                 NavigationLink {
-                    ProfileDetailPlaceholder(profile: profile)
+                    ProfileDetailView(profile: profile)
                         .onAppear {
                             // Track profile view analytics
                             AnalyticsManager.shared.trackProfileView(

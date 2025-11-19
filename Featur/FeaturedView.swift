@@ -170,7 +170,7 @@ struct FeaturedView: View {
             ForEach(viewModel.filteredCreators) { creator in
                 NavigationLink {
                     if let profile = creator.profile {
-                        ProfileDetailPlaceholder(profile: profile) // Uses SharedComponents
+                        ProfileDetailView(profile: profile)
                             .onAppear {
                                 // Track profile view analytics
                                 AnalyticsManager.shared.trackProfileView(

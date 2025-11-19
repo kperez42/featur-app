@@ -236,7 +236,7 @@ struct EnhancedHomeView: View {
         }
         .sheet(isPresented: $showProfileDetail) {
             if let profile = selectedProfile {
-                ProfileDetailPlaceholder(profile: profile)
+                ProfileDetailView(profile: profile)
             }
         }
         .task {

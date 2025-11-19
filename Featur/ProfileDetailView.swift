@@ -693,7 +693,12 @@ struct MessageSheet: View {
     let recipientProfile: UserProfile
     @Environment(\.dismiss) var dismiss
     @State private var messageText = ""
-    
+    @State private var isSending = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    private let service = FirebaseService()
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
@@ -733,17 +738,25 @@ struct MessageSheet: View {
                 Spacer()
                 
                 Button {
-                    // Send message
-                    dismiss()
+                    Task {
+                        await sendMessage()
+                    }
                 } label: {
-                    Text("Send Message")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                    HStack {
+                        if isSending {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Text("Send Message")
+                                .font(.headline)
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
                 }
-                .disabled(messageText.isEmpty)
+                .disabled(messageText.isEmpty || isSending)
                 .padding(.horizontal)
                 .padding(.bottom, 20)
             }
@@ -755,6 +768,67 @@ struct MessageSheet: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+        }
+    }
+
+    private func sendMessage() async {
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            errorMessage = "Please sign in to send messages"
+            showError = true
+            return
+        }
+
+        guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        isSending = true
+
+        do {
+            // Get or create conversation
+            let conversation = try await service.getOrCreateConversation(
+                userA: currentUserId,
+                userB: recipientProfile.uid
+            )
+
+            guard let conversationId = conversation.id else {
+                throw NSError(domain: "MessageSheet", code: -1,
+                             userInfo: [NSLocalizedDescriptionKey: "Conversation ID not found"])
+            }
+
+            // Create and send message
+            let message = Message(
+                id: UUID().uuidString,
+                conversationId: conversationId,
+                senderId: currentUserId,
+                recipientId: recipientProfile.uid,
+                content: messageText.trimmingCharacters(in: .whitespacesAndNewlines),
+                sentAt: Date(),
+                isRead: false,
+                mediaURL: nil
+            )
+
+            try await service.sendMessage(message)
+
+            // Mark match as messaged
+            await service.markMatchAsMessaged(userA: currentUserId, userB: recipientProfile.uid)
+
+            print("✅ Message sent successfully to \(recipientProfile.displayName)")
+
+            // Dismiss on success
+            isSending = false
+            dismiss()
+
+        } catch {
+            isSending = false
+            errorMessage = "Failed to send message: \(error.localizedDescription)"
+            showError = true
+            print("❌ Error sending message: \(error)")
         }
     }
 }
