@@ -19,7 +19,7 @@ struct AuthGateView: View {
                             } else if destination == "LoginView" {
                                 LoginView(navigationPath: $navigationPath) // Pass navigationPath
                             } else if destination == "VerifyEmailView" {
-                                VerifyEmailView(email: "") // Update to pass email if needed
+                                VerifyEmailView() // Update to pass email if needed
                             }
                         }
                         .toolbar {

@@ -177,28 +177,19 @@ struct ProfileCreationFlow: View {
             uid: uid,
             displayName: nameFromRegistration,
             age: age,
-            bio: nil,
             location: UserProfile.Location(
                 city: locationManager.city,
                 state: locationManager.state,
                 country: locationManager.country,
                 coordinates: locationManager.coordinates
             ),
-            interests: [],
             contentStyles: contentStyles,
-            socialLinks: links,
             mediaURLs: mediaURLs,
-            profileImageURL: profileImageURL,
-            isVerified: false,
-            followerCount: 0,
-            collaborationPreferences: .init(
-                lookingFor: [],
-                availability: [],
-                responseTime: .moderate
-            ),
-            createdAt: Date(),
-            updatedAt: Date()
+            socialLinks: links,
+            profileImageURL: profileImageURL
         )
+
+
 
         await viewModel.updateProfile(newProfile)
         viewModel.needsSetup = false

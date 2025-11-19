@@ -48,7 +48,7 @@ final class FirebaseService: ObservableObject {
     
     // MARK: - Discovery & Matching
     
-    // ✅ FIXED: Convert PrefixSequence to Array
+    //  Convert PrefixSequence to Array
     func fetchDiscoverProfiles(for user: UserProfile, limit: Int = 20, excludeUserIds: [String] = []) async throws -> [UserProfile] {
         var query: Query = db.collection("users").limit(to: limit)
         
@@ -87,7 +87,17 @@ final class FirebaseService: ObservableObject {
         }
         
     }
-    
+    // this function reads from swipes collection from firestore and returns every targetuserId that the user has ever swiped on
+    func fetchSwipedUserIds(for userId: String) async throws -> [String] {
+        let snapshot = try await db.collection("swipes")
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
+
+        return snapshot.documents.compactMap {
+            try? $0.data(as: SwipeAction.self).targetUserId
+        }
+    }
+
     
     private func checkAndCreateMatch(userId: String, targetUserId: String) async throws {
         guard !userId.isEmpty, !targetUserId.isEmpty else {

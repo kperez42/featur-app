@@ -10,6 +10,7 @@ struct RegistrationView: View {
     @State private var confirmPassword = ""
     @State private var isLoading = false
     @Binding var navigationPath: NavigationPath // Bind to AuthGateView's navigationPath
+    @EnvironmentObject var auth: AuthViewModel
 
     var body: some View {
         ZStack {
@@ -51,7 +52,7 @@ struct RegistrationView: View {
         }
         .navigationDestination(for: String.self) { destination in
             if destination == "VerifyEmailView" {
-                VerifyEmailView(email: email)
+                VerifyEmailView()
             }
         }
     }

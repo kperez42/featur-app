@@ -3,7 +3,6 @@ import SwiftUI
 struct VerifyEmailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var auth: AuthViewModel // Add AuthViewModel to handle sign-out
-    var email: String
     
     var body: some View {
         ZStack {
@@ -26,7 +25,7 @@ struct VerifyEmailView: View {
                         .font(.headline)
                         .foregroundStyle(.white.opacity(0.8))
                     
-                    Text(email)
+                    Text(auth.user?.email ?? "Email unavailable")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal)

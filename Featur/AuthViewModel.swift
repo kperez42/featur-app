@@ -1,7 +1,7 @@
 import Foundation
 import AuthenticationServices
 import CryptoKit
-import FirebaseCore     // 👈 Needed for FirebaseApp
+import FirebaseCore     
 import FirebaseAuth
 import os.log
 
