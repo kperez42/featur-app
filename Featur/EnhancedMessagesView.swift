@@ -46,6 +46,12 @@ struct EnhancedMessagesView: View {
                 await viewModel.loadConversations(userId: userId)
             }
         }
+        .refreshable {
+            if let userId = auth.user?.uid {
+                await viewModel.loadConversations(userId: userId)
+                Haptics.notify(.success)
+            }
+        }
         .onChange(of: auth.user?.uid ?? "") { newValue in
             guard !newValue.isEmpty else { return }
             Task { await viewModel.loadConversations(userId: newValue) }
