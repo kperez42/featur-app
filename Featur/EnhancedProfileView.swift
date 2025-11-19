@@ -2494,9 +2494,12 @@ private struct MainProfileContent: View {
         var body: some View {
             VStack(spacing: 20) {
                 PreviewNameSection(profile: profile)
+                PreviewLocationAgeSection(profile: profile)
                 PreviewActionButtons()
                 PreviewBioSection(bio: profile.bio)
+                PreviewInterestsSection(interests: profile.interests)
                 PreviewContentStylesSection(styles: profile.contentStyles)
+                PreviewCollabPreferencesSection(preferences: profile.collaborationPreferences)
                 PreviewSocialLinksSection(profile: profile)
             }
             .padding()
@@ -2594,6 +2597,127 @@ private struct MainProfileContent: View {
                 .padding(.vertical, 6)
                 .background(AppTheme.accent.opacity(0.15), in: Capsule())
                 .foregroundStyle(AppTheme.accent)
+        }
+    }
+
+    struct PreviewLocationAgeSection: View {
+        let profile: UserProfile
+
+        var body: some View {
+            Group {
+                if hasLocationOrAge {
+                    HStack(spacing: 12) {
+                        if let location = profile.location {
+                            HStack(spacing: 4) {
+                                Image(systemName: "location.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(locationText(location))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if let location = profile.location, profile.age != nil {
+                            Text("•")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if let age = profile.age {
+                            HStack(spacing: 4) {
+                                Image(systemName: "person.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("\(age)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+
+        private var hasLocationOrAge: Bool {
+            (profile.location != nil && !locationText(profile.location!).isEmpty) || profile.age != nil
+        }
+
+        private func locationText(_ location: UserProfile.Location) -> String {
+            var parts: [String] = []
+            if let city = location.city, !city.isEmpty {
+                parts.append(city)
+            }
+            if let state = location.state, !state.isEmpty {
+                parts.append(state)
+            }
+            return parts.joined(separator: ", ")
+        }
+    }
+
+    struct PreviewInterestsSection: View {
+        let interests: [String]?
+
+        var body: some View {
+            Group {
+                if let interests = interests, !interests.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Interests")
+                            .font(.headline)
+                        FlowLayout(spacing: 8) {
+                            ForEach(interests, id: \.self) { interest in
+                                Text(interest)
+                                    .font(.caption)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.purple.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(.purple)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    struct PreviewCollabPreferencesSection: View {
+        let preferences: UserProfile.CollaborationPreferences?
+
+        var body: some View {
+            Group {
+                if let preferences = preferences, !preferences.lookingFor.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Looking For")
+                            .font(.headline)
+                        FlowLayout(spacing: 8) {
+                            ForEach(preferences.lookingFor, id: \.self) { collabType in
+                                HStack(spacing: 4) {
+                                    Image(systemName: "sparkles")
+                                        .font(.caption2)
+                                    Text(collabType.rawValue)
+                                        .font(.caption)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.orange.opacity(0.15), in: Capsule())
+                                .foregroundStyle(.orange)
+                            }
+                        }
+
+                        // Response Time
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(preferences.responseTime.rawValue)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
     }
 
