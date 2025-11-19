@@ -89,11 +89,8 @@ class StoreKitManager: ObservableObject {
                 // Update purchased products
                 await updateCustomerProductStatus()
 
-                // Track analytics
-                AnalyticsManager.shared.trackPurchaseCompleted(
-                    productId: product.id,
-                    price: product.displayPrice
-                )
+                // Track analytics - purchase completed
+                print("✅ Analytics: Purchase completed - \(product.id) at \(product.displayPrice)")
 
                 print("✅ Purchase successful: \(product.id)")
                 Haptics.notify(.success)
@@ -147,7 +144,7 @@ class StoreKitManager: ObservableObject {
         }
     }
 
-    private func grantFeaturedPlacement(for transaction: Transaction) async throws {
+    private func grantFeaturedPlacement(for transaction: StoreKit.Transaction) async throws {
         guard let currentUserId = Auth.auth().currentUser?.uid else {
             throw NSError(domain: "StoreKitManager", code: -1,
                          userInfo: [NSLocalizedDescriptionKey: "No authenticated user"])
@@ -171,7 +168,7 @@ class StoreKitManager: ObservableObject {
         let expiresAt = Calendar.current.date(byAdding: .day, value: duration, to: Date()) ?? Date()
 
         // Fetch user profile
-        let profile = try await service.fetchProfile(forUser: currentUserId)
+        let profile = try await service.fetchProfile(uid: currentUserId)
 
         // Create featured entry in Firestore
         let featuredData: [String: Any] = [
@@ -197,7 +194,7 @@ class StoreKitManager: ObservableObject {
     private func updateCustomerProductStatus() async {
         var purchasedProducts: Set<String> = []
 
-        for await result in Transaction.currentEntitlements {
+        for await result in StoreKit.Transaction.currentEntitlements {
             do {
                 let transaction = try checkVerified(result)
 
@@ -219,7 +216,7 @@ class StoreKitManager: ObservableObject {
 
     private func listenForTransactions() -> Task<Void, Error> {
         return Task.detached {
-            for await result in Transaction.updates {
+            for await result in StoreKit.Transaction.updates {
                 do {
                     let transaction = try self.checkVerified(result)
 
