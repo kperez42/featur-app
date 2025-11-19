@@ -9,44 +9,87 @@ struct ProfileDetailView: View {
     @StateObject private var viewModel = ProfileDetailViewModel()
     @State private var showMessageSheet = false
     @State private var showReportSheet = false
-    @State private var selectedImageIndex = 0
-    @State private var showImageViewer = false
-    
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                // Image Gallery Header
-                ImageGalleryHeader(
-                    mediaURLs: profile.mediaURLs ?? [],
-                    selectedIndex: $selectedImageIndex,
-                    onTapImage: { showImageViewer = true }
-                )
-                
-                // Profile Content
+            VStack(spacing: 20) {
+                // Single Profile Image
+                if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 400)
+                                .clipped()
+                        default:
+                            Rectangle()
+                                .fill(AppTheme.accent.opacity(0.2))
+                                .frame(height: 400)
+                        }
+                    }
+                } else {
+                    Rectangle()
+                        .fill(AppTheme.accent.opacity(0.2))
+                        .frame(height: 400)
+                }
+
                 VStack(spacing: 20) {
-                    // Name & Basic Info
-                    ProfileHeaderInfo(profile: profile)
+                    // Name
+                    Text(profile.displayName)
+                        .font(.system(size: 32, weight: .bold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                    // Action Buttons
-                    ActionButtonsRow(
-                        profile: profile,
-                        isLiked: viewModel.isLiked,
-                        onLike: { viewModel.toggleLike(profile: profile) },
-                        onMessage: { showMessageSheet = true },
-                        onShare: { viewModel.shareProfile(profile: profile) },
-                        viewModel: viewModel
-                    )
+                    // Like and Message Buttons
+                    HStack(spacing: 12) {
+                        // Like Button
+                        Button(action: { viewModel.toggleLike(profile: profile) }) {
+                            HStack {
+                                if viewModel.isLoading {
+                                    ProgressView()
+                                        .tint(viewModel.isLiked ? .white : AppTheme.accent)
+                                } else {
+                                    Image(systemName: viewModel.isLiked ? "heart.fill" : "heart")
+                                    Text(viewModel.isLiked ? "Liked" : "Like")
+                                }
+                            }
+                            .font(.headline)
+                            .foregroundStyle(viewModel.isLiked ? .white : AppTheme.accent)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                viewModel.isLiked ? AppTheme.accent : AppTheme.card,
+                                in: RoundedRectangle(cornerRadius: 16)
+                            )
+                        }
+                        .disabled(viewModel.isLoading)
 
-                    // Bio
-                    if let bio = profile.bio, !bio.isEmpty {
-                        BioSection(bio: bio)
+                        // Message Button
+                        Button(action: { showMessageSheet = true }) {
+                            HStack {
+                                Image(systemName: "message.fill")
+                                Text("Message")
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                        }
                     }
 
-                    // Content Styles
-                    ContentStylesSection(styles: profile.contentStyles)
-
-                    // Social Links
-                    SocialLinksGrid(profile: profile)
+                    // Bio (if exists)
+                    if let bio = profile.bio, !bio.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("About")
+                                .font(.headline)
+                            Text(bio)
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
                     // Report Button
                     Button {
@@ -72,9 +115,6 @@ struct ProfileDetailView: View {
         }
         .sheet(isPresented: $showReportSheet) {
             ReportSheet(profile: profile)
-        }
-        .fullScreenCover(isPresented: $showImageViewer) {
-            ImageViewerSheet(mediaURLs: (profile.mediaURLs ?? []), selectedIndex: $selectedImageIndex)
         }
         .task {
             if let currentUserId = Auth.auth().currentUser?.uid {

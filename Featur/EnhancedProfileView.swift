@@ -104,106 +104,23 @@ private struct MainProfileContent: View {
                     )
                     .padding(.horizontal)
                     .padding(.top, 20)
-                    
-                    // Profile Strength Indicator
-                    ProfileStrengthCard(profile: profile)
-                        .padding(.horizontal)
-                        .padding(.top, 16)
-                    
-                    // Achievement Showcase
-                    AchievementShowcase(profile: profile)
-                        .padding(.horizontal)
-                        .padding(.top, 16)
-                    
+
                     // Content Preview Section
                     ContentPreviewSection(profile: profile)
                         .padding(.top, 20)
-                    
+
                     // Bio & Info Section
                     BioInfoSection(profile: profile)
                         .padding(.horizontal)
                         .padding(.top, 20)
-                    
+
                     // Social Links Grid
                     SocialLinksSection(profile: profile)
                         .padding(.horizontal)
                         .padding(.top, 20)
-                    
-                    if let prefs = profile.collaborationPreferences {
-                        CollaborationDetailsCard(preferences: prefs)
-                        
-                        
-                        
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // 3D Interactive Profile Card
-                        Interactive3DProfileCard(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Profile Insights Card
-                        ProfileInsightsCard(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Activity Timeline
-                        ActivityTimelineSection()
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Featured Content Carousel
-                        FeaturedContentCarousel(profile: profile)
-                            .padding(.top, 20)
-                        
-                        // Skills & Expertise Section
-                        SkillsExpertiseSection(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Testimonials Section
-                        TestimonialsSection()
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Collaboration History
-                        CollaborationHistorySection(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Creator Stats Dashboard
-                        CreatorStatsDashboard(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Content Calendar Preview
-                        ContentCalendarPreview()
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Networking Score
-                        NetworkingScoreCard(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Profile Milestones
-                        ProfileMilestonesSection(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Recent Profile Visitors
-                        RecentVisitorsSection()
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Creator Badges Collection
-                        CreatorBadgesSection(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Bottom Padding
-                        Color.clear.frame(height: 100)
-                    }
+
+                    // Bottom Padding
+                    Color.clear.frame(height: 100)
                 }
                 .coordinateSpace(name: "scroll")
                 .onPreferenceChange(ScrollOffsetKey.self) { value in
@@ -248,39 +165,13 @@ private struct MainProfileContent: View {
                         .opacity(scrollOffset < -100 ? 1 : 0)
                         .animation(.easeInOut, value: scrollOffset)
                 }
-                
+
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button { showEditSheet = true } label: {
-                            Label("Edit Profile", systemImage: "pencil")
-                        }
-                        Button { showProfilePreview = true } label: {
-                            Label("Preview Profile", systemImage: "eye")
-                        }
-                        Button { showQRSheet = true } label: {
-                            Label("QR Code", systemImage: "qrcode")
-                        }
-                        Button { showShareSheet = true } label: {
-                            Label("Share Profile", systemImage: "square.and.arrow.up")
-                        }
-                        Divider()
-                        Button { showStatsSheet = true } label: {
-                            Label("Analytics", systemImage: "chart.bar")
-                        }
-                        Button { showSettingsSheet = true } label: {
-                            Label("Settings", systemImage: "gear")
-                        }
-                        Divider()
-                        Button(role: .destructive) {
-                            Task { await auth.signOut() }
-                        } label: {
-                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                        }
+                    Button {
+                        showSettingsSheet = true
                     } label: {
-                        Image(systemName: "ellipsis.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "gear")
                             .foregroundStyle(AppTheme.accent)
-                            .symbolEffect(.bounce, value: showEditSheet)
                     }
                 }
             }
