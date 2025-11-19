@@ -2,166 +2,11 @@
 import SwiftUI
 import FirebaseAuth
 
-// ============================================================================
-// MARK: - 🧪 TEST DATA - REMOVE BEFORE PRODUCTION
-// ============================================================================
-#if DEBUG
-extension HomeViewModel {
-    func loadTestProfiles() {
-        self.profiles = [
-            UserProfile(
-                id: "test1",
-                uid: "test1",
-                displayName: "Sarah Johnson",
-                age: 24,
-                bio: "Content creator specializing in fitness & wellness. Looking to collab on workout videos! 💪",
-                location: UserProfile.Location(city: "Los Angeles", state: "CA", country: "USA", coordinates: nil),
-                interests: ["Fitness", "Wellness", "Yoga"],
-                contentStyles: [.fitness, .dance],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@sarahfit", followerCount: 125000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@sarahfitness", followerCount: 85000, isVerified: true),
-                    youtube: nil,
-                    twitch: nil,
-                    spotify: nil,
-                    snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 125000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.twitchStream, .contentSeries],
-                    availability: [.weekdays, .flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "test2",
-                uid: "test2",
-                displayName: "Marcus Chen",
-                age: 28,
-                bio: "Gaming streamer & editor. Let's create something epic! 🎮",
-                location: UserProfile.Location(city: "San Francisco", state: "CA", country: "USA", coordinates: nil),
-                interests: ["Gaming", "Editing", "Tech"],
-                contentStyles: [.gaming, .editing],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: nil,
-                    instagram: nil,
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@marcusgaming", followerCount: 250000, isVerified: true),
-                    twitch: UserProfile.SocialLinks.SocialAccount(username: "marcusplays", followerCount: 180000, isVerified: true),
-                    spotify: nil,
-                    snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 250000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.twitchStream, .contentSeries],
-                    availability: [.weekends, .flexible],
-                    responseTime: .moderate
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "test3",
-                uid: "test3",
-                displayName: "Zoe Martinez",
-                age: 22,
-                bio: "Beauty & fashion influencer ✨ Always down for creative collabs!",
-                location: UserProfile.Location(city: "Miami", state: "FL", country: "USA", coordinates: nil),
-                interests: ["Beauty", "Fashion", "Lifestyle"],
-                contentStyles: [.beauty, .fashion],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@zoebeauty", followerCount: 500000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@zoestyle", followerCount: 320000, isVerified: true),
-                    youtube: nil,
-                    twitch: nil,
-                    spotify: nil,
-                    snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 500000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.brandDeal, .contentSeries, .tiktokLive],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "test4",
-                uid: "test4",
-                displayName: "Alex Thompson",
-                age: 26,
-                bio: "Chef & food content creator 🍳 Let's cook up something amazing!",
-                location: UserProfile.Location(city: "New York", state: "NY", country: "USA", coordinates: nil),
-                interests: ["Cooking", "Food", "Recipes"],
-                contentStyles: [.cooking, .mukbang],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@chefalex", followerCount: 175000, isVerified: false),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@alexcooks", followerCount: 95000, isVerified: false),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@AlexKitchen", followerCount: 145000, isVerified: true),
-                    twitch: nil,
-                    spotify: nil,
-                    snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: false,
-                followerCount: 175000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.contentSeries, .brandDeal],
-                    availability: [.weekdays],
-                    responseTime: .moderate
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "test5",
-                uid: "test5",
-                displayName: "Riley Peterson",
-                age: 25,
-                bio: "Musician & producer 🎵 Looking for creative collaborations in music & podcasts",
-                location: UserProfile.Location(city: "Nashville", state: "TN", country: "USA", coordinates: nil),
-                interests: ["Music", "Production", "Podcasting"],
-                contentStyles: [.music, .art],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@rileymusic", followerCount: 89000, isVerified: false),
-                    instagram: nil,
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@RileyBeats", followerCount: 210000, isVerified: true),
-                    twitch: nil,
-                    spotify: "Riley Peterson",
-                    snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 210000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.musicCollab, .podcastGuest, .contentSeries],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            )
-        ]
-        self.isLoading = false
-    }
-}
-#endif
-// ============================================================================
-// END TEST DATA
-// ============================================================================
-
 struct EnhancedHomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @EnvironmentObject var auth: AuthViewModel
-    
+    @EnvironmentObject var appState: AppStateManager
+
     @State private var swipeCount = 0
     @State private var showFilters = false
     @State private var selectedProfile: UserProfile? = nil
@@ -201,7 +46,7 @@ struct EnhancedHomeView: View {
                 .animation(.spring(), value: viewModel.errorMessage)
             }
         }
-        .navigationTitle("Discover")
+        .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -236,11 +81,14 @@ struct EnhancedHomeView: View {
         }
         .sheet(isPresented: $showProfileDetail) {
             if let profile = selectedProfile {
-                ProfileDetailPlaceholder(profile: profile)
+                ProfileDetailView(profile: profile)
             }
         }
         .task {
-           // fetch the latest profiles using current user id, if nil default to an empty string
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Home", screenClass: "EnhancedHomeView")
+
+            // fetch the latest profiles using current user id, if nil default to an empty string
             await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
         }
         .refreshable {
@@ -250,7 +98,9 @@ struct EnhancedHomeView: View {
         }
         .alert("It's a Match! 🎉", isPresented: $viewModel.showMatchAlert) {
             Button("Send Message") {
-                // Navigate to chat
+                if let match = viewModel.lastMatch {
+                    appState.navigateToChat(withUserId: match.uid)
+                }
             }
             Button("Keep Swiping", role: .cancel) { }
         } message: {
@@ -316,6 +166,12 @@ struct EnhancedHomeView: View {
                             selectedProfile = profile
                             showProfileDetail = true
                             Haptics.impact(.light)
+
+                            // Track profile view analytics
+                            AnalyticsManager.shared.trackProfileView(
+                                userId: profile.uid,
+                                source: "home"
+                            )
                         }
                     )
                     .zIndex(Double(3 - index))
@@ -451,14 +307,34 @@ struct EnhancedHomeView: View {
     }
     
     // MARK: - Error Toast
-    
+
     private func errorToast(_ message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundStyle(.white)
-            .padding()
-            .background(.red, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Button {
+                Task {
+                    await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding()
+        .background(.red, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
 }
 
@@ -855,69 +731,130 @@ final class HomeViewModel: ObservableObject {
     func loadProfiles(currentUserId: String) async {
         isLoading = true
         errorMessage = nil
-        
+
         do {
-            guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
-                throw NSError(domain: "Missing current user profile", code: 0)
+            guard !currentUserId.isEmpty else {
+                throw NSError(domain: "HomeViewModel", code: -1,
+                             userInfo: [NSLocalizedDescriptionKey: "User not logged in"])
             }
-            let fetched = try await service.fetchDiscoverProfiles(
+
+            guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
+                throw NSError(domain: "HomeViewModel", code: -2,
+                             userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
+            }
+
+            // Fetch swiped user IDs from Firebase to ensure consistency across tabs
+            let swipedIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
+            swipedUserIds = Set(swipedIds)
+
+            // Fetch profiles from Firebase
+            var fetched = try await service.fetchDiscoverProfiles(
                 for: currentUser,
-                limit: 20,
+                limit: 50, // Fetch more to account for filtering
                 excludeUserIds: Array(swipedUserIds)
             )
-            
-            profiles = fetched
+
+            // Apply client-side filters
+            fetched = applyClientFilters(to: fetched)
+
+            // Limit to 20 after filtering
+            profiles = Array(fetched.prefix(20))
+
+            // Fetch online status for all profiles
+            if !profiles.isEmpty {
+                let userIds = profiles.map { $0.uid }
+                await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+            }
+
             isLoading = false
-            
+            print("✅ Loaded \(profiles.count) profiles for Home")
+
         } catch {
             isLoading = false
             profiles = []
-            errorMessage = "Unable to load profiles. Pull to refresh."
-            
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            errorMessage = nil
-            
+
+            // Provide specific error messages based on error type
+            if let nsError = error as NSError? {
+                if nsError.domain == NSURLErrorDomain {
+                    errorMessage = "No internet connection"
+                } else if nsError.domain == "HomeViewModel" {
+                    errorMessage = nsError.localizedDescription
+                } else {
+                    errorMessage = "Failed to load profiles"
+                }
+            } else {
+                errorMessage = "Failed to load profiles"
+            }
+
+            // Don't auto-dismiss critical errors
+            if errorMessage != "No internet connection" {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                errorMessage = nil
+            }
+
             print("❌ Error loading profiles: \(error)")
         }
     }
+
+    /// Apply client-side filters to profile list
+    private func applyClientFilters(to profiles: [UserProfile]) -> [UserProfile] {
+        var filtered = profiles
+
+        // Filter by age
+        filtered = filtered.filter { profile in
+            guard let age = profile.age else { return true }
+            return Double(age) >= minAge && Double(age) <= maxAge
+        }
+
+        // Filter by content styles
+        if !selectedContentStyles.isEmpty {
+            filtered = filtered.filter { profile in
+                !Set(profile.contentStyles).isDisjoint(with: selectedContentStyles)
+            }
+        }
+
+        // Filter by verified status
+        if verifiedOnly {
+            filtered = filtered.filter { $0.isVerified == true }
+        }
+
+        return filtered
+    }
     
     func handleSwipe(profile: UserProfile, action: SwipeAction.Action) async {
-        /*
-        // 🧪 TEST: Skip Firebase calls in debug mode
-        #if DEBUG
-        // Just remove from local array for testing
-        swipeHistory.append(SwipeRecord(profile: profile, action: action))
-        if swipeHistory.count > 10 {
-            swipeHistory.removeFirst()
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            errorMessage = "Please sign in to continue"
+            return
         }
-        
-        withAnimation(.spring(response: 0.3)) {
-            profiles.removeAll { $0.id == profile.id }
-        }
-        return
-        #endif
-        */
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-        
+
+        // Optimistically update UI
         swipedUserIds.insert(profile.uid)
-        
+
         let swipe = SwipeAction(
             userId: currentUserId,
             targetUserId: profile.uid,
             action: action,
             timestamp: Date()
         )
-        
-        swipeHistory.append(SwipeRecord(profile: profile, action: action))
+
+        // Add to history for undo
+        let record = SwipeRecord(profile: profile, action: action, swipeData: swipe)
+        swipeHistory.append(record)
         if swipeHistory.count > 10 {
             swipeHistory.removeFirst()
         }
-        
-        do {
-            try await service.recordSwipe(swipe)
-            print("Swipe recorded to Firestore: \(action) → \(profile.displayName) (\(profile.uid))")
 
-            
+        // Remove from UI immediately for smooth experience
+        withAnimation(.spring(response: 0.3)) {
+            profiles.removeAll { $0.id == profile.id }
+        }
+
+        do {
+            // Save swipe to Firebase
+            try await service.recordSwipe(swipe)
+            print("✅ Swipe recorded: \(action.rawValue) → \(profile.displayName)")
+
+            // Check for match on likes
             if action == .like || action == .superLike {
                 let matches = try await service.fetchMatches(forUser: currentUserId)
                 if matches.contains(where: {
@@ -928,43 +865,87 @@ final class HomeViewModel: ObservableObject {
                     matchesToday += 1
                     hasNewMatches = true
                     Haptics.notify(.success)
+                    print("🎉 Match created with \(profile.displayName)")
                 }
             }
-            
-            withAnimation(.spring(response: 0.3)) {
-                profiles.removeAll { $0.id == profile.id }
-            }
-            
-            if profiles.count < 3 {
+
+            // Preload more profiles when running low
+            if profiles.count < 5 {
                 await loadProfiles(currentUserId: currentUserId)
             }
         } catch {
-            errorMessage = "Failed to process swipe"
+            // Rollback on error
+            swipedUserIds.remove(profile.uid)
+
+            // Re-add profile to top of stack
+            withAnimation(.spring(response: 0.3)) {
+                profiles.insert(profile, at: 0)
+            }
+
+            // Remove from history
+            swipeHistory.removeAll { $0.id == record.id }
+
+            // Show error
+            if let nsError = error as NSError?, nsError.domain == NSURLErrorDomain {
+                errorMessage = "Connection lost - swipe not saved"
+            } else {
+                errorMessage = "Failed to save swipe"
+            }
+
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            errorMessage = nil
+
             print("❌ Error handling swipe: \(error)")
         }
     }
     
     func undoSwipe(_ record: SwipeRecord) async {
+        guard let currentUserId = Auth.auth().currentUser?.uid,
+              let swipeData = record.swipeData else {
+            print("⚠️ Cannot undo: missing user ID or swipe data")
+            return
+        }
+
+        // Optimistically update UI
         swipedUserIds.remove(record.profile.uid)
         swipeHistory.removeAll { $0.id == record.id }
-        
+
         withAnimation(.spring(response: 0.3)) {
             profiles.insert(record.profile, at: 0)
         }
-        
+
         Haptics.impact(.medium)
+
+        do {
+            // Remove swipe from Firebase
+            try await service.deleteSwipe(
+                userId: swipeData.userId,
+                targetUserId: swipeData.targetUserId
+            )
+            print("✅ Swipe undone: \(record.profile.displayName)")
+        } catch {
+            // Rollback UI on error
+            swipedUserIds.insert(record.profile.uid)
+            swipeHistory.append(record)
+
+            withAnimation(.spring(response: 0.3)) {
+                profiles.removeAll { $0.id == record.profile.id }
+            }
+
+            errorMessage = "Failed to undo swipe"
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            errorMessage = nil
+
+            print("❌ Error undoing swipe: \(error)")
+        }
     }
-    
+
     func refresh(currentUserId: String) async {
         swipedUserIds.removeAll()
         swipeHistory.removeAll()
-        
-        // 🧪 TEST: Reload test data in debug mode
-        #if DEBUG
-        loadTestProfiles()
-        #else
+        matchesToday = 0
+
         await loadProfiles(currentUserId: currentUserId)
-        #endif
     }
     
     func applyFilters() async {
@@ -980,6 +961,7 @@ struct SwipeRecord: Identifiable {
     let profile: UserProfile
     let action: SwipeAction.Action
     let timestamp = Date()
+    let swipeData: SwipeAction? // Store for undo functionality
 }
 
 // MARK: - Haptics Helper

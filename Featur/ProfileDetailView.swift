@@ -32,7 +32,8 @@ struct ProfileDetailView: View {
                         isLiked: viewModel.isLiked,
                         onLike: { viewModel.toggleLike(profile: profile) },
                         onMessage: { showMessageSheet = true },
-                        onShare: { viewModel.shareProfile(profile: profile) }
+                        onShare: { viewModel.shareProfile(profile: profile) },
+                        viewModel: viewModel
                     )
                     
                     // Stats
@@ -120,6 +121,38 @@ struct ProfileDetailView: View {
         .fullScreenCover(isPresented: $showImageViewer) {
             ImageViewerSheet(mediaURLs: (profile.mediaURLs ?? []), selectedIndex: $selectedImageIndex)
         }
+        .alert("It's a Match! 🎉", isPresented: $viewModel.showMatchAlert) {
+            Button("Send Message") {
+                showMessageSheet = true
+            }
+            Button("Keep Browsing", role: .cancel) { }
+        } message: {
+            Text("You and \(profile.displayName) liked each other!")
+        }
+        .task {
+            // Load like status and online status when view appears
+            if let currentUserId = Auth.auth().currentUser?.uid {
+                await viewModel.loadLikeStatus(currentUserId: currentUserId, targetUserId: profile.uid)
+            }
+
+            // Fetch online status for this profile
+            await PresenceManager.shared.fetchOnlineStatus(userId: profile.uid)
+        }
+        .overlay(alignment: .bottom) {
+            if viewModel.showCopySuccess {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Link copied to clipboard")
+                        .font(.subheadline)
+                }
+                .padding()
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .padding(.bottom, 100)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(), value: viewModel.showCopySuccess)
+            }
+        }
     }
 }
 
@@ -187,7 +220,7 @@ private struct ProfileHeaderInfo: View {
                                 .foregroundStyle(.blue)
                         }
                         
-                        if profile.isOnline {
+                        if PresenceManager.shared.isOnline(userId: profile.uid) {
                             HStack(spacing: 4) {
                                 Circle()
                                     .fill(.green)
@@ -222,14 +255,20 @@ private struct ActionButtonsRow: View {
     let onLike: () -> Void
     let onMessage: () -> Void
     let onShare: () -> Void
-    
+    @ObservedObject var viewModel: ProfileDetailViewModel
+
     var body: some View {
         HStack(spacing: 12) {
             // Like Button
             Button(action: onLike) {
                 HStack {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                    Text(isLiked ? "Liked" : "Like")
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .tint(isLiked ? .white : AppTheme.accent)
+                    } else {
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                        Text(isLiked ? "Liked" : "Like")
+                    }
                 }
                 .font(.headline)
                 .foregroundStyle(isLiked ? .white : AppTheme.accent)
@@ -240,6 +279,7 @@ private struct ActionButtonsRow: View {
                     in: RoundedRectangle(cornerRadius: 16)
                 )
             }
+            .disabled(viewModel.isLoading)
             
             // Message Button
             Button(action: onMessage) {
@@ -540,25 +580,111 @@ private struct InterestsSection: View {
 final class ProfileDetailViewModel: ObservableObject {
     @Published var isLiked = false
     @Published var showSuccess = false
-    
+    @Published var showMatchAlert = false
+    @Published var isLoading = false
+    @Published var showCopySuccess = false
+
+    private let service = FirebaseService()
+
+    func loadLikeStatus(currentUserId: String, targetUserId: String) async {
+        do {
+            isLiked = try await service.checkLikeStatus(userId: currentUserId, targetUserId: targetUserId)
+        } catch {
+            print("❌ Error loading like status: \(error)")
+        }
+    }
+
     func toggleLike(profile: UserProfile) {
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            print("⚠️ No current user - cannot like")
+            return
+        }
+
+        // Optimistic UI update
         withAnimation(.spring(response: 0.3)) {
             isLiked.toggle()
         }
         Haptics.impact(isLiked ? .medium : .light)
-        
-        // TODO: Save like to Firebase
+
+        // Save to Firebase
+        Task {
+            isLoading = true
+
+            do {
+                if isLiked {
+                    // Save like
+                    let didMatch = try await service.saveLike(userId: currentUserId, targetUserId: profile.uid)
+
+                    if didMatch {
+                        // Show match alert
+                        showMatchAlert = true
+                        Haptics.notify(.success)
+                    }
+                } else {
+                    // Remove like
+                    try await service.removeLike(userId: currentUserId, targetUserId: profile.uid)
+                }
+
+            } catch {
+                print("❌ Error toggling like: \(error)")
+
+                // Revert UI on error
+                withAnimation {
+                    isLiked.toggle()
+                }
+            }
+
+            isLoading = false
+        }
     }
-    
+
     func shareProfile(profile: UserProfile) {
-        // TODO: Implement share functionality
         Haptics.impact(.light)
+
+        // Create shareable content
+        let profileURL = URL(string: "https://featur.app/profile/\(profile.uid)")!
+        let shareText = "Check out \(profile.displayName) on Featur! 🎬"
+
+        // Present iOS share sheet
+        let activityVC = UIActivityViewController(
+            activityItems: [shareText, profileURL],
+            applicationActivities: nil
+        )
+
+        // For iPad compatibility
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootVC = window.rootViewController {
+
+            // Find the topmost view controller
+            var topVC = rootVC
+            while let presented = topVC.presentedViewController {
+                topVC = presented
+            }
+
+            // For iPad - set popover presentation controller
+            if let popover = activityVC.popoverPresentationController {
+                popover.sourceView = topVC.view
+                popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+
+            topVC.present(activityVC, animated: true)
+        }
     }
-    
+
     func copyProfileLink(profile: UserProfile) {
-        // TODO: Copy profile link to clipboard
         UIPasteboard.general.string = "https://featur.app/profile/\(profile.uid)"
         Haptics.notify(.success)
+
+        // Show success feedback
+        showCopySuccess = true
+
+        // Auto-hide after 2 seconds
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            showCopySuccess = false
+        }
     }
 }
 
@@ -567,7 +693,12 @@ struct MessageSheet: View {
     let recipientProfile: UserProfile
     @Environment(\.dismiss) var dismiss
     @State private var messageText = ""
-    
+    @State private var isSending = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    private let service = FirebaseService()
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
@@ -607,17 +738,25 @@ struct MessageSheet: View {
                 Spacer()
                 
                 Button {
-                    // Send message
-                    dismiss()
+                    Task {
+                        await sendMessage()
+                    }
                 } label: {
-                    Text("Send Message")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                    HStack {
+                        if isSending {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Text("Send Message")
+                                .font(.headline)
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
                 }
-                .disabled(messageText.isEmpty)
+                .disabled(messageText.isEmpty || isSending)
                 .padding(.horizontal)
                 .padding(.bottom, 20)
             }
@@ -629,6 +768,67 @@ struct MessageSheet: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+        }
+    }
+
+    private func sendMessage() async {
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            errorMessage = "Please sign in to send messages"
+            showError = true
+            return
+        }
+
+        guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        isSending = true
+
+        do {
+            // Get or create conversation
+            let conversation = try await service.getOrCreateConversation(
+                between: currentUserId,
+                and: recipientProfile.uid
+            )
+
+            guard let conversationId = conversation.id else {
+                throw NSError(domain: "MessageSheet", code: -1,
+                             userInfo: [NSLocalizedDescriptionKey: "Conversation ID not found"])
+            }
+
+            // Create and send message
+            let message = Message(
+                id: UUID().uuidString,
+                conversationId: conversationId,
+                senderId: currentUserId,
+                recipientId: recipientProfile.uid,
+                content: messageText.trimmingCharacters(in: .whitespacesAndNewlines),
+                sentAt: Date(),
+                isRead: false,
+                mediaURL: nil
+            )
+
+            try await service.sendMessage(message)
+
+            // Mark match as messaged
+            await service.markMatchAsMessaged(userA: currentUserId, userB: recipientProfile.uid)
+
+            print("✅ Message sent successfully to \(recipientProfile.displayName)")
+
+            // Dismiss on success
+            isSending = false
+            dismiss()
+
+        } catch {
+            isSending = false
+            errorMessage = "Failed to send message: \(error.localizedDescription)"
+            showError = true
+            print("❌ Error sending message: \(error)")
         }
     }
 }
@@ -639,7 +839,12 @@ struct ReportSheet: View {
     @Environment(\.dismiss) var dismiss
     @State private var selectedReason = ""
     @State private var details = ""
-    
+    @State private var isSubmitting = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    private let service = FirebaseService()
+
     let reasons = [
         "Inappropriate content",
         "Spam or scam",
@@ -673,12 +878,52 @@ struct ReportSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Submit") {
-                        // Submit report
-                        dismiss()
+                        Task {
+                            await submitReport()
+                        }
                     }
-                    .disabled(selectedReason.isEmpty)
+                    .disabled(selectedReason.isEmpty || isSubmitting)
                 }
             }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+        }
+    }
+
+    private func submitReport() async {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        do {
+            // Create report document in Firestore
+            let report: [String: Any] = [
+                "reportedUserId": profile.uid,
+                "reportedBy": currentUserId,
+                "reason": selectedReason,
+                "details": details,
+                "timestamp": FieldValue.serverTimestamp(),
+                "status": "pending"
+            ]
+
+            try await Firestore.firestore().collection("reports").addDocument(data: report)
+
+            print("✅ Report submitted successfully")
+
+            // Track analytics
+            AnalyticsManager.shared.trackError(error: "profile_reported", context: selectedReason)
+
+            Haptics.notify(.success)
+            dismiss()
+
+        } catch {
+            errorMessage = "Failed to submit report: \(error.localizedDescription)"
+            showError = true
+            print("❌ Error submitting report: \(error)")
         }
     }
 }
