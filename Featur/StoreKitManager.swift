@@ -135,7 +135,7 @@ class StoreKitManager: ObservableObject {
 
     // MARK: - Private Helpers
 
-    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+    nonisolated private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
         case .unverified:
             throw StoreKitError.unknown
@@ -174,7 +174,7 @@ class StoreKitManager: ObservableObject {
         let featuredData: [String: Any] = [
             "userId": currentUserId,
             "category": "Featured",
-            "highlightText": profile.bio ?? "Content creator on Featur",
+            "highlightText": profile?.bio ?? "Content creator on Featur",
             "featuredAt": FieldValue.serverTimestamp(),
             "expiresAt": expiresAt,
             "priority": 1,
@@ -215,7 +215,8 @@ class StoreKitManager: ObservableObject {
     }
 
     private func listenForTransactions() -> Task<Void, Error> {
-        return Task.detached {
+        return Task.detached { [weak self] in
+            guard let self = self else { return }
             for await result in StoreKit.Transaction.updates {
                 do {
                     let transaction = try self.checkVerified(result)
