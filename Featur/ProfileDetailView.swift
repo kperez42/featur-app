@@ -792,8 +792,8 @@ struct MessageSheet: View {
         do {
             // Get or create conversation
             let conversation = try await service.getOrCreateConversation(
-                userA: currentUserId,
-                userB: recipientProfile.uid
+                between: currentUserId,
+                and: recipientProfile.uid
             )
 
             guard let conversationId = conversation.id else {

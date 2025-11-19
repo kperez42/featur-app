@@ -75,8 +75,8 @@ struct EnhancedMessagesView: View {
         do {
             // Create or get existing conversation
             let conversation = try await viewModel.service.getOrCreateConversation(
-                userA: currentUserId,
-                userB: matchedUserId
+                between: currentUserId,
+                and: matchedUserId
             )
 
             // Navigate to the conversation
@@ -899,8 +899,8 @@ final class NewChatViewModel: ObservableObject {
 
         do {
             let conversation = try await service.getOrCreateConversation(
-                userA: currentUserId,
-                userB: profile.uid
+                between: currentUserId,
+                and: profile.uid
             )
 
             print("✅ Conversation created/retrieved: \(conversation.id ?? "unknown")")

@@ -251,7 +251,7 @@ final class FirebaseService: ObservableObject {
     /// Automatically create a conversation when a match happens
     private func createConversationForMatch(userId1: String, userId2: String) async throws {
         // Use existing getOrCreateConversation to create the conversation
-        let conversation = try await getOrCreateConversation(userA: userId1, userB: userId2)
+        let conversation = try await getOrCreateConversation(between: userId1, and: userId2)
         print("✅ Conversation created for match: \(conversation.id ?? "unknown")")
 
         // Track analytics
