@@ -2569,16 +2569,16 @@ private struct MainProfileContent: View {
                         .font(.headline)
 
                     VStack(spacing: 8) {
-                        if let handle = profile.instagramHandle {
+                        if let handle = profile.socialLinks?.instagram?.username {
                             socialLinkRow(icon: "camera.fill", color: .purple, handle: handle)
                         }
-                        if let handle = profile.tiktokHandle {
+                        if let handle = profile.socialLinks?.tiktok?.username {
                             socialLinkRow(icon: "music.note", color: .black, handle: handle)
                         }
-                        if let handle = profile.youtubeHandle {
+                        if let handle = profile.socialLinks?.youtube?.username {
                             socialLinkRow(icon: "play.rectangle.fill", color: .red, handle: handle)
                         }
-                        if let handle = profile.twitchHandle {
+                        if let handle = profile.socialLinks?.twitch?.username {
                             socialLinkRow(icon: "tv.fill", color: .purple, handle: handle)
                         }
                     }
@@ -2588,8 +2588,8 @@ private struct MainProfileContent: View {
         }
 
         private var hasAnySocialLinks: Bool {
-            profile.instagramHandle != nil || profile.tiktokHandle != nil ||
-            profile.youtubeHandle != nil || profile.twitchHandle != nil
+            profile.socialLinks?.instagram?.username != nil || profile.socialLinks?.tiktok?.username != nil ||
+            profile.socialLinks?.youtube?.username != nil || profile.socialLinks?.twitch?.username != nil
         }
 
         private func socialLinkRow(icon: String, color: Color, handle: String) -> some View {
