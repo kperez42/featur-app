@@ -171,6 +171,13 @@ struct FeaturedView: View {
                 NavigationLink {
                     if let profile = creator.profile {
                         ProfileDetailPlaceholder(profile: profile) // Uses SharedComponents
+                            .onAppear {
+                                // Track profile view analytics
+                                AnalyticsManager.shared.trackProfileView(
+                                    userId: profile.uid,
+                                    source: "featured"
+                                )
+                            }
                     }
                 } label: {
                     FeaturedCreatorCard(creator: creator)
@@ -834,21 +841,25 @@ final class FeaturedViewModel: ObservableObject {
     
     func loadFeatured(forceRefresh: Bool = false) async {
         guard !isLoading else { return }
-        
+
         isLoading = true
         errorMessage = nil
-        
-        #if DEBUG
-        // 🧪 TEST DATA - Load immediately in debug mode
-        loadTestFeatured()
-        isLoading = false
-        return
-        #endif
-        
+
         do {
+            // Fetch real featured creators from Firebase
             featuredCreators = try await service.fetchFeaturedCreators()
             filteredCreators = featuredCreators
+
+            // Track analytics
+            for creator in featuredCreators {
+                if let userId = creator.profile?.uid {
+                    AnalyticsManager.shared.trackFeaturedCreatorView(userId: userId)
+                }
+            }
+
             isLoading = false
+            print("✅ Loaded \(featuredCreators.count) featured creators")
+
         } catch {
             isLoading = false
 
@@ -865,9 +876,11 @@ final class FeaturedViewModel: ObservableObject {
 
             print("❌ Error loading featured: \(error)")
 
-            // Clear error after delay
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            errorMessage = nil
+            // Clear error after delay (not for network errors)
+            if errorMessage != "No internet connection" {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                errorMessage = nil
+            }
         }
     }
     
