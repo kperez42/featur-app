@@ -1379,10 +1379,25 @@ final class EditAccountViewModel: ObservableObject {
         } catch {
             isUploadingMedia = false
             mediaUploadSuccess = false
-            mediaStatusMessage = "Upload failed: \(error.localizedDescription)"
+
+            // Provide user-friendly error messages
+            let nsError = error as NSError
+            if nsError.domain == NSURLErrorDomain && nsError.code == -1200 {
+                mediaStatusMessage = "Network error. Check your internet connection and try again."
+            } else if nsError.domain == NSURLErrorDomain {
+                mediaStatusMessage = "Connection failed. Please check your network and try again."
+            } else {
+                mediaStatusMessage = "Upload failed: \(error.localizedDescription)"
+            }
+
             mediaSelections = []
             print("❌❌ Error uploading media: \(error)")
             print("❌ Error details: \(error)")
+
+            // Clear error message after 10 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                self.mediaStatusMessage = nil
+            }
         }
     }
 

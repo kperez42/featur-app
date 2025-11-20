@@ -524,8 +524,49 @@ final class FirebaseService: ObservableObject {
     
     func uploadMedia(data: Data, path: String) async throws -> String {
         let ref = storage.reference().child(path)
-        let _ = try await ref.putDataAsync(data)
-        return try await ref.downloadURL().absoluteString
+
+        // Retry logic for network errors
+        var lastError: Error?
+        let maxRetries = 3
+
+        for attempt in 0..<maxRetries {
+            do {
+                print("⬆️ Upload attempt \(attempt + 1)/\(maxRetries) to: \(path)")
+                let _ = try await ref.putDataAsync(data)
+                let url = try await ref.downloadURL().absoluteString
+                print("✅ Upload successful: \(url)")
+                return url
+            } catch let error as NSError {
+                lastError = error
+                print("⚠️ Upload attempt \(attempt + 1) failed: \(error.localizedDescription)")
+                print("   Error code: \(error.code), domain: \(error.domain)")
+
+                // Check if it's a retryable network error
+                let isNetworkError = error.domain == NSURLErrorDomain &&
+                    (error.code == NSURLErrorTimedOut ||
+                     error.code == NSURLErrorCannotConnectToHost ||
+                     error.code == NSURLErrorNetworkConnectionLost ||
+                     error.code == NSURLErrorSecureConnectionFailed ||
+                     error.code == NSURLErrorNotConnectedToInternet)
+
+                if isNetworkError && attempt < maxRetries - 1 {
+                    let delay = pow(2.0, Double(attempt)) // Exponential backoff: 1s, 2s, 4s
+                    print("   Retrying in \(delay)s...")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } else if !isNetworkError {
+                    // Not a network error, don't retry
+                    print("   Non-retryable error, failing immediately")
+                    throw error
+                } else {
+                    // Last attempt or non-retryable
+                    print("   All retry attempts exhausted")
+                    throw error
+                }
+            }
+        }
+
+        throw lastError ?? NSError(domain: "FirebaseService", code: -1,
+                                   userInfo: [NSLocalizedDescriptionKey: "Upload failed after \(maxRetries) attempts"])
     }
     
     func uploadProfilePhoto(userId: String, imageData: Data) async throws -> String {
