@@ -5292,5 +5292,27 @@ struct CollabHistoryCard: View {
         case .pending: return .orange
         }
     }
+
+    // MARK: - Image Helper
+
+    private func resizeImage(_ image: UIImage, maxWidth: CGFloat) -> UIImage {
+        let size = image.size
+
+        // If image is already smaller, return as-is
+        if size.width <= maxWidth {
+            return image
+        }
+
+        // Calculate new size maintaining aspect ratio
+        let ratio = maxWidth / size.width
+        let newHeight = size.height * ratio
+        let newSize = CGSize(width: maxWidth, height: newHeight)
+
+        // Resize the image
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+    }
 }
 
