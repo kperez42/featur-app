@@ -438,6 +438,7 @@ struct DiscoverProfileCard: View {
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         default:
                             AppTheme.gradient
                         }

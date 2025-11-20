@@ -1695,7 +1695,7 @@ private struct MainProfileContent: View {
                         Color.gray.opacity(0.2)
                     }
                 }
-                .frame(height: 280)
+                .frame(maxWidth: .infinity, maxHeight: 280)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 
                 // Gradient Overlay
@@ -1704,7 +1704,7 @@ private struct MainProfileContent: View {
                     startPoint: .center,
                     endPoint: .bottom
                 )
-                .frame(height: 280)
+                .frame(maxWidth: .infinity, maxHeight: 280)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 
                 // Content Info

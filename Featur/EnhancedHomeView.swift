@@ -466,6 +466,7 @@ struct ProfileCardView: View {
                                 AppTheme.gradient
                             }
                         }
+                        .frame(width: geo.size.width, height: geo.size.height)
                         .id(currentImageIndex) // Force reload when index changes
                     }
                 } else {

@@ -855,6 +855,7 @@ struct ImageViewerSheet: View {
                             image
                                 .resizable()
                                 .scaledToFit()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         default:
                             ProgressView()
                         }
