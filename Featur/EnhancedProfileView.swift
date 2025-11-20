@@ -2216,9 +2216,14 @@ private struct MainProfileContent: View {
                         defer { isUploading = false }
 
                         if let data = try? await newValue.loadTransferable(type: Data.self),
-                           let compressed = UIImage(data: data)?.jpegData(compressionQuality: 0.7),
+                           let image = UIImage(data: data),
                            let uid = Auth.auth().currentUser?.uid {
-                            await viewModel.updateProfilePhoto(userId: uid, imageData: compressed)
+                            // Resize to max 1200px for faster upload
+                            let resized = resizeImage(image, maxWidth: 1200)
+                            if let compressed = resized.jpegData(compressionQuality: 0.5) {
+                                print("📦 Compressed profile photo: \(data.count / 1024)KB → \(compressed.count / 1024)KB")
+                                await viewModel.updateProfilePhoto(userId: uid, imageData: compressed)
+                            }
                         }
                     }
                 }
@@ -2233,10 +2238,16 @@ private struct MainProfileContent: View {
 
                         for photo in newPhotos {
                             if let data = try? await photo.loadTransferable(type: Data.self),
-                               let compressed = UIImage(data: data)?.jpegData(compressionQuality: 0.7),
+                               let image = UIImage(data: data),
                                let uid = Auth.auth().currentUser?.uid {
-                                if let url = await viewModel.uploadGalleryPhoto(userId: uid, imageData: compressed) {
-                                    galleryImageURLs.append(url)
+                                // Resize image to max 1200px width for faster uploads
+                                let resized = resizeImage(image, maxWidth: 1200)
+                                // Compress more aggressively (0.5 instead of 0.7)
+                                if let compressed = resized.jpegData(compressionQuality: 0.5) {
+                                    print("📦 Compressed image: \(data.count / 1024)KB → \(compressed.count / 1024)KB")
+                                    if let url = await viewModel.uploadGalleryPhoto(userId: uid, imageData: compressed) {
+                                        galleryImageURLs.append(url)
+                                    }
                                 }
                             }
                         }
