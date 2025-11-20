@@ -2078,13 +2078,36 @@ private struct MainProfileContent: View {
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                                 ForEach(Array(galleryImageURLs.enumerated()), id: \.offset) { index, url in
                                     ZStack(alignment: .topTrailing) {
-                                        AsyncImage(url: URL(string: url)) { image in
-                                            image.resizable().scaledToFill()
-                                        } placeholder: {
-                                            Color.gray.opacity(0.2)
+                                        AsyncImage(url: URL(string: url)) { phase in
+                                            switch phase {
+                                            case .success(let image):
+                                                image
+                                                    .resizable()
+                                                    .scaledToFill()
+                                                    .frame(width: 100, height: 100)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            case .failure(_):
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(.red.opacity(0.2))
+                                                    .frame(width: 100, height: 100)
+                                                    .overlay(
+                                                        Image(systemName: "exclamationmark.triangle")
+                                                            .foregroundStyle(.red)
+                                                    )
+                                            case .empty:
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(.gray.opacity(0.2))
+                                                    .frame(width: 100, height: 100)
+                                                    .overlay(
+                                                        ProgressView()
+                                                            .tint(AppTheme.accent)
+                                                    )
+                                            @unknown default:
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(.gray.opacity(0.2))
+                                                    .frame(width: 100, height: 100)
+                                            }
                                         }
-                                        .frame(height: 100)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
 
                                         Button {
                                             galleryImageURLs.remove(at: index)

@@ -10,9 +10,10 @@ final class ProfileViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var needsSetup = false
-    
+
     private let db = Firestore.firestore()
     private let storage = Storage.storage()
+    private let firebaseService = FireBaseService()
     
     // MARK: - Load Profile
     
@@ -86,18 +87,19 @@ final class ProfileViewModel: ObservableObject {
     }
     
     // MARK: - Upload Image
-    
-    func uploadImageToStorage(userId: String, data: Data) async throws -> String {
+
+    func uploadImageToStorage(userId: String, data: Data, isGalleryPhoto: Bool = false) async throws -> String {
         let filename = UUID().uuidString + ".jpg"
-        let path = "profile_photos/\(userId)/\(filename)"
-        let ref = storage.reference().child(path)
-        
-        // Upload the image
-        let _ = try await ref.putDataAsync(data)
-        
-        // Get download URL
-        let downloadURL = try await ref.downloadURL()
-        return downloadURL.absoluteString
+        // Use media/ path for gallery photos, profile_photos/ for profile picture
+        let path = isGalleryPhoto ? "media/\(userId)/\(filename)" : "profile_photos/\(userId)/\(filename)"
+
+        print("📤 Uploading image to: \(path)")
+
+        // Use FireBaseService which has retry logic
+        let url = try await firebaseService.uploadMedia(data: data, path: path)
+
+        print("✅ Upload successful: \(url)")
+        return url
     }
     
     // MARK: - Update Profile Photo
@@ -132,12 +134,16 @@ final class ProfileViewModel: ObservableObject {
 
     func uploadGalleryPhoto(userId: String, imageData: Data) async -> String? {
         do {
-            let url = try await uploadImageToStorage(userId: userId, data: imageData)
+            print("📸 Starting gallery photo upload for user: \(userId)")
+            print("   Image size: \(imageData.count / 1024)KB")
+
+            let url = try await uploadImageToStorage(userId: userId, data: imageData, isGalleryPhoto: true)
             print("✅ Gallery photo uploaded: \(url)")
             return url
         } catch {
             self.errorMessage = "Failed to upload gallery photo: \(error.localizedDescription)"
             print("❌ Error uploading gallery photo: \(error)")
+            print("   Error details: \(error)")
             return nil
         }
     }
