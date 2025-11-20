@@ -14,38 +14,57 @@ final class ProfileViewModel: ObservableObject {
     private let db = Firestore.firestore()
     private let storage = Storage.storage()
     private let firebaseService = FirebaseService()
-    
+
+    // Cache to prevent unnecessary reloads
+    private var cachedUID: String?
+    private var lastLoadTime: Date?
+    private let cacheValidDuration: TimeInterval = 60 // 60 seconds cache
+
     // MARK: - Load Profile
-    
+
     func loadProfile(uid: String) async {
+        // Check cache first - only reload if cache is invalid or different user
+        if let cachedUID = cachedUID,
+           cachedUID == uid,
+           let lastLoad = lastLoadTime,
+           Date().timeIntervalSince(lastLoad) < cacheValidDuration {
+            print("📦 Using cached profile for \(uid)")
+            return
+        }
+
         isLoading = true
         errorMessage = nil
-        
+
         do {
             let document = try await db.collection("users").document(uid).getDocument()
-            
+
             if document.exists {
                 self.profile = try document.data(as: UserProfile.self)
                 self.needsSetup = false
+                // Update cache
+                self.cachedUID = uid
+                self.lastLoadTime = Date()
             } else {
                 self.needsSetup = true
                 self.profile = nil
+                self.cachedUID = nil
+                self.lastLoadTime = nil
             }
         } catch {
             self.errorMessage = "Failed to load profile: \(error.localizedDescription)"
             self.needsSetup = true
             print("❌ Error loading profile: \(error)")
         }
-        
+
         isLoading = false
     }
     
     // MARK: - Update Profile
-    
+
     func updateProfile(_ updatedProfile: UserProfile) async {
         isLoading = true
         errorMessage = nil
-        
+
         do {
             var profileToSave = updatedProfile
             profileToSave.updatedAt = Date()
@@ -55,12 +74,14 @@ final class ProfileViewModel: ObservableObject {
                 .setData(from: profileToSave, merge: true)
 
             self.profile = profileToSave
+            // Refresh cache timestamp
+            self.lastLoadTime = Date()
             print("✅ Profile updated successfully")
         } catch {
             self.errorMessage = "Failed to update profile: \(error.localizedDescription)"
             print("❌ Error updating profile: \(error)")
         }
-        
+
         isLoading = false
     }
     
@@ -149,7 +170,7 @@ final class ProfileViewModel: ObservableObject {
     }
     
     // MARK: - Add Media URLs
-    
+
     func addMediaURL(userId: String, url: String) async {
         do {
             try await db.collection("users")
@@ -157,7 +178,7 @@ final class ProfileViewModel: ObservableObject {
                 .updateData([
                     "mediaURLs": FirebaseFirestore.FieldValue.arrayUnion([url])
                 ])
-            
+
             // Update local profile
             if var currentProfile = self.profile {
 
@@ -168,8 +189,10 @@ final class ProfileViewModel: ObservableObject {
                 // Reassign back into the struct
                 currentProfile.mediaURLs = urls
                 self.profile = currentProfile
+                // Refresh cache timestamp
+                self.lastLoadTime = Date()
             }
-            
+
             print("✅ Media URL added")
         } catch {
             self.errorMessage = "Failed to add media: \(error.localizedDescription)"
@@ -196,14 +219,23 @@ final class ProfileViewModel: ObservableObject {
     }
     
     // MARK: - Helper Methods
-    
+
     func refreshProfile() async {
         guard let uid = profile?.uid ?? Auth.auth().currentUser?.uid else { return }
+        // Force refresh by clearing cache
+        cachedUID = nil
+        lastLoadTime = nil
         await loadProfile(uid: uid)
     }
-    
+
     func clearError() {
         errorMessage = nil
+    }
+
+    // Force clear cache to reload fresh data
+    func invalidateCache() {
+        cachedUID = nil
+        lastLoadTime = nil
     }
     
     func uploadPhotos(_ items: [PhotosUI.PhotosPickerItem]) async {

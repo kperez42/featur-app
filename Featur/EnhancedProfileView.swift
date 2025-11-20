@@ -2246,10 +2246,10 @@ private struct MainProfileContent: View {
                             if let data = try? await photo.loadTransferable(type: Data.self),
                                let image = UIImage(data: data),
                                let uid = Auth.auth().currentUser?.uid {
-                                // Resize image to max 1200px width for faster uploads
-                                let resized = resizeImage(image, maxWidth: 1200)
-                                // Compress more aggressively (0.5 instead of 0.7)
-                                if let compressed = resized.jpegData(compressionQuality: 0.5) {
+                                // Resize to 800px max width and compress aggressively
+                                let resized = resizeImage(image, maxWidth: 800)
+                                // Use 0.3 quality for much faster uploads (smaller file size)
+                                if let compressed = resized.jpegData(compressionQuality: 0.3) {
                                     print("📦 Compressed image: \(data.count / 1024)KB → \(compressed.count / 1024)KB")
                                     if let url = await viewModel.uploadGalleryPhoto(userId: uid, imageData: compressed) {
                                         await MainActor.run {
