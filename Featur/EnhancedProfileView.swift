@@ -2015,6 +2015,7 @@ private struct MainProfileContent: View {
         @State private var isUploadingGallery = false
         @State private var showNetworkAlert = false
         @State private var networkAlertMessage = ""
+        @State private var hasInitializedGallery = false
 
         let availableInterests = ["Music", "Art", "Gaming", "Fitness", "Travel", "Food", "Tech", "Fashion", "Sports", "Photography"]
         
@@ -2086,8 +2087,8 @@ private struct MainProfileContent: View {
                                     .foregroundStyle(galleryImageURLs.count >= 6 ? .red : .secondary)
                             }
 
-                            // Photo grid
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            // Photo grid - use fixed size to prevent NaN errors
+                            LazyVGrid(columns: [GridItem(.fixed(100)), GridItem(.fixed(100)), GridItem(.fixed(100))], spacing: 12) {
                                 ForEach(galleryImageURLs, id: \.self) { url in
                                     ZStack(alignment: .topTrailing) {
                                         AsyncImage(url: URL(string: url)) { phase in
@@ -2122,13 +2123,17 @@ private struct MainProfileContent: View {
                                         }
 
                                         Button {
-                                            // Use removeAll with closure to safely remove by URL
-                                            galleryImageURLs.removeAll { $0 == url }
+                                            let urlToDelete = url
+                                            print("🗑️ User clicked delete for photo")
+                                            // Remove from local array
+                                            withAnimation {
+                                                galleryImageURLs.removeAll { $0 == urlToDelete }
+                                            }
                                             // Save removal to Firestore immediately
                                             if let uid = Auth.auth().currentUser?.uid {
                                                 Task {
-                                                    await viewModel.removeMediaURL(userId: uid, url: url)
-                                                    print("🗑️ Photo removed from profile: \(galleryImageURLs.count)/6")
+                                                    await viewModel.removeMediaURL(userId: uid, url: urlToDelete)
+                                                    print("✅ Photo deleted from Firestore")
                                                 }
                                             }
                                         } label: {
@@ -2136,6 +2141,7 @@ private struct MainProfileContent: View {
                                                 .foregroundStyle(.white)
                                                 .background(Circle().fill(.black.opacity(0.6)))
                                         }
+                                        .buttonStyle(.plain)
                                         .padding(4)
                                     }
                                 }
@@ -2297,13 +2303,28 @@ private struct MainProfileContent: View {
                     Text(networkAlertMessage)
                 }
                 .task {
+                    // Only sync once when sheet first appears
+                    guard !hasInitializedGallery else {
+                        print("⏭️ Gallery already initialized, skipping sync")
+                        return
+                    }
+
                     // Wait a tiny bit for profile refresh to complete, then sync
-                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+
                     // Sync galleryImageURLs with latest profile data when sheet opens
                     if let latestProfile = viewModel.profile {
-                        galleryImageURLs = latestProfile.mediaURLs ?? []
-                        print("🔄 Synced gallery photos on sheet open: \(galleryImageURLs.count) photos")
-                        print("   Photos: \(galleryImageURLs.map { String($0.suffix(20)) })")
+                        let newURLs = latestProfile.mediaURLs ?? []
+                        print("🔄 Syncing gallery photos on sheet open")
+                        print("   Current: \(galleryImageURLs.count) photos")
+                        print("   From Firestore: \(newURLs.count) photos")
+
+                        // Only update if we haven't already initialized
+                        if !hasInitializedGallery {
+                            galleryImageURLs = newURLs
+                            hasInitializedGallery = true
+                            print("✅ Gallery initialized with \(galleryImageURLs.count) photos")
+                        }
                     }
                 }
             }
