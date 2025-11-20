@@ -956,14 +956,17 @@ struct EditAccountView: View {
                 }
 
                 // Upload new media
+                let currentCount = auth.userProfile?.mediaURLs?.count ?? 0
+                let availableSlots = max(1, 6 - currentCount)
+
                 PhotosPicker(selection: $viewModel.mediaSelections,
-                           maxSelectionCount: 6,
+                           maxSelectionCount: availableSlots,
                            matching: .images,
                            photoLibrary: .shared()) {
                     HStack {
                         Image(systemName: "photo.on.rectangle.angled")
                             .foregroundStyle(.blue)
-                        Text("Add Photos to Gallery")
+                        Text("Add Photos to Gallery (\(currentCount)/6)")
                         Spacer()
                         if viewModel.isUploadingMedia {
                             ProgressView()
@@ -973,7 +976,7 @@ struct EditAccountView: View {
                         }
                     }
                 }
-                .disabled(viewModel.isUploadingMedia || (auth.userProfile?.mediaURLs?.count ?? 0) >= 6)
+                .disabled(viewModel.isUploadingMedia || currentCount >= 6)
 
                 if viewModel.isUploadingMedia {
                     HStack {
@@ -989,10 +992,12 @@ struct EditAccountView: View {
                 Text("Media Gallery")
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Add up to 6 photos to showcase your content")
+                    let currentCount = auth.userProfile?.mediaURLs?.count ?? 0
+                    Text("Add up to 6 photos to showcase your content. You have \(currentCount) photo\(currentCount == 1 ? "" : "s").")
                     if let message = viewModel.mediaStatusMessage {
                         Text(message)
                             .foregroundStyle(viewModel.mediaUploadSuccess ? .green : .red)
+                            .bold()
                     }
                 }
                 .font(.caption)
@@ -1000,9 +1005,11 @@ struct EditAccountView: View {
         }
         .navigationTitle("Edit Account")
         .onAppear {
+            print("🎬 EditAccountView appeared")
             viewModel.auth = auth
             viewModel.displayName = auth.userProfile?.displayName ?? ""
             viewModel.loadSocialLinks()
+            print("✅ Auth and profile loaded: \(auth.userProfile != nil)")
         }
         .alert("Upload Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
@@ -1239,9 +1246,24 @@ final class EditAccountViewModel: ObservableObject {
     // MARK: - Media Gallery Methods
 
     private func handleMediaSelections(_ selections: [PhotosPickerItem]) async {
-        guard !selections.isEmpty else { return }
+        print("📸 handleMediaSelections called with \(selections.count) selections")
+
+        guard !selections.isEmpty else {
+            print("⚠️ No selections to process")
+            return
+        }
+
         guard let userId = Auth.auth().currentUser?.uid else {
-            mediaStatusMessage = "User not found"
+            print("❌ No user ID found")
+            mediaStatusMessage = "User not found. Please sign in again."
+            mediaSelections = []
+            return
+        }
+
+        guard auth != nil, auth?.userProfile != nil else {
+            print("❌ Auth or user profile is nil")
+            mediaStatusMessage = "Profile not loaded. Please try again."
+            mediaSelections = []
             return
         }
 
@@ -1249,7 +1271,10 @@ final class EditAccountViewModel: ObservableObject {
         let currentCount = auth?.userProfile?.mediaURLs?.count ?? 0
         let availableSlots = 6 - currentCount
 
+        print("📊 Current photo count: \(currentCount), Available slots: \(availableSlots)")
+
         if availableSlots <= 0 {
+            print("⚠️ Photo limit reached")
             mediaStatusMessage = "Maximum 6 photos allowed"
             mediaSelections = []
             return
@@ -1257,6 +1282,7 @@ final class EditAccountViewModel: ObservableObject {
 
         // Limit selections to available slots
         let selectionsToProcess = Array(selections.prefix(availableSlots))
+        print("📸 Processing \(selectionsToProcess.count) photos")
 
         isUploadingMedia = true
         mediaStatusMessage = "Processing images..."
@@ -1264,34 +1290,42 @@ final class EditAccountViewModel: ObservableObject {
         mediaUploadSuccess = false
 
         var uploadedURLs: [String] = []
+        var failedCount = 0
 
         do {
             // Process each selection
             for (index, selection) in selectionsToProcess.enumerated() {
                 uploadProgress = (index + 1, selectionsToProcess.count)
+                mediaStatusMessage = "Uploading \(index + 1) of \(selectionsToProcess.count)..."
 
                 // Load image data
                 guard let data = try await selection.loadTransferable(type: Data.self) else {
                     print("⚠️ Failed to load image \(index + 1)")
+                    failedCount += 1
                     continue
                 }
+
+                print("✅ Loaded image \(index + 1): \(data.count / 1024)KB")
 
                 // Validate size
                 let maxSize = 10 * 1024 * 1024 // 10MB
                 if data.count > maxSize {
-                    print("⚠️ Image \(index + 1) too large")
+                    print("⚠️ Image \(index + 1) too large: \(data.count / 1024 / 1024)MB")
+                    failedCount += 1
                     continue
                 }
 
                 // Compress
                 let compressedData = compressImageIfNeeded(data)
+                print("📦 Compressed image \(index + 1): \(compressedData.count / 1024)KB")
 
                 // Upload to Firebase Storage
                 let path = "media/\(userId)/\(UUID().uuidString).jpg"
+                print("⬆️ Uploading to Firebase: \(path)")
                 let url = try await service.uploadMedia(data: compressedData, path: path)
                 uploadedURLs.append(url)
 
-                print("✅ Uploaded media \(index + 1) of \(selectionsToProcess.count)")
+                print("✅ Uploaded media \(index + 1) of \(selectionsToProcess.count): \(url)")
             }
 
             // Update profile with new URLs
@@ -1300,28 +1334,40 @@ final class EditAccountViewModel: ObservableObject {
                     throw NSError(domain: "EditAccount", code: -1, userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
                 }
 
+                print("💾 Updating profile with \(uploadedURLs.count) new URLs")
                 var currentMediaURLs = profile.mediaURLs ?? []
                 currentMediaURLs.append(contentsOf: uploadedURLs)
                 profile.mediaURLs = currentMediaURLs
 
                 try await service.updateProfile(profile)
+                print("✅ Profile updated in Firestore")
 
                 // Update local auth state
                 auth?.userProfile?.mediaURLs = currentMediaURLs
+                print("✅ Local auth state updated")
 
                 // Track analytics
                 AnalyticsManager.shared.trackMediaUpload(type: "gallery", count: uploadedURLs.count)
 
                 mediaUploadSuccess = true
-                mediaStatusMessage = "Uploaded \(uploadedURLs.count) photo\(uploadedURLs.count > 1 ? "s" : "") successfully!"
+                let successCount = uploadedURLs.count
+                if failedCount > 0 {
+                    mediaStatusMessage = "Uploaded \(successCount) photo\(successCount > 1 ? "s" : ""). \(failedCount) failed."
+                } else {
+                    mediaStatusMessage = "Uploaded \(successCount) photo\(successCount > 1 ? "s" : "") successfully!"
+                }
+                print("✅✅ Upload complete! Success: \(successCount), Failed: \(failedCount)")
+            } else {
+                print("❌ No photos were uploaded successfully")
+                mediaStatusMessage = "Failed to upload photos. Please try again."
             }
 
             // Clear selections
             isUploadingMedia = false
             mediaSelections = []
 
-            // Clear success message after 3 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            // Clear success message after 5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
                 self.mediaStatusMessage = nil
                 self.mediaUploadSuccess = false
             }
@@ -1331,7 +1377,8 @@ final class EditAccountViewModel: ObservableObject {
             mediaUploadSuccess = false
             mediaStatusMessage = "Upload failed: \(error.localizedDescription)"
             mediaSelections = []
-            print("❌ Error uploading media: \(error)")
+            print("❌❌ Error uploading media: \(error)")
+            print("❌ Error details: \(error)")
         }
     }
 
