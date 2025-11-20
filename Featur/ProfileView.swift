@@ -367,23 +367,14 @@ private struct SignedInProfile: View {
             // Social Links Card
             if profile.socialLinks?.tiktok != nil ||
                profile.socialLinks?.instagram != nil ||
-               profile.socialLinks?.youtube != nil {
+               profile.socialLinks?.youtube != nil ||
+               profile.socialLinks?.twitch != nil {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Social Media", systemImage: "link")
                             .font(.headline)
-                        
+
                         VStack(spacing: 10) {
-                            if let tiktok = profile.socialLinks?.tiktok {
-                                socialLinkRow(
-                                    platform: "TikTok",
-                                    icon: "music.note",
-                                    username: tiktok.username,
-                                    followers: tiktok.followerCount,
-                                    isVerified: tiktok.isVerified
-                                )
-                            }
-                            
                             if let instagram = profile.socialLinks?.instagram {
                                 socialLinkRow(
                                     platform: "Instagram",
@@ -393,7 +384,17 @@ private struct SignedInProfile: View {
                                     isVerified: instagram.isVerified
                                 )
                             }
-                            
+
+                            if let tiktok = profile.socialLinks?.tiktok {
+                                socialLinkRow(
+                                    platform: "TikTok",
+                                    icon: "music.note",
+                                    username: tiktok.username,
+                                    followers: tiktok.followerCount,
+                                    isVerified: tiktok.isVerified
+                                )
+                            }
+
                             if let youtube = profile.socialLinks?.youtube {
                                 socialLinkRow(
                                     platform: "YouTube",
@@ -401,6 +402,16 @@ private struct SignedInProfile: View {
                                     username: youtube.username,
                                     followers: youtube.followerCount,
                                     isVerified: youtube.isVerified
+                                )
+                            }
+
+                            if let twitch = profile.socialLinks?.twitch {
+                                socialLinkRow(
+                                    platform: "Twitch",
+                                    icon: "gamecontroller",
+                                    username: twitch.username,
+                                    followers: twitch.followerCount,
+                                    isVerified: twitch.isVerified
                                 )
                             }
                         }
