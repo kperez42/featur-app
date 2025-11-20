@@ -9,86 +9,69 @@ struct ProfileDetailView: View {
     @StateObject private var viewModel = ProfileDetailViewModel()
     @State private var showMessageSheet = false
     @State private var showReportSheet = false
+    @State private var selectedImageIndex = 0
+    @State private var showImageViewer = false
+
+    private var mediaURLs: [String] {
+        if let urls = profile.mediaURLs, !urls.isEmpty {
+            return urls
+        } else if let profileImage = profile.profileImageURL {
+            return [profileImage]
+        }
+        return []
+    }
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                // Single Profile Image
-                if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 400)
-                                .clipped()
-                        default:
-                            Rectangle()
-                                .fill(AppTheme.accent.opacity(0.2))
-                                .frame(height: 400)
-                        }
-                    }
+            VStack(spacing: 0) {
+                // Photo Gallery Carousel
+                if !mediaURLs.isEmpty {
+                    ImageGalleryHeader(
+                        mediaURLs: mediaURLs,
+                        selectedIndex: $selectedImageIndex,
+                        onTapImage: { showImageViewer = true }
+                    )
                 } else {
-                    Rectangle()
-                        .fill(AppTheme.accent.opacity(0.2))
-                        .frame(height: 400)
+                    AppTheme.gradient
+                        .frame(height: 500)
                 }
 
-                VStack(spacing: 20) {
-                    // Name
-                    Text(profile.displayName)
-                        .font(.system(size: 32, weight: .bold))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                // Profile Content
+                VStack(spacing: 24) {
+                    // Header with Name, Verified, Online Status
+                    ProfileHeaderInfo(profile: profile)
 
-                    // Like and Message Buttons
-                    HStack(spacing: 12) {
-                        // Like Button
-                        Button(action: { viewModel.toggleLike(profile: profile) }) {
-                            HStack {
-                                if viewModel.isLoading {
-                                    ProgressView()
-                                        .tint(viewModel.isLiked ? .white : AppTheme.accent)
-                                } else {
-                                    Image(systemName: viewModel.isLiked ? "heart.fill" : "heart")
-                                    Text(viewModel.isLiked ? "Liked" : "Like")
-                                }
-                            }
-                            .font(.headline)
-                            .foregroundStyle(viewModel.isLiked ? .white : AppTheme.accent)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(
-                                viewModel.isLiked ? AppTheme.accent : AppTheme.card,
-                                in: RoundedRectangle(cornerRadius: 16)
-                            )
-                        }
-                        .disabled(viewModel.isLoading)
+                    // Stats Row (Followers, Posts, Styles)
+                    StatsRow(profile: profile)
 
-                        // Message Button
-                        Button(action: { showMessageSheet = true }) {
-                            HStack {
-                                Image(systemName: "message.fill")
-                                Text("Message")
-                            }
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
-                        }
+                    // Action Buttons (Like, Message, Share)
+                    ActionButtonsRow(
+                        profile: profile,
+                        isLiked: viewModel.isLiked,
+                        onLike: { viewModel.toggleLike(profile: profile) },
+                        onMessage: { showMessageSheet = true },
+                        onShare: { viewModel.shareProfile(profile: profile) },
+                        viewModel: viewModel
+                    )
+
+                    // Bio Section
+                    if let bio = profile.bio, !bio.isEmpty {
+                        BioSection(bio: bio)
                     }
 
-                    // Bio (if exists)
-                    if let bio = profile.bio, !bio.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("About")
-                                .font(.headline)
-                            Text(bio)
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // Looking to Collaborate Section
+                    if let prefs = profile.collaborationPreferences, !prefs.isEmpty {
+                        CollaborationSection(preferences: prefs)
+                    }
+
+                    // Content Styles
+                    if let styles = profile.contentStyles, !styles.isEmpty {
+                        ContentStylesSection(styles: styles)
+                    }
+
+                    // Social Links
+                    if profile.socialLinks != nil {
+                        SocialLinksGrid(profile: profile)
                     }
 
                     // Report Button
@@ -115,6 +98,9 @@ struct ProfileDetailView: View {
         }
         .sheet(isPresented: $showReportSheet) {
             ReportSheet(profile: profile)
+        }
+        .sheet(isPresented: $showImageViewer) {
+            ImageViewerSheet(mediaURLs: mediaURLs, selectedIndex: $selectedImageIndex)
         }
         .task {
             if let currentUserId = Auth.auth().currentUser?.uid {
@@ -380,7 +366,7 @@ private struct SocialLinkCard: View {
     let verified: Bool
     let icon: String
     let color: Color
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -393,15 +379,15 @@ private struct SocialLinkCard: View {
                         .foregroundStyle(.blue)
                 }
             }
-            
+
             Text(platform)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            
+
             Text("@\(username)")
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
-            
+
             if let followers = followers {
                 Text(formatNumber(followers))
                     .font(.caption)
@@ -410,6 +396,106 @@ private struct SocialLinkCard: View {
         }
         .padding()
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+// MARK: - Stats Row
+private struct StatsRow: View {
+    let profile: UserProfile
+
+    private var postsCount: Int {
+        profile.mediaURLs?.count ?? 0
+    }
+
+    private var stylesCount: Int {
+        profile.contentStyles?.count ?? 0
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Followers
+            StatItem(
+                value: formatNumber(profile.followerCount ?? 0),
+                label: "Followers"
+            )
+
+            Divider()
+                .frame(height: 40)
+
+            // Posts
+            StatItem(
+                value: "\(postsCount)",
+                label: "Posts"
+            )
+
+            Divider()
+                .frame(height: 40)
+
+            // Styles
+            StatItem(
+                value: "\(stylesCount)",
+                label: "Styles"
+            )
+        }
+        .padding(.vertical, 16)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+private struct StatItem: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(AppTheme.accent)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Collaboration Section
+private struct CollaborationSection: View {
+    let preferences: [UserProfile.CollaborationType]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "person.2.fill")
+                    .foregroundStyle(AppTheme.accent)
+                Text("Looking to Collaborate")
+                    .font(.headline)
+            }
+
+            FlowLayout(spacing: 10) {
+                ForEach(preferences, id: \.self) { type in
+                    HStack(spacing: 6) {
+                        Image(systemName: type.icon)
+                        Text(type.rawValue)
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.card, in: Capsule())
+                    .overlay(Capsule().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            LinearGradient(
+                colors: [AppTheme.accent.opacity(0.1), AppTheme.accent.opacity(0.05)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 16)
+        )
     }
 }
 
