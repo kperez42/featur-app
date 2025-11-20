@@ -804,6 +804,120 @@ struct EditAccountView: View {
                 Text("Profile Information")
             }
 
+            // Social Links Section
+            Section {
+                // Instagram
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "camera")
+                            .foregroundStyle(.pink)
+                            .frame(width: 28)
+                        Text("Instagram")
+                            .font(.subheadline.weight(.semibold))
+                    }
+
+                    TextField("Username", text: $viewModel.instagramUsername)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    TextField("Follower count", text: $viewModel.instagramFollowers)
+                        .keyboardType(.numberPad)
+
+                    Toggle("Verified", isOn: $viewModel.instagramVerified)
+                }
+                .padding(.vertical, 4)
+
+                Divider()
+
+                // TikTok
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "music.note")
+                            .foregroundStyle(.black)
+                            .frame(width: 28)
+                        Text("TikTok")
+                            .font(.subheadline.weight(.semibold))
+                    }
+
+                    TextField("Username", text: $viewModel.tiktokUsername)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    TextField("Follower count", text: $viewModel.tiktokFollowers)
+                        .keyboardType(.numberPad)
+
+                    Toggle("Verified", isOn: $viewModel.tiktokVerified)
+                }
+                .padding(.vertical, 4)
+
+                Divider()
+
+                // YouTube
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "play.rectangle")
+                            .foregroundStyle(.red)
+                            .frame(width: 28)
+                        Text("YouTube")
+                            .font(.subheadline.weight(.semibold))
+                    }
+
+                    TextField("Username", text: $viewModel.youtubeUsername)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    TextField("Subscriber count", text: $viewModel.youtubeFollowers)
+                        .keyboardType(.numberPad)
+
+                    Toggle("Verified", isOn: $viewModel.youtubeVerified)
+                }
+                .padding(.vertical, 4)
+
+                Divider()
+
+                // Twitch
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "gamecontroller")
+                            .foregroundStyle(.purple)
+                            .frame(width: 28)
+                        Text("Twitch")
+                            .font(.subheadline.weight(.semibold))
+                    }
+
+                    TextField("Username", text: $viewModel.twitchUsername)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    TextField("Follower count", text: $viewModel.twitchFollowers)
+                        .keyboardType(.numberPad)
+
+                    Toggle("Verified", isOn: $viewModel.twitchVerified)
+                }
+                .padding(.vertical, 4)
+
+                // Save Social Links Button
+                if viewModel.socialLinksChanged {
+                    Button("Save Social Links") {
+                        Task {
+                            await viewModel.updateSocialLinks()
+                        }
+                    }
+                    .disabled(viewModel.isUpdatingSocials)
+                }
+            } header: {
+                Text("Social Links")
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Your social links will be shown as non-clickable text for credibility. Users won't be redirected outside the app.")
+                    if let message = viewModel.socialsStatusMessage {
+                        Text(message)
+                            .foregroundStyle(viewModel.socialsUpdateSuccess ? .green : .red)
+                    }
+                }
+                .font(.caption)
+            }
+
             // Media Gallery Section
             Section {
                 // Gallery Grid
@@ -888,6 +1002,7 @@ struct EditAccountView: View {
         .onAppear {
             viewModel.auth = auth
             viewModel.displayName = auth.userProfile?.displayName ?? ""
+            viewModel.loadSocialLinks()
         }
         .alert("Upload Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
@@ -915,6 +1030,45 @@ final class EditAccountViewModel: ObservableObject {
     @Published var mediaUploadSuccess = false
     @Published var mediaStatusMessage: String?
     @Published var uploadProgress: (Int, Int) = (0, 0)
+
+    // Social links properties
+    @Published var instagramUsername = ""
+    @Published var instagramFollowers = ""
+    @Published var instagramVerified = false
+    @Published var tiktokUsername = ""
+    @Published var tiktokFollowers = ""
+    @Published var tiktokVerified = false
+    @Published var youtubeUsername = ""
+    @Published var youtubeFollowers = ""
+    @Published var youtubeVerified = false
+    @Published var twitchUsername = ""
+    @Published var twitchFollowers = ""
+    @Published var twitchVerified = false
+    @Published var isUpdatingSocials = false
+    @Published var socialsUpdateSuccess = false
+    @Published var socialsStatusMessage: String?
+
+    var socialLinksChanged: Bool {
+        guard let profile = auth?.userProfile else { return false }
+
+        let currentInstagram = profile.socialLinks?.instagram
+        let currentTikTok = profile.socialLinks?.tiktok
+        let currentYouTube = profile.socialLinks?.youtube
+        let currentTwitch = profile.socialLinks?.twitch
+
+        return instagramUsername != (currentInstagram?.username ?? "") ||
+               instagramFollowers != (currentInstagram?.followerCount.map(String.init) ?? "") ||
+               instagramVerified != (currentInstagram?.isVerified ?? false) ||
+               tiktokUsername != (currentTikTok?.username ?? "") ||
+               tiktokFollowers != (currentTikTok?.followerCount.map(String.init) ?? "") ||
+               tiktokVerified != (currentTikTok?.isVerified ?? false) ||
+               youtubeUsername != (currentYouTube?.username ?? "") ||
+               youtubeFollowers != (currentYouTube?.followerCount.map(String.init) ?? "") ||
+               youtubeVerified != (currentYouTube?.isVerified ?? false) ||
+               twitchUsername != (currentTwitch?.username ?? "") ||
+               twitchFollowers != (currentTwitch?.followerCount.map(String.init) ?? "") ||
+               twitchVerified != (currentTwitch?.isVerified ?? false)
+    }
 
     var auth: AuthViewModel?
     private var selectedImageData: Data?
@@ -1217,6 +1371,115 @@ final class EditAccountViewModel: ObservableObject {
             errorMessage = "Failed to delete photo"
             showError = true
             print("❌ Error deleting media: \(error)")
+        }
+    }
+
+    // MARK: - Social Links Methods
+
+    func loadSocialLinks() {
+        guard let profile = auth?.userProfile else { return }
+
+        // Load Instagram
+        if let instagram = profile.socialLinks?.instagram {
+            instagramUsername = instagram.username
+            instagramFollowers = instagram.followerCount.map(String.init) ?? ""
+            instagramVerified = instagram.isVerified
+        }
+
+        // Load TikTok
+        if let tiktok = profile.socialLinks?.tiktok {
+            tiktokUsername = tiktok.username
+            tiktokFollowers = tiktok.followerCount.map(String.init) ?? ""
+            tiktokVerified = tiktok.isVerified
+        }
+
+        // Load YouTube
+        if let youtube = profile.socialLinks?.youtube {
+            youtubeUsername = youtube.username
+            youtubeFollowers = youtube.followerCount.map(String.init) ?? ""
+            youtubeVerified = youtube.isVerified
+        }
+
+        // Load Twitch
+        if let twitch = profile.socialLinks?.twitch {
+            twitchUsername = twitch.username
+            twitchFollowers = twitch.followerCount.map(String.init) ?? ""
+            twitchVerified = twitch.isVerified
+        }
+    }
+
+    func updateSocialLinks() async {
+        guard var profile = auth?.userProfile else { return }
+
+        isUpdatingSocials = true
+        socialsStatusMessage = "Updating..."
+        socialsUpdateSuccess = false
+
+        // Build social links
+        var socialLinks = UserProfile.SocialLinks()
+
+        // Instagram
+        if !instagramUsername.isEmpty {
+            socialLinks.instagram = UserProfile.SocialLinks.SocialAccount(
+                username: instagramUsername,
+                followerCount: Int(instagramFollowers),
+                isVerified: instagramVerified
+            )
+        }
+
+        // TikTok
+        if !tiktokUsername.isEmpty {
+            socialLinks.tiktok = UserProfile.SocialLinks.SocialAccount(
+                username: tiktokUsername,
+                followerCount: Int(tiktokFollowers),
+                isVerified: tiktokVerified
+            )
+        }
+
+        // YouTube
+        if !youtubeUsername.isEmpty {
+            socialLinks.youtube = UserProfile.SocialLinks.SocialAccount(
+                username: youtubeUsername,
+                followerCount: Int(youtubeFollowers),
+                isVerified: youtubeVerified
+            )
+        }
+
+        // Twitch
+        if !twitchUsername.isEmpty {
+            socialLinks.twitch = UserProfile.SocialLinks.SocialAccount(
+                username: twitchUsername,
+                followerCount: Int(twitchFollowers),
+                isVerified: twitchVerified
+            )
+        }
+
+        profile.socialLinks = socialLinks
+
+        do {
+            // Update profile
+            try await service.updateProfile(profile)
+
+            // Update local auth state
+            auth?.userProfile?.socialLinks = socialLinks
+
+            isUpdatingSocials = false
+            socialsUpdateSuccess = true
+            socialsStatusMessage = "Social links updated successfully!"
+
+            print("✅ Social links updated")
+
+            // Clear success message after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                self.socialsStatusMessage = nil
+                self.socialsUpdateSuccess = false
+            }
+
+        } catch {
+            isUpdatingSocials = false
+            socialsUpdateSuccess = false
+            socialsStatusMessage = "Failed to update social links"
+            print("❌ Error updating social links: \(error)")
         }
     }
 }

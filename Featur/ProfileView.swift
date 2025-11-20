@@ -470,31 +470,33 @@ private struct SignedInProfile: View {
                 .font(.title3)
                 .foregroundStyle(AppTheme.accent)
                 .frame(width: 32)
-            
+
             VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(platform)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 HStack(spacing: 4) {
                     Text("@\(username)")
                         .font(.body.weight(.medium))
-                    
+
                     if isVerified {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.caption)
                             .foregroundStyle(.blue)
                     }
                 }
-                
+
                 if let followers = followers {
                     Text("\(formatFollowerCount(followers)) followers")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             Spacer()
-            
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 8)
     }
