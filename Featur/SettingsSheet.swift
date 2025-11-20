@@ -933,17 +933,40 @@ struct EditAccountView: View {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
                             ZStack(alignment: .topTrailing) {
-                                AsyncImage(url: URL(string: url)) { image in
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                } placeholder: {
-                                    Rectangle()
-                                        .fill(.gray.opacity(0.2))
+                                AsyncImage(url: URL(string: url)) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 100, height: 100)
+                                            .clipped()
+                                            .cornerRadius(8)
+                                    case .failure(_):
+                                        Rectangle()
+                                            .fill(.red.opacity(0.2))
+                                            .frame(width: 100, height: 100)
+                                            .cornerRadius(8)
+                                            .overlay(
+                                                Image(systemName: "exclamationmark.triangle")
+                                                    .foregroundStyle(.red)
+                                            )
+                                    case .empty:
+                                        Rectangle()
+                                            .fill(.gray.opacity(0.2))
+                                            .frame(width: 100, height: 100)
+                                            .cornerRadius(8)
+                                            .overlay(
+                                                ProgressView()
+                                                    .tint(AppTheme.accent)
+                                            )
+                                    @unknown default:
+                                        Rectangle()
+                                            .fill(.gray.opacity(0.2))
+                                            .frame(width: 100, height: 100)
+                                            .cornerRadius(8)
+                                    }
                                 }
-                                .frame(height: 100)
-                                .clipped()
-                                .cornerRadius(8)
 
                                 // Delete button
                                 Button {

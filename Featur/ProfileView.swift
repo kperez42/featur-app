@@ -387,18 +387,32 @@ private struct SignedInProfile: View {
                                         image
                                             .resizable()
                                             .scaledToFill()
-                                            .frame(height: 100)
+                                            .frame(width: 100, height: 100)
                                             .clipped()
                                             .cornerRadius(8)
-                                    default:
+                                    case .failure(_):
+                                        Rectangle()
+                                            .fill(.red.opacity(0.2))
+                                            .frame(width: 100, height: 100)
+                                            .cornerRadius(8)
+                                            .overlay(
+                                                Image(systemName: "exclamationmark.triangle")
+                                                    .foregroundStyle(.red)
+                                            )
+                                    case .empty:
                                         Rectangle()
                                             .fill(.gray.opacity(0.2))
-                                            .frame(height: 100)
+                                            .frame(width: 100, height: 100)
                                             .cornerRadius(8)
                                             .overlay(
                                                 ProgressView()
                                                     .tint(AppTheme.accent)
                                             )
+                                    @unknown default:
+                                        Rectangle()
+                                            .fill(.gray.opacity(0.2))
+                                            .frame(width: 100, height: 100)
+                                            .cornerRadius(8)
                                     }
                                 }
                             }
