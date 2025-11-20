@@ -408,7 +408,7 @@ private struct StatsRow: View {
     }
 
     private var stylesCount: Int {
-        profile.contentStyles?.count ?? 0
+        profile.contentStyles.count
     }
 
     var body: some View {
