@@ -247,10 +247,12 @@ private struct MainProfileContent: View {
                 }
             }
             .sheet(isPresented: $showEditSheet) {
-                EnhancedEditProfileSheet(profile: profile, viewModel: viewModel) {
-                    showSuccessBanner = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { showSuccessBanner = false }
+                if let currentProfile = viewModel.profile {
+                    EnhancedEditProfileSheet(profile: currentProfile, viewModel: viewModel) {
+                        showSuccessBanner = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation { showSuccessBanner = false }
+                        }
                     }
                 }
             }
@@ -2203,12 +2205,13 @@ private struct MainProfileContent: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") {
                             Task {
-                                var updated = profile
+                                // Get latest profile to avoid overwriting photos
+                                guard var updated = viewModel.profile else { return }
                                 updated.displayName = displayName
                                 updated.bio = bio.isEmpty ? nil : bio
                                 updated.interests = Array(selectedInterests)
                                 updated.contentStyles = Array(selectedContentStyles)
-                                updated.mediaURLs = galleryImageURLs.isEmpty ? nil : galleryImageURLs
+                                // DON'T set mediaURLs here - photos are saved immediately via addMediaURL/removeMediaURL
                                 await viewModel.updateProfile(updated)
                                 Haptics.notify(.success)
                                 onSave()
@@ -2284,6 +2287,13 @@ private struct MainProfileContent: View {
                     Button("OK", role: .cancel) { }
                 } message: {
                     Text(networkAlertMessage)
+                }
+                .onAppear {
+                    // Sync galleryImageURLs with latest profile data when sheet opens
+                    if let latestProfile = viewModel.profile {
+                        galleryImageURLs = latestProfile.mediaURLs ?? []
+                        print("🔄 Synced gallery photos on sheet open: \(galleryImageURLs.count) photos")
+                    }
                 }
             }
         }
