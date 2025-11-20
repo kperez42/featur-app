@@ -2237,6 +2237,12 @@ private struct MainProfileContent: View {
                         }
 
                         for photo in newPhotos {
+                            // Stop if we've reached the 6 photo limit
+                            guard galleryImageURLs.count < 6 else {
+                                print("⚠️ Reached 6 photo limit, stopping uploads")
+                                break
+                            }
+
                             if let data = try? await photo.loadTransferable(type: Data.self),
                                let image = UIImage(data: data),
                                let uid = Auth.auth().currentUser?.uid {
@@ -2246,7 +2252,9 @@ private struct MainProfileContent: View {
                                 if let compressed = resized.jpegData(compressionQuality: 0.5) {
                                     print("📦 Compressed image: \(data.count / 1024)KB → \(compressed.count / 1024)KB")
                                     if let url = await viewModel.uploadGalleryPhoto(userId: uid, imageData: compressed) {
-                                        galleryImageURLs.append(url)
+                                        await MainActor.run {
+                                            galleryImageURLs.append(url)
+                                        }
                                     }
                                 }
                             }
