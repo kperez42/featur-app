@@ -13,7 +13,7 @@ final class ProfileViewModel: ObservableObject {
 
     private let db = Firestore.firestore()
     private let storage = Storage.storage()
-    private let firebaseService = FireBaseService()
+    private let firebaseService = FirebaseService()
     
     // MARK: - Load Profile
     
