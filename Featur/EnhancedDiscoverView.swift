@@ -416,13 +416,23 @@ struct EnhancedDiscoverView: View {
 
 struct DiscoverProfileCard: View {
     let profile: UserProfile
-    
+    @State private var currentImageIndex = 0
+
+    private var mediaURLs: [String] {
+        profile.mediaURLs ?? []
+    }
+
+    private var hasMultipleImages: Bool {
+        mediaURLs.count > 1
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Profile Image
+            // Profile Image with Carousel
             ZStack(alignment: .topTrailing) {
-                if let firstMediaURL = (profile.mediaURLs ?? []).first {
-                    AsyncImage(url: URL(string: firstMediaURL)) { phase in
+                if !mediaURLs.isEmpty {
+                    let currentURL = mediaURLs[currentImageIndex]
+                    AsyncImage(url: URL(string: currentURL)) { phase in
                         switch phase {
                         case .success(let image):
                             image
@@ -432,10 +442,29 @@ struct DiscoverProfileCard: View {
                             AppTheme.gradient
                         }
                     }
+                    .id(currentImageIndex) // Force reload when index changes
                 } else {
                     AppTheme.gradient
                 }
-                
+
+                // Image Indicators (dots)
+                if hasMultipleImages {
+                    VStack {
+                        HStack(spacing: 4) {
+                            ForEach(0..<mediaURLs.count, id: \.self) { index in
+                                Circle()
+                                    .fill(index == currentImageIndex ? .white : .white.opacity(0.5))
+                                    .frame(width: 6, height: 6)
+                            }
+                        }
+                        .padding(8)
+                        .background(.black.opacity(0.3), in: Capsule())
+                        .padding(.top, 8)
+
+                        Spacer()
+                    }
+                }
+
                 // Verified Badge
                 if profile.isVerified ?? false {
                     Image(systemName: "checkmark.seal.fill")
@@ -446,6 +475,32 @@ struct DiscoverProfileCard: View {
             }
             .frame(height: 200)
             .clipped()
+            .overlay(
+                // Image Navigation Areas (tap left/right)
+                HStack(spacing: 0) {
+                    if hasMultipleImages {
+                        // Left tap area
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation {
+                                    currentImageIndex = max(0, currentImageIndex - 1)
+                                }
+                                Haptics.impact(.light)
+                            }
+
+                        // Right tap area
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation {
+                                    currentImageIndex = min(mediaURLs.count - 1, currentImageIndex + 1)
+                                }
+                                Haptics.impact(.light)
+                            }
+                    }
+                }
+            )
             
             // Profile Info
             VStack(alignment: .leading, spacing: 6) {

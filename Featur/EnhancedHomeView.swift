@@ -418,48 +418,101 @@ struct TinderSwipeCard: View {
 
 struct ProfileCardView: View {
     let profile: UserProfile
-    
+    @State private var currentImageIndex = 0
+
+    private var mediaURLs: [String] {
+        profile.mediaURLs ?? []
+    }
+
+    private var hasMultipleImages: Bool {
+        mediaURLs.count > 1
+    }
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
-                // Background Image/Gradient
-                if let firstMediaURL = profile.mediaURLs?.first,
-                   let url = URL(string: firstMediaURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                    
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .empty:
-                            // While loading: subtle gradient + blur shimmer
-                            ZStack {
-                                AppTheme.gradient
-                                Rectangle()
-                                    .fill(.ultraThinMaterial)
-                                    .opacity(0.4)
-                                ProgressView()
-                                    .tint(.white)
-                            }
-                            .transition(.opacity)
-                            
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .overlay(
-                                    // Add slight fade so gradient gently merges into image
-                                    AppTheme.gradient.opacity(0.15)
-                                )
+                // Background Image/Gradient with Carousel
+                if !mediaURLs.isEmpty {
+                    let currentURL = mediaURLs[currentImageIndex]
+                    if let url = URL(string: currentURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .empty:
+                                // While loading: subtle gradient + blur shimmer
+                                ZStack {
+                                    AppTheme.gradient
+                                    Rectangle()
+                                        .fill(.ultraThinMaterial)
+                                        .opacity(0.4)
+                                    ProgressView()
+                                        .tint(.white)
+                                }
                                 .transition(.opacity)
-                                .animation(.easeInOut(duration: 0.4), value: UUID()) // harmless trigger
 
-                        case .failure:
-                            AppTheme.gradient
-                        @unknown default:
-                            AppTheme.gradient
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .overlay(
+                                        // Add slight fade so gradient gently merges into image
+                                        AppTheme.gradient.opacity(0.15)
+                                    )
+                                    .transition(.opacity)
+                                    .animation(.easeInOut(duration: 0.4), value: UUID()) // harmless trigger
+
+                            case .failure:
+                                AppTheme.gradient
+                            @unknown default:
+                                AppTheme.gradient
+                            }
                         }
+                        .id(currentImageIndex) // Force reload when index changes
                     }
-                    
                 } else {
                     AppTheme.gradient
+                }
+
+                // Image Navigation Areas (tap left/right to navigate)
+                if hasMultipleImages {
+                    HStack(spacing: 0) {
+                        // Left tap area - previous image
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation {
+                                    currentImageIndex = max(0, currentImageIndex - 1)
+                                }
+                                Haptics.impact(.light)
+                            }
+
+                        // Right tap area - next image
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation {
+                                    currentImageIndex = min(mediaURLs.count - 1, currentImageIndex + 1)
+                                }
+                                Haptics.impact(.light)
+                            }
+                    }
+                }
+
+                // Image Indicators (dots at top)
+                if hasMultipleImages {
+                    VStack {
+                        HStack(spacing: 6) {
+                            ForEach(0..<mediaURLs.count, id: \.self) { index in
+                                Capsule()
+                                    .fill(index == currentImageIndex ? .white : .white.opacity(0.5))
+                                    .frame(height: 4)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+
+                        Spacer()
+                    }
                 }
 
                 
