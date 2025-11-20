@@ -2003,6 +2003,8 @@ private struct MainProfileContent: View {
         @State private var galleryImageURLs: [String]
         @State private var isUploading = false
         @State private var isUploadingGallery = false
+        @State private var showNetworkAlert = false
+        @State private var networkAlertMessage = ""
 
         let availableInterests = ["Music", "Art", "Gaming", "Fitness", "Travel", "Food", "Tech", "Fashion", "Sports", "Photography"]
         
@@ -2110,7 +2112,15 @@ private struct MainProfileContent: View {
                                         }
 
                                         Button {
+                                            let removedURL = galleryImageURLs[index]
                                             galleryImageURLs.remove(at: index)
+                                            // Save removal to Firestore immediately
+                                            if let uid = Auth.auth().currentUser?.uid {
+                                                Task {
+                                                    await viewModel.removeMediaURL(userId: uid, url: removedURL)
+                                                    print("🗑️ Photo removed from profile: \(galleryImageURLs.count)/6")
+                                                }
+                                            }
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
                                                 .foregroundStyle(.white)
@@ -2255,11 +2265,25 @@ private struct MainProfileContent: View {
                                         await MainActor.run {
                                             galleryImageURLs.append(url)
                                         }
+                                        // CRITICAL FIX: Save to Firestore immediately so photos don't get lost
+                                        await viewModel.addMediaURL(userId: uid, url: url)
+                                        print("✅ Photo saved to profile: \(galleryImageURLs.count)/6")
+                                    } else if let errorMsg = await viewModel.errorMessage {
+                                        // Show alert if upload failed (e.g., WiFi blocking)
+                                        await MainActor.run {
+                                            networkAlertMessage = errorMsg
+                                            showNetworkAlert = true
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                }
+                .alert("Upload Failed", isPresented: $showNetworkAlert) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text(networkAlertMessage)
                 }
             }
         }

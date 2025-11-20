@@ -161,10 +161,26 @@ final class ProfileViewModel: ObservableObject {
             let url = try await uploadImageToStorage(userId: userId, data: imageData, isGalleryPhoto: true)
             print("✅ Gallery photo uploaded: \(url)")
             return url
-        } catch {
-            self.errorMessage = "Failed to upload gallery photo: \(error.localizedDescription)"
-            print("❌ Error uploading gallery photo: \(error)")
-            print("   Error details: \(error)")
+        } catch let error as NSError {
+            // Check if this is a network/WiFi blocking issue
+            var isWiFiBlocking = false
+            if error.domain == NSURLErrorDomain && error.code == -1200 {
+                isWiFiBlocking = true
+            } else if error.domain == "FIRStorageErrorDomain",
+                      let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError,
+                      underlying.domain == NSURLErrorDomain && underlying.code == -1200 {
+                isWiFiBlocking = true
+            }
+
+            if isWiFiBlocking {
+                self.errorMessage = "⚠️ WiFi network blocking uploads. Please switch to cellular data and try again."
+                print("❌ WiFi network is blocking Firebase Storage connection")
+                print("   💡 Solution: Turn OFF WiFi and use cellular data for uploads")
+            } else {
+                self.errorMessage = "Failed to upload photo: \(error.localizedDescription)"
+                print("❌ Error uploading gallery photo: \(error)")
+            }
+            print("   Error details: code=\(error.code), domain=\(error.domain)")
             return nil
         }
     }
@@ -197,6 +213,35 @@ final class ProfileViewModel: ObservableObject {
         } catch {
             self.errorMessage = "Failed to add media: \(error.localizedDescription)"
             print("❌ Error adding media: \(error)")
+        }
+    }
+
+    // MARK: - Remove Media URL
+
+    func removeMediaURL(userId: String, url: String) async {
+        do {
+            try await db.collection("users")
+                .document(userId)
+                .updateData([
+                    "mediaURLs": FirebaseFirestore.FieldValue.arrayRemove([url])
+                ])
+
+            // Update local profile
+            if var currentProfile = self.profile {
+                var urls = currentProfile.mediaURLs ?? []
+                urls.removeAll { $0 == url }
+
+                // Reassign back into the struct
+                currentProfile.mediaURLs = urls.isEmpty ? nil : urls
+                self.profile = currentProfile
+                // Refresh cache timestamp
+                self.lastLoadTime = Date()
+            }
+
+            print("✅ Media URL removed")
+        } catch {
+            self.errorMessage = "Failed to remove media: \(error.localizedDescription)"
+            print("❌ Error removing media: \(error)")
         }
     }
     
