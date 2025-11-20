@@ -60,7 +60,7 @@ struct ProfileDetailView: View {
                     }
 
                     // Looking to Collaborate Section
-                    if let prefs = profile.collaborationPreferences, !prefs.isEmpty {
+                    if let prefs = profile.collaborationPreferences?.lookingFor, !prefs.isEmpty {
                         CollaborationSection(preferences: prefs)
                     }
 
@@ -461,7 +461,7 @@ private struct StatItem: View {
 
 // MARK: - Collaboration Section
 private struct CollaborationSection: View {
-    let preferences: [UserProfile.CollaborationType]
+    let preferences: [UserProfile.CollaborationPreferences.CollabType]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -475,7 +475,7 @@ private struct CollaborationSection: View {
             FlowLayout(spacing: 10) {
                 ForEach(preferences, id: \.self) { type in
                     HStack(spacing: 6) {
-                        Image(systemName: type.icon)
+                        Image(systemName: collabIcon(for: type))
                         Text(type.rawValue)
                     }
                     .font(.subheadline.weight(.medium))
@@ -496,6 +496,17 @@ private struct CollaborationSection: View {
             ),
             in: RoundedRectangle(cornerRadius: 16)
         )
+    }
+
+    private func collabIcon(for type: UserProfile.CollaborationPreferences.CollabType) -> String {
+        switch type {
+        case .twitchStream: return "gamecontroller.fill"
+        case .musicCollab: return "music.note"
+        case .podcastGuest: return "mic.fill"
+        case .tiktokLive: return "video.fill"
+        case .brandDeal: return "bag.fill"
+        case .contentSeries: return "film.fill"
+        }
     }
 }
 
