@@ -207,9 +207,14 @@ final class ProfileViewModel: ObservableObject {
                 self.profile = currentProfile
                 // Refresh cache timestamp
                 self.lastLoadTime = Date()
+
+                print("✅ Media URL added to profile")
+                print("   Total photos in profile: \(urls.count)")
+                print("   URLs: \(urls.map { String($0.suffix(20)) })")
+            } else {
+                print("⚠️ No current profile found to update")
             }
 
-            print("✅ Media URL added")
         } catch {
             self.errorMessage = "Failed to add media: \(error.localizedDescription)"
             print("❌ Error adding media: \(error)")
@@ -267,10 +272,17 @@ final class ProfileViewModel: ObservableObject {
 
     func refreshProfile() async {
         guard let uid = profile?.uid ?? Auth.auth().currentUser?.uid else { return }
+        print("🔄 Refreshing profile from Firestore...")
         // Force refresh by clearing cache
         cachedUID = nil
         lastLoadTime = nil
         await loadProfile(uid: uid)
+        if let refreshedProfile = self.profile {
+            print("✅ Profile refreshed - photos: \(refreshedProfile.mediaURLs?.count ?? 0)")
+            if let urls = refreshedProfile.mediaURLs {
+                print("   URLs: \(urls.map { String($0.suffix(20)) })")
+            }
+        }
     }
 
     func clearError() {

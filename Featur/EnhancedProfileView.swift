@@ -256,6 +256,14 @@ private struct MainProfileContent: View {
                     }
                 }
             }
+            .onChange(of: showEditSheet) { _, isShowing in
+                if isShowing {
+                    // Force refresh profile from Firestore when opening edit sheet
+                    Task {
+                        await viewModel.refreshProfile()
+                    }
+                }
+            }
             .sheet(isPresented: $showSettingsSheet) {
                 SettingsSheet()
             }
@@ -2288,11 +2296,14 @@ private struct MainProfileContent: View {
                 } message: {
                     Text(networkAlertMessage)
                 }
-                .onAppear {
+                .task {
+                    // Wait a tiny bit for profile refresh to complete, then sync
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                     // Sync galleryImageURLs with latest profile data when sheet opens
                     if let latestProfile = viewModel.profile {
                         galleryImageURLs = latestProfile.mediaURLs ?? []
                         print("🔄 Synced gallery photos on sheet open: \(galleryImageURLs.count) photos")
+                        print("   Photos: \(galleryImageURLs.map { String($0.suffix(20)) })")
                     }
                 }
             }
