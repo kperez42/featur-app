@@ -664,6 +664,14 @@ struct EditAccountView: View {
     @EnvironmentObject var auth: AuthViewModel
     @StateObject private var viewModel = EditAccountViewModel()
 
+    private var currentPhotoCount: Int {
+        auth.userProfile?.mediaURLs?.count ?? 0
+    }
+
+    private var photoSelectionLimit: Int {
+        max(1, 6 - currentPhotoCount)
+    }
+
     var body: some View {
         Form {
             // Profile Photo Section
@@ -956,17 +964,14 @@ struct EditAccountView: View {
                 }
 
                 // Upload new media
-                let currentCount = auth.userProfile?.mediaURLs?.count ?? 0
-                let availableSlots = max(1, 6 - currentCount)
-
                 PhotosPicker(selection: $viewModel.mediaSelections,
-                           maxSelectionCount: availableSlots,
+                           maxSelectionCount: photoSelectionLimit,
                            matching: .images,
                            photoLibrary: .shared()) {
                     HStack {
                         Image(systemName: "photo.on.rectangle.angled")
                             .foregroundStyle(.blue)
-                        Text("Add Photos to Gallery (\(currentCount)/6)")
+                        Text("Add Photos to Gallery (\(currentPhotoCount)/6)")
                         Spacer()
                         if viewModel.isUploadingMedia {
                             ProgressView()
@@ -976,9 +981,9 @@ struct EditAccountView: View {
                         }
                     }
                 }
-                .disabled(viewModel.isUploadingMedia || currentCount >= 6)
+                .disabled(viewModel.isUploadingMedia || currentPhotoCount >= 6)
 
-                if viewModel.isUploadingMedia {
+                if viewModel.isUploadingMedia, viewModel.uploadProgress.1 > 0 {
                     HStack {
                         Text("Uploading \(viewModel.uploadProgress.0) of \(viewModel.uploadProgress.1)...")
                             .font(.caption)
@@ -992,8 +997,7 @@ struct EditAccountView: View {
                 Text("Media Gallery")
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
-                    let currentCount = auth.userProfile?.mediaURLs?.count ?? 0
-                    Text("Add up to 6 photos to showcase your content. You have \(currentCount) photo\(currentCount == 1 ? "" : "s").")
+                    Text("Add up to 6 photos to showcase your content. You have \(currentPhotoCount) photo\(currentPhotoCount == 1 ? "" : "s").")
                     if let message = viewModel.mediaStatusMessage {
                         Text(message)
                             .foregroundStyle(viewModel.mediaUploadSuccess ? .green : .red)
