@@ -532,7 +532,13 @@ final class FirebaseService: ObservableObject {
         for attempt in 0..<maxRetries {
             do {
                 print("⬆️ Upload attempt \(attempt + 1)/\(maxRetries) to: \(path)")
-                let _ = try await ref.putDataAsync(data)
+                print("   Data size: \(data.count / 1024)KB")
+
+                // Use simple putDataAsync without metadata (simpler, less prone to errors)
+                let metadata = StorageMetadata()
+                metadata.contentType = "image/jpeg"
+
+                let _ = try await ref.putDataAsync(data, metadata: metadata)
                 let url = try await ref.downloadURL().absoluteString
                 print("✅ Upload successful: \(url)")
                 return url
@@ -542,24 +548,46 @@ final class FirebaseService: ObservableObject {
                 print("   Error code: \(error.code), domain: \(error.domain)")
 
                 // Check if it's a retryable network error
-                let isNetworkError = error.domain == NSURLErrorDomain &&
-                    (error.code == NSURLErrorTimedOut ||
+                // Firebase Storage wraps network errors in FIRStorageErrorDomain (-13000)
+                // Need to check both the outer error AND underlying error
+                var isNetworkError = false
+
+                // Direct NSURLError
+                if error.domain == NSURLErrorDomain &&
+                    (error.code == -1200 || // NSURLErrorSecureConnectionFailed
+                     error.code == NSURLErrorTimedOut ||
                      error.code == NSURLErrorCannotConnectToHost ||
                      error.code == NSURLErrorNetworkConnectionLost ||
-                     error.code == NSURLErrorSecureConnectionFailed ||
-                     error.code == NSURLErrorNotConnectedToInternet)
+                     error.code == NSURLErrorNotConnectedToInternet) {
+                    isNetworkError = true
+                }
+
+                // Firebase Storage error wrapping NSURLError
+                if error.domain == "FIRStorageErrorDomain" && error.code == -13000 {
+                    if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+                        print("   Underlying error: code \(underlying.code), domain: \(underlying.domain)")
+                        if underlying.domain == NSURLErrorDomain &&
+                            (underlying.code == -1200 ||
+                             underlying.code == NSURLErrorTimedOut ||
+                             underlying.code == NSURLErrorCannotConnectToHost ||
+                             underlying.code == NSURLErrorNetworkConnectionLost ||
+                             underlying.code == NSURLErrorNotConnectedToInternet) {
+                            isNetworkError = true
+                        }
+                    }
+                }
 
                 if isNetworkError && attempt < maxRetries - 1 {
                     let delay = pow(2.0, Double(attempt)) // Exponential backoff: 1s, 2s, 4s
-                    print("   Retrying in \(delay)s...")
+                    print("   Network error detected - retrying in \(delay)s...")
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 } else if !isNetworkError {
                     // Not a network error, don't retry
                     print("   Non-retryable error, failing immediately")
                     throw error
                 } else {
-                    // Last attempt or non-retryable
-                    print("   All retry attempts exhausted")
+                    // Last attempt exhausted
+                    print("   All \(maxRetries) retry attempts exhausted")
                     throw error
                 }
             }
