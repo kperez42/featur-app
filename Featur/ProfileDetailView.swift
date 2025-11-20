@@ -65,8 +65,8 @@ struct ProfileDetailView: View {
                     }
 
                     // Content Styles
-                    if let styles = profile.contentStyles, !styles.isEmpty {
-                        ContentStylesSection(styles: styles)
+                    if !profile.contentStyles.isEmpty {
+                        ContentStylesSection(styles: profile.contentStyles)
                     }
 
                     // Social Links
