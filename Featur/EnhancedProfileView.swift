@@ -1667,7 +1667,7 @@ private struct MainProfileContent: View {
                     .padding(.horizontal)
                 }
                 
-                if (profile.mediaURLs ?? []).isEmpty {
+                if !(profile.mediaURLs ?? []).isEmpty {
                     TabView(selection: $currentIndex) {
                         ForEach(Array((profile.mediaURLs ?? []).prefix(5).enumerated()), id: \.offset) { index, url in
                             FeaturedContentCard(imageURL: url, index: index)
@@ -1698,14 +1698,16 @@ private struct MainProfileContent: View {
                         image
                             .resizable()
                             .scaledToFill()
+                            .frame(maxWidth: .infinity, maxHeight: 280)
                     case .empty:
                         Color.gray.opacity(0.2)
                             .overlay(ProgressView())
+                            .frame(maxWidth: .infinity, maxHeight: 280)
                     default:
                         Color.gray.opacity(0.2)
+                            .frame(maxWidth: .infinity, maxHeight: 280)
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: 280)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 
                 // Gradient Overlay
