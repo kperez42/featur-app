@@ -2078,7 +2078,7 @@ private struct MainProfileContent: View {
 
                             // Photo grid
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                                ForEach(Array(galleryImageURLs.enumerated()), id: \.offset) { index, url in
+                                ForEach(galleryImageURLs, id: \.self) { url in
                                     ZStack(alignment: .topTrailing) {
                                         AsyncImage(url: URL(string: url)) { phase in
                                             switch phase {
@@ -2112,12 +2112,12 @@ private struct MainProfileContent: View {
                                         }
 
                                         Button {
-                                            let removedURL = galleryImageURLs[index]
-                                            galleryImageURLs.remove(at: index)
+                                            // Use removeAll with closure to safely remove by URL
+                                            galleryImageURLs.removeAll { $0 == url }
                                             // Save removal to Firestore immediately
                                             if let uid = Auth.auth().currentUser?.uid {
                                                 Task {
-                                                    await viewModel.removeMediaURL(userId: uid, url: removedURL)
+                                                    await viewModel.removeMediaURL(userId: uid, url: url)
                                                     print("🗑️ Photo removed from profile: \(galleryImageURLs.count)/6")
                                                 }
                                             }
