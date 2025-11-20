@@ -156,6 +156,14 @@ private struct SignedInProfile: View {
             SettingsSheet()
                 .environmentObject(auth)
         }
+        .onChange(of: showSettings) { _, isShowing in
+            if !isShowing {
+                // Refresh profile when returning from settings
+                Task {
+                    await profileViewModel.refreshProfile()
+                }
+            }
+        }
     }
     
     // MARK: - Profile Header
@@ -363,7 +371,42 @@ private struct SignedInProfile: View {
                     }
                 }
             }
-            
+
+            // Photo Gallery Card
+            if let mediaURLs = profile.mediaURLs, !mediaURLs.isEmpty {
+                GlassCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("My Photos", systemImage: "photo.on.rectangle.angled")
+                            .font(.headline)
+
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
+                                AsyncImage(url: URL(string: url)) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(height: 100)
+                                            .clipped()
+                                            .cornerRadius(8)
+                                    default:
+                                        Rectangle()
+                                            .fill(.gray.opacity(0.2))
+                                            .frame(height: 100)
+                                            .cornerRadius(8)
+                                            .overlay(
+                                                ProgressView()
+                                                    .tint(AppTheme.accent)
+                                            )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Social Links Card
             if profile.socialLinks?.tiktok != nil ||
                profile.socialLinks?.instagram != nil ||
