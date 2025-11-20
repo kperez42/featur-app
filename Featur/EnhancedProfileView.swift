@@ -3000,12 +3000,83 @@ private struct MainProfileContent: View {
     struct ProfilePreviewView: View {
         let profile: UserProfile
         @Environment(\.dismiss) var dismiss
+        @State private var selectedImageIndex = 0
+
+        // Combine profile photo + gallery photos for carousel
+        private var allPhotos: [String] {
+            var photos: [String] = []
+            // Add gallery photos first
+            if let mediaURLs = profile.mediaURLs, !mediaURLs.isEmpty {
+                photos.append(contentsOf: mediaURLs)
+            }
+            // Add profile photo at the end if not already in gallery
+            if let profileImage = profile.profileImageURL,
+               !photos.contains(profileImage) {
+                photos.append(profileImage)
+            }
+            return photos
+        }
 
         var body: some View {
             NavigationStack {
                 ScrollView {
                     VStack(spacing: 20) {
-                        PreviewProfileImage(imageURL: profile.profileImageURL)
+                        // Photo Gallery Carousel (like ProfileDetailView)
+                        if !allPhotos.isEmpty {
+                            TabView(selection: $selectedImageIndex) {
+                                ForEach(Array(allPhotos.enumerated()), id: \.offset) { index, url in
+                                    AsyncImage(url: URL(string: url)) { phase in
+                                        switch phase {
+                                        case .success(let image):
+                                            image
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: UIScreen.main.bounds.width, height: 400)
+                                                .clipped()
+                                        case .empty:
+                                            Rectangle()
+                                                .fill(AppTheme.accent.opacity(0.2))
+                                                .frame(width: UIScreen.main.bounds.width, height: 400)
+                                                .overlay(ProgressView().tint(.white))
+                                        case .failure(_):
+                                            Rectangle()
+                                                .fill(.red.opacity(0.2))
+                                                .frame(width: UIScreen.main.bounds.width, height: 400)
+                                                .overlay(
+                                                    Image(systemName: "exclamationmark.triangle")
+                                                        .foregroundStyle(.red)
+                                                )
+                                        @unknown default:
+                                            Rectangle()
+                                                .fill(AppTheme.accent.opacity(0.2))
+                                                .frame(width: UIScreen.main.bounds.width, height: 400)
+                                        }
+                                    }
+                                    .tag(index)
+                                }
+                            }
+                            .tabViewStyle(.page(indexDisplayMode: .always))
+                            .frame(height: 400)
+
+                            // Photo counter
+                            if allPhotos.count > 1 {
+                                Text("\(selectedImageIndex + 1) / \(allPhotos.count)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, -10)
+                            }
+                        } else {
+                            // Fallback if no photos
+                            Rectangle()
+                                .fill(AppTheme.accent.opacity(0.2))
+                                .frame(height: 300)
+                                .overlay(
+                                    Image(systemName: "person.circle.fill")
+                                        .font(.system(size: 80))
+                                        .foregroundStyle(AppTheme.accent)
+                                )
+                        }
+
                         PreviewContentSection(profile: profile)
                     }
                 }
