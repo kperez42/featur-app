@@ -3,7 +3,6 @@ import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
 import PhotosUI
-import Photos
 
 // MARK: - Stats Period Enum
 enum StatsPeriod: String, CaseIterable {
@@ -2363,8 +2362,6 @@ private struct MainProfileContent: View {
 
         @State private var showShareSheet = false
         @State private var qrImage: UIImage?
-        @State private var showSaveSuccess = false
-        @State private var showPermissionAlert = false
         
         var body: some View {
             NavigationStack {
@@ -2424,37 +2421,20 @@ private struct MainProfileContent: View {
                     
                     Spacer()
                     
-                    HStack(spacing: 16) {
-                        Button {
-                            Task {
-                                await saveQRCode()
-                            }
-                        } label: {
-                            HStack {
-                                Image(systemName: "square.and.arrow.down")
-                                Text("Save")
-                            }
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                    // Save/Share button - uses system Share sheet (no permissions needed)
+                    Button {
+                        showShareSheet = true
+                        Haptics.impact(.medium)
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("Save or Share")
                         }
-                        
-                        Button {
-                            showShareSheet = true
-                            Haptics.impact(.medium)
-                        } label: {
-                            HStack {
-                                Image(systemName: "square.and.arrow.up")
-                                Text("Share")
-                            }
-                            .font(.headline)
-                            .foregroundStyle(AppTheme.accent)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(AppTheme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
-                        }
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal, 32)
                     .padding(.bottom, 20)
@@ -2483,67 +2463,6 @@ private struct MainProfileContent: View {
                         ShareSheet(items: [qrImage])
                     }
                 }
-                .alert("QR Code Saved!", isPresented: $showSaveSuccess) {
-                    Button("OK", role: .cancel) { }
-                } message: {
-                    Text("Your QR code has been saved to Photos")
-                }
-                .alert("Permission Required", isPresented: $showPermissionAlert) {
-                    Button("Open Settings", role: .none) {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
-                        }
-                    }
-                    Button("Cancel", role: .cancel) { }
-                } message: {
-                    Text("Please allow Featur to access your Photos in Settings to save the QR code")
-                }
-            }
-        }
-
-        // MARK: - Save QR Code with Permission Check
-        @MainActor
-        private func saveQRCode() async {
-            guard let qrImage = qrImage else { return }
-
-            // Check photo library permission
-            let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-
-            switch status {
-            case .authorized, .limited:
-                // Permission granted, save the image
-                await saveImageToLibrary(qrImage)
-
-            case .notDetermined:
-                // Request permission
-                let newStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-                if newStatus == .authorized || newStatus == .limited {
-                    await saveImageToLibrary(qrImage)
-                } else {
-                    showPermissionAlert = true
-                }
-
-            case .denied, .restricted:
-                // Show alert to open settings
-                showPermissionAlert = true
-
-            @unknown default:
-                showPermissionAlert = true
-            }
-        }
-
-        @MainActor
-        private func saveImageToLibrary(_ image: UIImage) async {
-            do {
-                try await PHPhotoLibrary.shared().performChanges {
-                    PHAssetChangeRequest.creationRequestForAsset(from: image)
-                }
-                showSaveSuccess = true
-                Haptics.notify(.success)
-                print("✅ QR code saved to photo library")
-            } catch {
-                print("❌ Failed to save QR code: \(error)")
-                showPermissionAlert = true
             }
         }
     }
