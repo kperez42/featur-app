@@ -602,13 +602,56 @@ private struct MainProfileContent: View {
             }
 
             let doubleValue = Double(currentValue)
-            // Generate a growth curve leading up to current value
-            // Values go from ~60% to 100% of current value over 7 days
-            return (0..<7).map { index in
-                let progress = Double(index) / 6.0  // 0.0 to 1.0
-                let growthFactor = 0.6 + (progress * 0.4)  // 0.6 to 1.0
-                return doubleValue * growthFactor
+
+            // Generate realistic data with natural fluctuations
+            // Use consistent seed based on current value for reproducibility
+            var generator = SeededRandomGenerator(seed: UInt64(currentValue))
+
+            // Start from a lower base value
+            let startValue = doubleValue * Double.random(in: 0.5...0.7, using: &generator)
+            var data: [Double] = [startValue]
+
+            // Generate 6 more days with realistic ups and downs
+            for i in 1..<7 {
+                let previousValue = data[i - 1]
+                let targetValue = doubleValue // We want to trend toward current value
+
+                // Calculate how far we still need to grow
+                let remainingGrowth = targetValue - previousValue
+                let daysRemaining = Double(7 - i)
+
+                // Base growth per day (to reach target)
+                let baseGrowth = remainingGrowth / daysRemaining
+
+                // Add realistic variation (+/- 30% of base growth)
+                let variation = baseGrowth * Double.random(in: -0.3...0.5, using: &generator)
+                let dailyChange = baseGrowth + variation
+
+                // Calculate next value, ensuring we don't go negative or overshoot too much
+                var nextValue = previousValue + dailyChange
+                nextValue = max(0, min(nextValue, targetValue * 1.1))
+
+                data.append(nextValue)
             }
+
+            // Ensure last value is exactly the current value
+            data[6] = doubleValue
+
+            return data
+        }
+    }
+
+    // Custom random generator with seed for reproducible "random" data
+    struct SeededRandomGenerator: RandomNumberGenerator {
+        private var state: UInt64
+
+        init(seed: UInt64) {
+            self.state = seed
+        }
+
+        mutating func next() -> UInt64 {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return state
         }
     }
     
