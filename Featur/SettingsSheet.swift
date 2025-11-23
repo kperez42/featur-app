@@ -8,17 +8,97 @@ import FirebaseFirestore
 struct SettingsSheet: View {
     @EnvironmentObject var auth: AuthViewModel
     @StateObject private var viewModel = SettingsViewModel()
+    @StateObject private var store = StoreKitManager.shared
     @Environment(\.dismiss) var dismiss
-    
+
     @State private var showDeleteConfirmation = false
     @State private var showLogoutConfirmation = false
     @State private var showBlockedUsers = false
     @State private var showPrivacyPolicy = false
     @State private var showTerms = false
-    
+    @State private var showFeaturedSheet = false
+
     var body: some View {
         NavigationStack {
             List {
+                // FEATUREd Subscription Section (NEW!)
+                Section {
+                    if viewModel.isFeatured {
+                        // Active subscription view
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "star.fill")
+                                    .foregroundStyle(.yellow)
+                                    .font(.title2)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("FEATUREd")
+                                        .font(.headline)
+
+                                    if let expiresAt = viewModel.featuredExpiresAt {
+                                        Text("Active until \(expiresAt.formatted(date: .abbreviated, time: .shortened))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                    .font(.title3)
+                            }
+
+                            // Featured status badge
+                            HStack {
+                                Text("✨ Your profile is being featured")
+                                    .font(.caption)
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(AppTheme.accent, in: Capsule())
+                            }
+                        }
+                        .padding(.vertical, 8)
+                    } else {
+                        // Inactive - promote getting featured
+                        Button {
+                            showFeaturedSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "star.circle")
+                                    .foregroundStyle(.yellow)
+                                    .font(.title2)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Get FEATUREd")
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+
+                                    Text("Boost your visibility and reach thousands")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.secondary)
+                                    .font(.caption)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                    }
+                } header: {
+                    Text("FEATUREd Status")
+                } footer: {
+                    if viewModel.isFeatured {
+                        Text("Your profile is currently featured in the FEATUREd tab.")
+                    } else {
+                        Text("Get featured to increase your profile visibility by 10x.")
+                    }
+                }
+
                 // Account Section
                 Section {
                     NavigationLink {
@@ -256,6 +336,12 @@ struct SettingsSheet: View {
             .sheet(isPresented: $showTerms) {
                 WebViewSheet(url: "https://featur.app/terms", title: "Terms of Service")
             }
+            .sheet(isPresented: $showFeaturedSheet) {
+                GetFeaturedSheet()
+            }
+            .task {
+                await viewModel.checkFeaturedStatus()
+            }
         }
     }
 }
@@ -290,13 +376,40 @@ final class SettingsViewModel: ObservableObject {
     @Published var appearsInDiscovery = true
     @Published var autoplayVideos = true
     @Published var highQualityUploads = false
-    
+
+    // Featured status
+    @Published var isFeatured = false
+    @Published var featuredExpiresAt: Date?
+
     var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
-    
+
     var buildNumber: String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
+    func checkFeaturedStatus() async {
+        do {
+            isFeatured = try await StoreKitManager.shared.isUserCurrentlyFeatured()
+
+            // Get expiration date if featured
+            if isFeatured, let userId = Auth.auth().currentUser?.uid {
+                let snapshot = try await Firestore.firestore()
+                    .collection("featured")
+                    .document(userId)
+                    .getDocument()
+
+                if let data = snapshot.data(),
+                   let expiresAt = (data["expiresAt"] as? Timestamp)?.dateValue() {
+                    featuredExpiresAt = expiresAt
+                }
+            }
+        } catch {
+            print("❌ Error checking featured status: \(error)")
+            isFeatured = false
+            featuredExpiresAt = nil
+        }
     }
     
     func updateNotificationPermissions(enabled: Bool) {
