@@ -55,6 +55,27 @@ class StoreKitManager: ObservableObject {
     // MARK: - Product Loading
 
     func loadProducts() async {
+        #if DEBUG
+        // 🧪 In DEBUG mode, simulate products if none are configured in App Store Connect
+        do {
+            let productIDs = FeaturedProduct.allCases.map { $0.rawValue }
+            let storeProducts = try await Product.products(for: productIDs)
+
+            if storeProducts.isEmpty {
+                print("⚠️ No products in App Store Connect - using simulated products for testing")
+                purchaseError = nil // Clear any error
+                // Products will remain empty but we'll handle this in the UI with a test mode
+                // The purchase flow will be simulated in the purchase() function
+            } else {
+                products = storeProducts
+                print("✅ Loaded \(products.count) real products from App Store Connect")
+            }
+        } catch {
+            print("⚠️ Failed to load products: \(error) - using simulated mode for testing")
+            purchaseError = nil // Clear error in debug mode
+        }
+        #else
+        // Production mode - load real products
         do {
             let productIDs = FeaturedProduct.allCases.map { $0.rawValue }
             products = try await Product.products(for: productIDs)
@@ -79,6 +100,7 @@ class StoreKitManager: ObservableObject {
                 context: error.localizedDescription
             )
         }
+        #endif
     }
 
     // MARK: - Purchase
@@ -155,6 +177,63 @@ class StoreKitManager: ObservableObject {
             purchaseError = "Failed to restore purchases"
         }
     }
+
+    #if DEBUG
+    // MARK: - 🧪 Simulate Test Purchase (DEBUG only)
+
+    func simulateTestPurchase(productId: String) async throws {
+        print("🧪 DEBUG: Simulating purchase for product: \(productId)")
+
+        // Check if user is already featured
+        if try await isUserCurrentlyFeatured() {
+            purchaseError = "You're already featured! Wait for your current placement to expire."
+            throw NSError(domain: "TestPurchase", code: -1, userInfo: [NSLocalizedDescriptionKey: "Already featured"])
+        }
+
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "TestPurchase", code: -2, userInfo: [NSLocalizedDescriptionKey: "No authenticated user"])
+        }
+
+        // Determine duration based on product ID
+        let duration: Int
+        if productId.contains("24h") {
+            duration = 1
+        } else if productId.contains("7d") {
+            duration = 7
+        } else if productId.contains("30d") {
+            duration = 30
+        } else {
+            duration = 1
+        }
+
+        // Calculate expiration date
+        let expiresAt = Calendar.current.date(byAdding: .day, value: duration, to: Date()) ?? Date()
+
+        // Fetch user profile
+        let profile = try await service.fetchProfile(uid: currentUserId)
+
+        // Create featured entry in Firestore
+        let featuredData: [String: Any] = [
+            "userId": currentUserId,
+            "category": "Featured",
+            "highlightText": profile?.bio ?? "Content creator on Featur",
+            "featuredAt": FieldValue.serverTimestamp(),
+            "expiresAt": expiresAt,
+            "priority": 1,
+            "transactionId": "test_\(UUID().uuidString)",
+            "productId": productId,
+            "status": "active",
+            "testMode": true // Mark as test purchase
+        ]
+
+        try await Firestore.firestore()
+            .collection("featured")
+            .document(currentUserId)
+            .setData(featuredData, merge: true)
+
+        print("✅ 🧪 Test featured placement granted until \(expiresAt)")
+    }
+    #endif
 
     // MARK: - Check if User Already Featured
 

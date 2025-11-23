@@ -656,7 +656,7 @@ struct GetFeaturedSheet: View {
 
                         if store.products.isEmpty {
                             if let error = store.purchaseError {
-                                // Show error state if products failed to load
+                                // Show error state if products failed to load (production only)
                                 VStack(spacing: 12) {
                                     Image(systemName: "exclamationmark.triangle.fill")
                                         .font(.system(size: 48))
@@ -686,9 +686,47 @@ struct GetFeaturedSheet: View {
                                 }
                                 .padding(.vertical, 40)
                             } else {
+                                #if DEBUG
+                                // 🧪 DEBUG MODE: Show test products
+                                VStack(spacing: 12) {
+                                    TestProductCard(
+                                        duration: "24 Hours",
+                                        price: "$4.99",
+                                        productId: FeaturedProduct.featured24h.rawValue,
+                                        features: ["24-hour spotlight", "Featured badge", "Priority support"],
+                                        store: store,
+                                        onPurchaseSuccess: { showSuccess = true }
+                                    )
+
+                                    TestProductCard(
+                                        duration: "7 Days",
+                                        price: "$19.99",
+                                        productId: FeaturedProduct.featured7d.rawValue,
+                                        popular: true,
+                                        features: ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"],
+                                        store: store,
+                                        onPurchaseSuccess: { showSuccess = true }
+                                    )
+
+                                    TestProductCard(
+                                        duration: "30 Days",
+                                        price: "$59.99",
+                                        productId: FeaturedProduct.featured30d.rawValue,
+                                        features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"],
+                                        store: store,
+                                        onPurchaseSuccess: { showSuccess = true }
+                                    )
+
+                                    Text("🧪 Test Mode - Products not configured in App Store Connect")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange)
+                                        .padding(.top, 8)
+                                }
+                                #else
                                 // Show loading state
                                 ProgressView("Loading plans...")
                                     .padding()
+                                #endif
                             }
                         } else {
                             ForEach(store.products, id: \.id) { product in
@@ -869,6 +907,111 @@ struct PricingCard: View {
         )
     }
 }
+
+// MARK: - Test Product Card (for DEBUG mode)
+
+#if DEBUG
+struct TestProductCard: View {
+    let duration: String
+    let price: String
+    let productId: String
+    var popular: Bool = false
+    let features: [String]
+    @ObservedObject var store: StoreKitManager
+    let onPurchaseSuccess: () -> Void
+
+    @State private var isPurchasing = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(duration)
+                        .font(.headline)
+                    Text(price)
+                        .font(.title.bold())
+                        .foregroundStyle(AppTheme.accent)
+                }
+
+                Spacer()
+
+                if popular {
+                    Text("POPULAR")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppTheme.accent, in: Capsule())
+                }
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(features, id: \.self) { feature in
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                        Text(feature)
+                            .font(.caption)
+                    }
+                }
+            }
+
+            Button {
+                Task {
+                    await simulatePurchase()
+                }
+            } label: {
+                if isPurchasing {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                } else {
+                    Text("Select Plan (Test)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+            }
+            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+            .disabled(isPurchasing)
+        }
+        .padding()
+        .background(
+            popular ? AppTheme.accent.opacity(0.1) : AppTheme.card,
+            in: RoundedRectangle(cornerRadius: 16)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(popular ? AppTheme.accent : Color.clear, lineWidth: 2)
+        )
+    }
+
+    private func simulatePurchase() async {
+        isPurchasing = true
+        Haptics.impact(.medium)
+
+        // Simulate network delay
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+        // Simulate granting featured placement
+        do {
+            try await store.simulateTestPurchase(productId: productId)
+            Haptics.notify(.success)
+            onPurchaseSuccess()
+        } catch {
+            Haptics.notify(.error)
+            print("❌ Test purchase failed: \(error)")
+        }
+
+        isPurchasing = false
+    }
+}
+#endif
 
 // MARK: - Featured Category
 
