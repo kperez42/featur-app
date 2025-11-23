@@ -1064,8 +1064,12 @@ private struct MainProfileContent: View {
     // MARK: - Content Preview Section
     private struct ContentPreviewSection: View {
         let profile: UserProfile
-        @State private var selectedImageURL: String?
+        @State private var selectedImageIndex: Int = 0
         @State private var showFullScreenImage = false
+
+        private var contentImages: [String] {
+            profile.mediaURLs ?? []
+        }
 
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
@@ -1073,10 +1077,10 @@ private struct MainProfileContent: View {
                     .font(.headline)
                     .padding(.horizontal)
 
-                if (profile.mediaURLs?.isEmpty == false) {
+                if !contentImages.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach((profile.mediaURLs ?? []).prefix(6), id: \.self) { url in
+                            ForEach(Array(contentImages.enumerated()), id: \.offset) { index, url in
                                 AsyncImage(url: URL(string: url)) { phase in
                                     switch phase {
                                     case .success(let image):
@@ -1086,7 +1090,7 @@ private struct MainProfileContent: View {
                                             .frame(width: 120, height: 160)
                                             .clipShape(RoundedRectangle(cornerRadius: 12))
                                             .onTapGesture {
-                                                selectedImageURL = url
+                                                selectedImageIndex = index
                                                 showFullScreenImage = true
                                             }
                                     case .empty:
@@ -1110,9 +1114,7 @@ private struct MainProfileContent: View {
                 }
             }
             .fullScreenCover(isPresented: $showFullScreenImage) {
-                if let imageURL = selectedImageURL {
-                    FullScreenImageViewer(imageURL: imageURL)
-                }
+                FullScreenImageViewer(images: contentImages, startingIndex: selectedImageIndex)
             }
         }
     }
@@ -3248,9 +3250,7 @@ private struct MainProfileContent: View {
                     await presenceManager.fetchOnlineStatus(userId: profile.uid)
                 }
                 .fullScreenCover(isPresented: $showFullScreenImage) {
-                    if selectedImageIndex < allPhotos.count {
-                        FullScreenImageViewer(imageURL: allPhotos[selectedImageIndex])
-                    }
+                    FullScreenImageViewer(images: allPhotos, startingIndex: selectedImageIndex)
                 }
             }
         }
@@ -4440,92 +4440,68 @@ private struct MainProfileContent: View {
 
     // MARK: - Full Screen Image Viewer
     private struct FullScreenImageViewer: View {
-        let imageURL: String
+        let images: [String]
+        let startingIndex: Int
         @Environment(\.dismiss) var dismiss
+        @State private var currentIndex: Int
         @State private var scale: CGFloat = 1.0
         @State private var lastScale: CGFloat = 1.0
         @State private var offset: CGSize = .zero
         @State private var lastOffset: CGSize = .zero
 
+        init(images: [String], startingIndex: Int) {
+            self.images = images
+            self.startingIndex = startingIndex
+            _currentIndex = State(initialValue: startingIndex)
+        }
+
+        // Convenience init for single image
+        init(imageURL: String) {
+            self.init(images: [imageURL], startingIndex: 0)
+        }
+
         var body: some View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                AsyncImage(url: URL(string: imageURL)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .scaleEffect(scale)
-                            .offset(offset)
-                            .gesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        scale = lastScale * value
-                                    }
-                                    .onEnded { _ in
-                                        lastScale = scale
-                                        // Reset if zoomed out too much
-                                        if scale < 1.0 {
-                                            withAnimation {
-                                                scale = 1.0
-                                                lastScale = 1.0
-                                                offset = .zero
-                                                lastOffset = .zero
-                                            }
-                                        }
-                                    }
-                            )
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        if scale > 1.0 {
-                                            offset = CGSize(
-                                                width: lastOffset.width + value.translation.width,
-                                                height: lastOffset.height + value.translation.height
-                                            )
-                                        }
-                                    }
-                                    .onEnded { _ in
-                                        lastOffset = offset
-                                    }
-                            )
-                            .onTapGesture(count: 2) {
-                                // Double tap to zoom
-                                withAnimation {
-                                    if scale > 1.0 {
-                                        scale = 1.0
-                                        lastScale = 1.0
-                                        offset = .zero
-                                        lastOffset = .zero
-                                    } else {
-                                        scale = 2.0
-                                        lastScale = 2.0
-                                    }
-                                }
-                            }
-                    case .empty:
-                        ProgressView()
-                            .tint(.white)
-                    case .failure:
-                        VStack(spacing: 12) {
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.white)
-                            Text("Failed to load image")
-                                .foregroundStyle(.white)
-                        }
-                    @unknown default:
-                        ProgressView()
-                            .tint(.white)
+                TabView(selection: $currentIndex) {
+                    ForEach(Array(images.enumerated()), id: \.offset) { index, url in
+                        ZoomableImageView(
+                            imageURL: url,
+                            scale: index == currentIndex ? $scale : .constant(1.0),
+                            lastScale: index == currentIndex ? $lastScale : .constant(1.0),
+                            offset: index == currentIndex ? $offset : .constant(.zero),
+                            lastOffset: index == currentIndex ? $lastOffset : .constant(.zero)
+                        )
+                        .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .onChange(of: currentIndex) { _ in
+                    // Reset zoom when swiping to another image
+                    withAnimation {
+                        scale = 1.0
+                        lastScale = 1.0
+                        offset = .zero
+                        lastOffset = .zero
                     }
                 }
 
-                // Close button
+                // Top overlay with close button and counter
                 VStack {
                     HStack {
+                        if images.count > 1 {
+                            Text("\(currentIndex + 1) / \(images.count)")
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .padding(.leading)
+                        }
+
                         Spacer()
+
                         Button {
                             dismiss()
                         } label: {
@@ -4537,6 +4513,88 @@ private struct MainProfileContent: View {
                         .padding()
                     }
                     Spacer()
+                }
+            }
+        }
+    }
+
+    // MARK: - Zoomable Image View
+    private struct ZoomableImageView: View {
+        let imageURL: String
+        @Binding var scale: CGFloat
+        @Binding var lastScale: CGFloat
+        @Binding var offset: CGSize
+        @Binding var lastOffset: CGSize
+
+        var body: some View {
+            AsyncImage(url: URL(string: imageURL)) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .gesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    scale = lastScale * value
+                                }
+                                .onEnded { _ in
+                                    lastScale = scale
+                                    // Reset if zoomed out too much
+                                    if scale < 1.0 {
+                                        withAnimation {
+                                            scale = 1.0
+                                            lastScale = 1.0
+                                            offset = .zero
+                                            lastOffset = .zero
+                                        }
+                                    }
+                                }
+                        )
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    if scale > 1.0 {
+                                        offset = CGSize(
+                                            width: lastOffset.width + value.translation.width,
+                                            height: lastOffset.height + value.translation.height
+                                        )
+                                    }
+                                }
+                                .onEnded { _ in
+                                    lastOffset = offset
+                                }
+                        )
+                        .onTapGesture(count: 2) {
+                            // Double tap to zoom
+                            withAnimation {
+                                if scale > 1.0 {
+                                    scale = 1.0
+                                    lastScale = 1.0
+                                    offset = .zero
+                                    lastOffset = .zero
+                                } else {
+                                    scale = 2.0
+                                    lastScale = 2.0
+                                }
+                            }
+                        }
+                case .empty:
+                    ProgressView()
+                        .tint(.white)
+                case .failure:
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.white)
+                        Text("Failed to load image")
+                            .foregroundStyle(.white)
+                    }
+                @unknown default:
+                    ProgressView()
+                        .tint(.white)
                 }
             }
         }
