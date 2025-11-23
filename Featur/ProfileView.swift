@@ -23,6 +23,9 @@ struct ProfileView: View {
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Profile", screenClass: "EnhancedProfileView")
+
             if let uid = auth.user?.uid {
                 await profileViewModel.loadProfile(uid: uid)
             }
@@ -152,6 +155,14 @@ private struct SignedInProfile: View {
         .sheet(isPresented: $showSettings) {
             SettingsSheet()
                 .environmentObject(auth)
+        }
+        .onChange(of: showSettings) { _, isShowing in
+            if !isShowing {
+                // Refresh profile when returning from settings
+                Task {
+                    await profileViewModel.refreshProfile()
+                }
+            }
         }
     }
     
@@ -360,27 +371,60 @@ private struct SignedInProfile: View {
                     }
                 }
             }
-            
+
+            // Photo Gallery Card
+            if let mediaURLs = profile.mediaURLs, !mediaURLs.isEmpty {
+                GlassCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("My Photos", systemImage: "photo.on.rectangle.angled")
+                            .font(.headline)
+
+                        LazyVGrid(columns: [GridItem(.fixed(100)), GridItem(.fixed(100)), GridItem(.fixed(100))], spacing: 8) {
+                            ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
+                                AsyncImage(url: URL(string: url)) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                    case .failure(_):
+                                        Rectangle()
+                                            .fill(.red.opacity(0.2))
+                                            .overlay(
+                                                Image(systemName: "exclamationmark.triangle")
+                                                    .foregroundStyle(.red)
+                                            )
+                                    case .empty:
+                                        Rectangle()
+                                            .fill(.gray.opacity(0.2))
+                                            .overlay(
+                                                ProgressView()
+                                                    .tint(AppTheme.accent)
+                                            )
+                                    @unknown default:
+                                        Rectangle()
+                                            .fill(.gray.opacity(0.2))
+                                    }
+                                }
+                                .frame(width: 100, height: 100)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                    }
+                }
+            }
+
             // Social Links Card
             if profile.socialLinks?.tiktok != nil ||
                profile.socialLinks?.instagram != nil ||
-               profile.socialLinks?.youtube != nil {
+               profile.socialLinks?.youtube != nil ||
+               profile.socialLinks?.twitch != nil {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Social Media", systemImage: "link")
                             .font(.headline)
-                        
+
                         VStack(spacing: 10) {
-                            if let tiktok = profile.socialLinks?.tiktok {
-                                socialLinkRow(
-                                    platform: "TikTok",
-                                    icon: "music.note",
-                                    username: tiktok.username,
-                                    followers: tiktok.followerCount,
-                                    isVerified: tiktok.isVerified
-                                )
-                            }
-                            
                             if let instagram = profile.socialLinks?.instagram {
                                 socialLinkRow(
                                     platform: "Instagram",
@@ -390,7 +434,17 @@ private struct SignedInProfile: View {
                                     isVerified: instagram.isVerified
                                 )
                             }
-                            
+
+                            if let tiktok = profile.socialLinks?.tiktok {
+                                socialLinkRow(
+                                    platform: "TikTok",
+                                    icon: "music.note",
+                                    username: tiktok.username,
+                                    followers: tiktok.followerCount,
+                                    isVerified: tiktok.isVerified
+                                )
+                            }
+
                             if let youtube = profile.socialLinks?.youtube {
                                 socialLinkRow(
                                     platform: "YouTube",
@@ -398,6 +452,16 @@ private struct SignedInProfile: View {
                                     username: youtube.username,
                                     followers: youtube.followerCount,
                                     isVerified: youtube.isVerified
+                                )
+                            }
+
+                            if let twitch = profile.socialLinks?.twitch {
+                                socialLinkRow(
+                                    platform: "Twitch",
+                                    icon: "gamecontroller",
+                                    username: twitch.username,
+                                    followers: twitch.followerCount,
+                                    isVerified: twitch.isVerified
                                 )
                             }
                         }
@@ -467,31 +531,33 @@ private struct SignedInProfile: View {
                 .font(.title3)
                 .foregroundStyle(AppTheme.accent)
                 .frame(width: 32)
-            
+
             VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(platform)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 HStack(spacing: 4) {
                     Text("@\(username)")
                         .font(.body.weight(.medium))
-                    
+
                     if isVerified {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.caption)
                             .foregroundStyle(.blue)
                     }
                 }
-                
+
                 if let followers = followers {
                     Text("\(formatFollowerCount(followers)) followers")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             Spacer()
-            
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 8)
     }

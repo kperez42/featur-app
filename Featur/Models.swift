@@ -147,3 +147,62 @@ struct FeaturedCreator: Identifiable, Codable {
     var highlightText: String?
     var priority: Int
 }
+
+// MARK: - Testimonial Model
+struct Testimonial: Identifiable, Codable {
+    @DocumentID var id: String?
+    var profileUserId: String // User who receives the testimonial
+    var authorUserId: String // User who writes the testimonial
+    var authorName: String
+    var authorImageURL: String?
+    var authorRole: String? // e.g., "Content Creator", "Video Editor"
+    var rating: Int // 1-5 stars
+    var text: String
+    var createdAt: Date
+    var isVerified: Bool // True if they actually collaborated
+}
+
+// MARK: - Collaboration Model
+struct Collaboration: Identifiable, Codable {
+    @DocumentID var id: String?
+    var user1Id: String // First user in collaboration
+    var user2Id: String // Second user in collaboration
+    var projectName: String
+    var projectDescription: String?
+    var status: CollabStatus
+    var startedAt: Date
+    var completedAt: Date?
+    var createdAt: Date
+
+    enum CollabStatus: String, Codable {
+        case active = "Active"
+        case completed = "Completed"
+        case pending = "Pending"
+
+        var color: String {
+            switch self {
+            case .active: return "green"
+            case .completed: return "blue"
+            case .pending: return "orange"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .active: return "checkmark.circle.fill"
+            case .completed: return "checkmark.seal.fill"
+            case .pending: return "clock.fill"
+            }
+        }
+    }
+
+    // Helper to get the other user's ID
+    func getPartnerUserId(currentUserId: String) -> String? {
+        if user1Id == currentUserId {
+            return user2Id
+        } else if user2Id == currentUserId {
+            return user1Id
+        }
+        return nil
+    }
+}
