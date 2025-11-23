@@ -1064,13 +1064,15 @@ private struct MainProfileContent: View {
     // MARK: - Content Preview Section
     private struct ContentPreviewSection: View {
         let profile: UserProfile
-        
+        @State private var selectedImageURL: String?
+        @State private var showFullScreenImage = false
+
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Content")
                     .font(.headline)
                     .padding(.horizontal)
-                
+
                 if (profile.mediaURLs?.isEmpty == false) {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
@@ -1083,6 +1085,10 @@ private struct MainProfileContent: View {
                                             .scaledToFill()
                                             .frame(width: 120, height: 160)
                                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            .onTapGesture {
+                                                selectedImageURL = url
+                                                showFullScreenImage = true
+                                            }
                                     case .empty:
                                         RoundedRectangle(cornerRadius: 12)
                                             .fill(Color.gray.opacity(0.2))
@@ -1101,6 +1107,11 @@ private struct MainProfileContent: View {
                 } else {
                     EmptyContentPlaceholder()
                         .padding(.horizontal)
+                }
+            }
+            .fullScreenCover(isPresented: $showFullScreenImage) {
+                if let imageURL = selectedImageURL {
+                    FullScreenImageViewer(imageURL: imageURL)
                 }
             }
         }
@@ -3138,6 +3149,7 @@ private struct MainProfileContent: View {
         let profile: UserProfile
         @Environment(\.dismiss) var dismiss
         @State private var selectedImageIndex = 0
+        @State private var showFullScreenImage = false
         @StateObject private var presenceManager = PresenceManager.shared
 
         // Combine profile photo + gallery photos for carousel
@@ -3171,6 +3183,9 @@ private struct MainProfileContent: View {
                                                 .scaledToFill()
                                                 .frame(width: UIScreen.main.bounds.width, height: 400)
                                                 .clipped()
+                                                .onTapGesture {
+                                                    showFullScreenImage = true
+                                                }
                                         case .empty:
                                             Rectangle()
                                                 .fill(AppTheme.accent.opacity(0.2))
@@ -3231,6 +3246,11 @@ private struct MainProfileContent: View {
                 .task {
                     // Fetch current user's real online status from Firebase
                     await presenceManager.fetchOnlineStatus(userId: profile.uid)
+                }
+                .fullScreenCover(isPresented: $showFullScreenImage) {
+                    if selectedImageIndex < allPhotos.count {
+                        FullScreenImageViewer(imageURL: allPhotos[selectedImageIndex])
+                    }
                 }
             }
         }
@@ -4410,14 +4430,118 @@ private struct MainProfileContent: View {
     
     private struct BlurView: UIViewRepresentable {
         let style: UIBlurEffect.Style
-        
+
         func makeUIView(context: Context) -> UIVisualEffectView {
             UIVisualEffectView(effect: UIBlurEffect(style: style))
         }
-        
+
         func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
     }
-    
+
+    // MARK: - Full Screen Image Viewer
+    private struct FullScreenImageViewer: View {
+        let imageURL: String
+        @Environment(\.dismiss) var dismiss
+        @State private var scale: CGFloat = 1.0
+        @State private var lastScale: CGFloat = 1.0
+        @State private var offset: CGSize = .zero
+        @State private var lastOffset: CGSize = .zero
+
+        var body: some View {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                AsyncImage(url: URL(string: imageURL)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .scaleEffect(scale)
+                            .offset(offset)
+                            .gesture(
+                                MagnificationGesture()
+                                    .onChanged { value in
+                                        scale = lastScale * value
+                                    }
+                                    .onEnded { _ in
+                                        lastScale = scale
+                                        // Reset if zoomed out too much
+                                        if scale < 1.0 {
+                                            withAnimation {
+                                                scale = 1.0
+                                                lastScale = 1.0
+                                                offset = .zero
+                                                lastOffset = .zero
+                                            }
+                                        }
+                                    }
+                            )
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        if scale > 1.0 {
+                                            offset = CGSize(
+                                                width: lastOffset.width + value.translation.width,
+                                                height: lastOffset.height + value.translation.height
+                                            )
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        lastOffset = offset
+                                    }
+                            )
+                            .onTapGesture(count: 2) {
+                                // Double tap to zoom
+                                withAnimation {
+                                    if scale > 1.0 {
+                                        scale = 1.0
+                                        lastScale = 1.0
+                                        offset = .zero
+                                        lastOffset = .zero
+                                    } else {
+                                        scale = 2.0
+                                        lastScale = 2.0
+                                    }
+                                }
+                            }
+                    case .empty:
+                        ProgressView()
+                            .tint(.white)
+                    case .failure:
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.white)
+                            Text("Failed to load image")
+                                .foregroundStyle(.white)
+                        }
+                    @unknown default:
+                        ProgressView()
+                            .tint(.white)
+                    }
+                }
+
+                // Close button
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundStyle(.white)
+                                .shadow(radius: 4)
+                        }
+                        .padding()
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
     // MARK: - Scroll Offset Key
     struct ScrollOffsetKey: PreferenceKey {
         static var defaultValue: CGFloat = 0
