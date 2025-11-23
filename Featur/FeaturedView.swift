@@ -655,8 +655,41 @@ struct GetFeaturedSheet: View {
                             .font(.headline)
 
                         if store.products.isEmpty {
-                            ProgressView("Loading plans...")
-                                .padding()
+                            if let error = store.purchaseError {
+                                // Show error state if products failed to load
+                                VStack(spacing: 12) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 48))
+                                        .foregroundStyle(.orange)
+
+                                    Text("Plans Unavailable")
+                                        .font(.headline)
+
+                                    Text(error)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal)
+
+                                    Button {
+                                        Task {
+                                            await store.loadProducts()
+                                        }
+                                    } label: {
+                                        Label("Try Again", systemImage: "arrow.clockwise")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 10)
+                                            .background(AppTheme.accent, in: Capsule())
+                                    }
+                                }
+                                .padding(.vertical, 40)
+                            } else {
+                                // Show loading state
+                                ProgressView("Loading plans...")
+                                    .padding()
+                            }
                         } else {
                             ForEach(store.products, id: \.id) { product in
                                 PricingCard(
