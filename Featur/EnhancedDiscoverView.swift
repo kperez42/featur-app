@@ -516,7 +516,7 @@ struct DiscoverProfileCard: View {
                             Circle()
                                 .fill(.green)
                                 .frame(width: 6, height: 6)
-                            Text("LIVE")
+                            Text("ONLINE")
                                 .font(.caption2.bold())
                                 .foregroundStyle(.green)
                         }

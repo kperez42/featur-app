@@ -549,7 +549,7 @@ struct ProfileCardView: View {
                                 Circle()
                                     .fill(.green)
                                     .frame(width: 8, height: 8)
-                                Text("LIVE")
+                                Text("ONLINE")
                                     .font(.caption.bold())
                                     .foregroundStyle(.white)
                             }
