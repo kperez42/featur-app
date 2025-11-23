@@ -662,37 +662,60 @@ private struct MainProfileContent: View {
         let color: Color
         let animate: Bool
         let trendData: [Double]
+
         func formatNumber(_ value: Int) -> String {
             let formatter = NumberFormatter()
             formatter.numberStyle = .decimal
             return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
         }
-        
+
+        // Calculate trend from data (simple: compare last value to first)
+        var trendPercentage: Int {
+            guard trendData.count >= 2,
+                  let first = trendData.first,
+                  let last = trendData.last,
+                  first > 0 else { return 0 }
+            let change = ((last - first) / first) * 100
+            return Int(change)
+        }
+
         var body: some View {
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 HStack(spacing: 6) {
                     Image(systemName: icon)
-                        .font(.caption)
+                        .font(.title3)
                         .foregroundStyle(color)
-                    
-                    Text(title)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
+
                     Spacer()
+
+                    // Trend indicator
+                    if trendPercentage != 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: trendPercentage > 0 ? "arrow.up.right" : "arrow.down.right")
+                                .font(.caption)
+                            Text("\(abs(trendPercentage))%")
+                                .font(.caption.bold())
+                        }
+                        .foregroundStyle(trendPercentage > 0 ? .green : .red)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background((trendPercentage > 0 ? Color.green : Color.red).opacity(0.1), in: Capsule())
+                    }
                 }
-                
-                Text(formatNumber(animate ? value : 0))
-                    .font(.title2.bold())
-                    .foregroundStyle(.primary)
-                    .contentTransition(.numericText())
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Mini bar chart (7 days)
-                MiniBarChart(data: trendData, baseColor: color)
-                    .frame(height: 30)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(formatNumber(animate ? value : 0))
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .contentTransition(.numericText())
+
+                    Text(title)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding()
+            .padding(20)
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
@@ -700,61 +723,7 @@ private struct MainProfileContent: View {
             )
         }
     }
-    
-    private struct MiniBarChart: View {
-        let data: [Double]
-        let baseColor: Color
 
-        @State private var animateBars = false
-
-        // 7 different colors for 7 days (rainbow gradient)
-        let barColors: [Color] = [
-            .purple,
-            .blue,
-            .cyan,
-            .green,
-            .yellow,
-            .orange,
-            .pink
-        ]
-
-        var body: some View {
-            GeometryReader { geometry in
-                HStack(alignment: .bottom, spacing: 2) {
-                    ForEach(Array(data.enumerated()), id: \.offset) { index, value in
-                        let maxValue = data.max() ?? 1.0
-                        let normalizedHeight = maxValue > 0 ? CGFloat(value) / CGFloat(maxValue) : 0
-                        let barHeight = geometry.size.height * normalizedHeight
-
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        barColors[index].opacity(0.9),
-                                        barColors[index].opacity(0.6)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .frame(height: animateBars ? barHeight : 0)
-                            .frame(maxWidth: .infinity)
-                            .animation(
-                                .spring(response: 0.6, dampingFraction: 0.7)
-                                .delay(Double(index) * 0.05),
-                                value: animateBars
-                            )
-                    }
-                }
-            }
-            .onAppear {
-                withAnimation {
-                    animateBars = true
-                }
-            }
-        }
-    }
-    
     // MARK: - Profile Strength Card
     private struct ProfileStrengthCard: View {
         let profile: UserProfile
