@@ -433,15 +433,16 @@ struct DiscoverProfileCard: View {
             ZStack(alignment: .topTrailing) {
                 if !mediaURLs.isEmpty {
                     let currentURL = mediaURLs[currentImageIndex]
-                    AsyncImage(url: URL(string: currentURL)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        default:
+                    CachedAsyncImage(url: URL(string: currentURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } placeholder: {
+                        ZStack {
                             AppTheme.gradient
+                            ProgressView()
+                                .tint(.white)
                         }
                     }
                     .id(currentImageIndex) // Force reload when index changes

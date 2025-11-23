@@ -474,14 +474,15 @@ struct FeaturedCreatorCard: View {
             // Profile Image / Avatar
             ZStack {
                 if let profile = creator.profile, let firstMedia = profile.mediaURLs?.first {
-                    AsyncImage(url: URL(string: firstMedia)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        default:
+                    CachedAsyncImage(url: URL(string: firstMedia)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        ZStack {
                             AppTheme.gradient
+                            ProgressView()
+                                .tint(.white)
                         }
                     }
                 } else {

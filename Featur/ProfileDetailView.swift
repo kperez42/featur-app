@@ -125,18 +125,19 @@ private struct ImageGalleryHeader: View {
         ZStack(alignment: .bottom) {
             TabView(selection: $selectedIndex) {
                 ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
-                    AsyncImage(url: URL(string: url)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 500)
-                                .clipped()
-                        default:
+                    CachedAsyncImage(url: URL(string: url)) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(height: 500)
+                            .clipped()
+                    } placeholder: {
+                        ZStack {
                             AppTheme.gradient
-                                .frame(height: 500)
+                            ProgressView()
+                                .tint(.white)
                         }
+                        .frame(height: 500)
                     }
                     .tag(index)
                     .onTapGesture(perform: onTapImage)
@@ -786,10 +787,12 @@ struct MessageSheet: View {
                 // Recipient Info
                 VStack(spacing: 12) {
                     if let imageURL = recipientProfile.profileImageURL, let url = URL(string: imageURL) {
-                        AsyncImage(url: url) { image in
+                        CachedAsyncImage(url: url) { image in
                             image.resizable().scaledToFill()
                         } placeholder: {
-                            Color.gray
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                                .overlay(ProgressView())
                         }
                         .frame(width: 80, height: 80)
                         .clipShape(Circle())
@@ -1021,16 +1024,14 @@ struct ImageViewerSheet: View {
             
             TabView(selection: $selectedIndex) {
                 ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
-                    AsyncImage(url: URL(string: url)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        default:
-                            ProgressView()
-                        }
+                    CachedAsyncImage(url: URL(string: url)) { image in
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } placeholder: {
+                        ProgressView()
+                            .tint(.white)
                     }
                     .tag(index)
                 }
