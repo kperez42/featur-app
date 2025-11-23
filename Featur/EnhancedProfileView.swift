@@ -4676,11 +4676,11 @@ private struct MainProfileContent: View {
 struct EmailVerificationView: View {
     let profile: UserProfile
     @Environment(\.dismiss) var dismiss
-    @State private var email: String = ""
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
     @State private var verificationSent = false
+    @State private var checkingStatus = false
 
     var body: some View {
         NavigationStack {
@@ -4695,7 +4695,7 @@ struct EmailVerificationView: View {
                 VStack(spacing: 8) {
                     Text("Verify Email")
                         .font(.title.bold())
-                    Text(verificationSent ? "Check your email inbox" : "Enter your email to receive a verification link")
+                    Text(verificationSent ? "Check your email inbox" : "We'll send a verification email to your address")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -4703,20 +4703,34 @@ struct EmailVerificationView: View {
                 .padding(.horizontal)
 
                 if !verificationSent {
-                    // Email input
+                    // Email display (read-only - uses Firebase Auth email)
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Email Address")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
 
-                        TextField("your@email.com", text: $email)
-                            .textContentType(.emailAddress)
-                            .keyboardType(.emailAddress)
-                            .autocapitalization(.none)
-                            .padding()
-                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+                        if let authEmail = Auth.auth().currentUser?.email {
+                            Text(authEmail)
+                                .font(.body)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+                        } else {
+                            Text("No email linked to account")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+                        }
                     }
                     .padding(.horizontal)
+
+                    Text("This is your Firebase Auth email")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
 
                     // Send verification button
                     Button {
@@ -4732,11 +4746,11 @@ struct EmailVerificationView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(email.isEmpty ? Color.gray : AppTheme.accent)
+                        .background(Auth.auth().currentUser?.email == nil ? Color.gray : AppTheme.accent)
                         .foregroundStyle(.white)
                         .cornerRadius(12)
                     }
-                    .disabled(email.isEmpty || isLoading)
+                    .disabled(Auth.auth().currentUser?.email == nil || isLoading)
                     .padding(.horizontal)
                 } else {
                     // Verification sent success
@@ -4748,17 +4762,19 @@ struct EmailVerificationView: View {
                         Text("Verification email sent!")
                             .font(.headline)
 
-                        Text("We sent a verification link to \(email). Click the link in your email to verify your address.")
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
+                        if let email = Auth.auth().currentUser?.email {
+                            Text("We sent a verification link to \(email). Click the link in your email to verify your address.")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
 
                         Button {
                             checkVerificationStatus()
                         } label: {
                             HStack {
-                                if isLoading {
+                                if checkingStatus {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
@@ -4771,7 +4787,7 @@ struct EmailVerificationView: View {
                             .foregroundStyle(.white)
                             .cornerRadius(12)
                         }
-                        .disabled(isLoading)
+                        .disabled(checkingStatus)
                         .padding(.horizontal)
 
                         Button {
@@ -4790,6 +4806,7 @@ struct EmailVerificationView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                         .padding(.horizontal)
+                        .multilineTextAlignment(.center)
                 }
 
                 if let success = successMessage {
@@ -4814,109 +4831,78 @@ struct EmailVerificationView: View {
                 }
             }
         }
-        .onAppear {
-            // Pre-fill email if already in profile
-            if let profileEmail = profile.email {
-                email = profileEmail
-            }
-        }
     }
 
     private func sendVerificationEmail() {
+        guard let user = Auth.auth().currentUser else {
+            errorMessage = "No user signed in"
+            return
+        }
+
         isLoading = true
         errorMessage = nil
         successMessage = nil
 
-        Task {
-            do {
-                let db = FirebaseFirestore.Firestore.firestore()
+        user.sendEmailVerification { error in
+            isLoading = false
 
-                // Generate unique verification token
-                let verificationToken = UUID().uuidString
+            if let error = error {
+                errorMessage = "Failed to send email: \(error.localizedDescription)"
+                return
+            }
 
-                // Save verification request to Firestore
-                let verificationData: [String: Any] = [
-                    "email": email,
-                    "userId": profile.uid,
-                    "token": verificationToken,
-                    "createdAt": Date(),
-                    "verified": false,
-                    "expiresAt": Date().addingTimeInterval(86400) // 24 hours
-                ]
+            verificationSent = true
+            successMessage = "Verification email sent!"
 
-                try await db.collection("emailVerifications").document(profile.uid).setData(verificationData)
-
-                // Update user's email in profile
-                try await db.collection("users").document(profile.uid).updateData([
-                    "email": email
-                ])
-
-                // Call Cloud Function to send email (you'll need to create this)
-                let functions = FirebaseFunctions.Functions.functions()
-                let data = ["email": email, "token": verificationToken, "userId": profile.uid]
-
-                try await functions.httpsCallable("sendEmailVerification").call(data)
-
-                await MainActor.run {
-                    verificationSent = true
-                    isLoading = false
-                    successMessage = "Verification email sent successfully!"
-                }
-            } catch {
-                await MainActor.run {
-                    errorMessage = "Failed to send email: \(error.localizedDescription)"
-                    isLoading = false
+            // Also update the email in the user profile
+            if let email = user.email {
+                Task {
+                    let db = Firestore.firestore()
+                    try? await db.collection("users").document(profile.uid).updateData([
+                        "email": email
+                    ])
                 }
             }
         }
     }
 
     private func checkVerificationStatus() {
-        isLoading = true
+        guard let user = Auth.auth().currentUser else {
+            errorMessage = "No user signed in"
+            return
+        }
+
+        checkingStatus = true
         errorMessage = nil
 
-        Task {
-            do {
-                let db = FirebaseFirestore.Firestore.firestore()
+        // Reload user to get fresh email verification status
+        user.reload { error in
+            checkingStatus = false
 
-                // Check if email was verified
-                let doc = try await db.collection("emailVerifications").document(profile.uid).getDocument()
+            if let error = error {
+                errorMessage = "Failed to check status: \(error.localizedDescription)"
+                return
+            }
 
-                guard let data = doc.data(),
-                      let verified = data["verified"] as? Bool else {
-                    await MainActor.run {
-                        errorMessage = "Verification status not found"
-                        isLoading = false
-                    }
-                    return
-                }
-
-                if verified {
-                    // Mark as verified in user profile
+            if user.isEmailVerified {
+                // Update Firestore
+                Task {
+                    let db = Firestore.firestore()
                     try await db.collection("users").document(profile.uid).updateData([
                         "isEmailVerified": true
                     ])
 
                     await MainActor.run {
                         successMessage = "Email verified successfully!"
-                        isLoading = false
 
                         // Dismiss after short delay
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                             dismiss()
                         }
                     }
-                } else {
-                    await MainActor.run {
-                        errorMessage = "Email not verified yet. Please check your inbox and click the verification link."
-                        isLoading = false
-                    }
                 }
-            } catch {
-                await MainActor.run {
-                    errorMessage = "Failed to check status: \(error.localizedDescription)"
-                    isLoading = false
-                }
+            } else {
+                errorMessage = "Email not verified yet. Please check your inbox and click the verification link."
             }
         }
     }
@@ -5095,38 +5081,30 @@ struct PhoneVerificationView: View {
         errorMessage = nil
         successMessage = nil
 
-        Task {
-            do {
-                let db = FirebaseFirestore.Firestore.firestore()
+        // Use Firebase PhoneAuthProvider to send SMS
+        PhoneAuthProvider.provider().verifyPhoneNumber(phoneNumber, uiDelegate: nil) { verificationID, error in
+            isLoading = false
 
-                // Call Firebase Cloud Function to send SMS via Twilio/SNS
-                let functions = FirebaseFunctions.Functions.functions()
-                let data = ["phoneNumber": phoneNumber, "userId": profile.uid]
+            if let error = error {
+                errorMessage = "Failed to send SMS: \(error.localizedDescription)"
+                return
+            }
 
-                let result = try await functions.httpsCallable("sendPhoneVerification").call(data)
+            guard let verificationID = verificationID else {
+                errorMessage = "Failed to get verification ID"
+                return
+            }
 
-                guard let response = result.data as? [String: Any],
-                      let verId = response["verificationId"] as? String else {
-                    throw NSError(domain: "PhoneVerification", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get verification ID"])
-                }
+            self.verificationID = verificationID
+            codeSent = true
+            successMessage = "SMS code sent!"
 
-                verificationID = verId
-
-                // Update user's phone number in profile
-                try await db.collection("users").document(profile.uid).updateData([
+            // Update phone number in profile
+            Task {
+                let db = Firestore.firestore()
+                try? await db.collection("users").document(profile.uid).updateData([
                     "phoneNumber": phoneNumber
                 ])
-
-                await MainActor.run {
-                    codeSent = true
-                    isLoading = false
-                    successMessage = "SMS code sent successfully!"
-                }
-            } catch {
-                await MainActor.run {
-                    errorMessage = "Failed to send SMS: \(error.localizedDescription)"
-                    isLoading = false
-                }
             }
         }
     }
@@ -5140,44 +5118,52 @@ struct PhoneVerificationView: View {
         isLoading = true
         errorMessage = nil
 
-        Task {
-            do {
-                let db = FirebaseFirestore.Firestore.firestore()
+        // Create phone credential
+        let credential = PhoneAuthProvider.provider().credential(
+            withVerificationID: verificationID,
+            verificationCode: verificationCode
+        )
 
-                // Call Firebase Cloud Function to verify the code
-                let functions = FirebaseFunctions.Functions.functions()
-                let data = [
-                    "verificationId": verificationID,
-                    "code": verificationCode,
-                    "userId": profile.uid
-                ]
+        // Link phone credential to current user
+        Auth.auth().currentUser?.link(with: credential) { authResult, error in
+            isLoading = false
 
-                let result = try await functions.httpsCallable("verifyPhoneCode").call(data)
+            if let error = error {
+                // If already linked, just mark as verified
+                if (error as NSError).code == AuthErrorCode.credentialAlreadyInUse.rawValue {
+                    Task {
+                        let db = Firestore.firestore()
+                        try await db.collection("users").document(profile.uid).updateData([
+                            "isPhoneVerified": true
+                        ])
 
-                guard let response = result.data as? [String: Any],
-                      let success = response["success"] as? Bool,
-                      success else {
-                    throw NSError(domain: "PhoneVerification", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid verification code"])
+                        await MainActor.run {
+                            successMessage = "Phone verified successfully!"
+
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                dismiss()
+                            }
+                        }
+                    }
+                } else {
+                    errorMessage = "Verification failed: \(error.localizedDescription)"
                 }
+                return
+            }
 
-                // Mark phone as verified
+            // Successfully linked - mark as verified
+            Task {
+                let db = Firestore.firestore()
                 try await db.collection("users").document(profile.uid).updateData([
                     "isPhoneVerified": true
                 ])
 
                 await MainActor.run {
                     successMessage = "Phone verified successfully!"
-                    isLoading = false
 
-                    // Dismiss after short delay
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                         dismiss()
                     }
-                }
-            } catch {
-                await MainActor.run {
-                    errorMessage = "Verification failed: \(error.localizedDescription)"
-                    isLoading = false
                 }
             }
         }
