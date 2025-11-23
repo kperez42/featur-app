@@ -108,7 +108,8 @@ struct EnhancedDiscoverView: View {
             // Track screen view
             AnalyticsManager.shared.trackScreenView(screenName: "Discover", screenClass: "EnhancedDiscoverView")
 
-            await viewModel.loadProfiles()
+            // Don't exclude swiped profiles on Discover page - show everyone
+            await viewModel.loadProfiles(excludeSwipedProfiles: false)
         }
         .refreshable {
             await viewModel.refresh()
@@ -910,7 +911,7 @@ final class DiscoverViewModel: ObservableObject {
         filteredProfiles.count >= pageSize && !isLoadingMore
     }
     
-    func loadProfiles() async {
+    func loadProfiles(excludeSwipedProfiles: Bool = true) async {
         loadTask?.cancel()
 
         loadTask = Task {
@@ -933,8 +934,11 @@ final class DiscoverViewModel: ObservableObject {
                                  userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
                 }
 
-                //  Step 2.5: Fetch swiped user IDs to exclude them from discovery
-                let swipedUserIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
+                //  Step 2.5: Fetch swiped user IDs to exclude them from discovery (only if requested)
+                var swipedUserIds: [String] = []
+                if excludeSwipedProfiles {
+                    swipedUserIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
+                }
 
                 //  Step 3: Fetch discoverable profiles using that user
                 allProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: 100, excludeUserIds: swipedUserIds)
@@ -1006,14 +1010,12 @@ final class DiscoverViewModel: ObservableObject {
                 return
             }
 
-            // Fetch swiped users to exclude
-            let swipedUserIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
-
+            // Don't exclude swiped profiles on Discover page - show everyone
             // Fetch more profiles
             let newProfiles = try await service.fetchDiscoverProfiles(
                 for: currentUser,
                 limit: 50,
-                excludeUserIds: swipedUserIds
+                excludeUserIds: [] // Empty - don't exclude swiped profiles
             )
 
             // Fetch online status for new profiles
@@ -1045,7 +1047,8 @@ final class DiscoverViewModel: ObservableObject {
     }
 
     func refresh() async {
-        await loadProfiles()
+        // On refresh, show all profiles again including previously swiped ones
+        await loadProfiles(excludeSwipedProfiles: false)
     }
     
     func filterByCategory(_ category: String?) async {
