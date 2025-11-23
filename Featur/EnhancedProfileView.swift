@@ -183,28 +183,6 @@ private struct MainProfileContent: View {
                         .padding(.top, 60)
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                
-                // Floating Action Button
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        FloatingActionMenu(
-                            onNewPost: {
-                                Haptics.impact(.medium)
-                            },
-                            onMessage: {
-                                Haptics.impact(.medium)
-                            },
-                            onShare: {
-                                showShareSheet = true
-                                Haptics.impact(.medium)
-                            }
-                        )
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 20)
-                    }
-                }
             }
             .background(AppTheme.bg)
             .navigationBarTitleDisplayMode(.inline)
@@ -4337,94 +4315,7 @@ private struct MainProfileContent: View {
             )
         }
     }
-    
-    // MARK: - Floating Action Menu
-    private struct FloatingActionMenu: View {
-        let onNewPost: () -> Void
-        let onMessage: () -> Void
-        let onShare: () -> Void
-        
-        @State private var isExpanded = false
-        
-        var body: some View {
-            VStack(spacing: 16) {
-                if isExpanded {
-                    FloatingActionButton(
-                        icon: "square.and.pencil.fill",
-                        color: .blue,
-                        size: 50
-                    ) {
-                        onNewPost()
-                        withAnimation(.spring()) { isExpanded = false }
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                    
-                    FloatingActionButton(
-                        icon: "paperplane.fill",
-                        color: .green,
-                        size: 50
-                    ) {
-                        onMessage()
-                        withAnimation(.spring()) { isExpanded = false }
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                    
-                    FloatingActionButton(
-                        icon: "square.and.arrow.up.fill",
-                        color: .orange,
-                        size: 50
-                    ) {
-                        onShare()
-                        withAnimation(.spring()) { isExpanded = false }
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                }
-                
-                // Main FAB
-                FloatingActionButton(
-                    icon: isExpanded ? "xmark" : "plus",
-                    color: AppTheme.accent,
-                    size: 60
-                ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        isExpanded.toggle()
-                    }
-                    Haptics.impact(.medium)
-                }
-            }
-        }
-    }
-    
-    private struct FloatingActionButton: View {
-        let icon: String
-        let color: Color
-        let size: CGFloat
-        let action: () -> Void
-        
-        @State private var isPressed = false
-        
-        var body: some View {
-            Button(action: action) {
-                ZStack {
-                    Circle()
-                        .fill(color)
-                        .frame(width: size, height: size)
-                        .shadow(color: color.opacity(0.4), radius: 10, y: 5)
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: size * 0.4, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-            }
-            .scaleEffect(isPressed ? 0.9 : 1.0)
-            .onLongPressGesture(minimumDuration: .infinity, maximumDistance: .infinity, pressing: { pressing in
-                withAnimation(.spring(response: 0.3)) {
-                    isPressed = pressing
-                }
-            }, perform: {})
-        }
-    }
-    
+
     private struct AnimatedGradientBackground: View {
         let animate: Bool
 
