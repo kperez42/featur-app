@@ -81,7 +81,21 @@ struct EnhancedHomeView: View {
         }
         .sheet(isPresented: $showProfileDetail) {
             if let profile = selectedProfile {
-                ProfileDetailView(profile: profile)
+                NavigationStack {
+                    ProfileDetailView(profile: profile)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button {
+                                    showProfileDetail = false
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                }
+                .presentationDragIndicator(.visible)
             }
         }
         .task {
