@@ -295,26 +295,16 @@ struct ConversationRow: View {
     }
     
     private func profileAvatar(_ profile: UserProfile) -> some View {
-        AsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFill() //
-                    .clipped()      //
-                    .frame(width: 56, height: 56)
-                    .clipShape(Circle())
-
-            case .failure(_):
-                placeholderAvatar(profile)
-
-            case .empty:
-                ProgressView()
-                    .frame(width: 56, height: 56)
-
-            @unknown default:
-                EmptyView()
-            }
+        CachedAsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
+            image
+                .resizable()
+                .scaledToFill()
+                .clipped()
+                .frame(width: 56, height: 56)
+                .clipShape(Circle())
+        } placeholder: {
+            ProgressView()
+                .frame(width: 56, height: 56)
         }
     }
 
@@ -349,7 +339,7 @@ struct NewMatchCard: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            AsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
+            CachedAsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -440,7 +430,7 @@ struct ChatView: View {
                     if let profile = conversation.participantProfiles?.values.first,
                        let urlString = (profile.mediaURLs ?? []).first,
                        let url = URL(string: urlString) {
-                        AsyncImage(url: url) { image in
+                        CachedAsyncImage(url: url) { image in
                             image
                                 .resizable()
                                 .scaledToFill()
@@ -449,8 +439,8 @@ struct ChatView: View {
                             Circle()
                                 .fill(AppTheme.accent.opacity(0.2))
                         }
-                        .frame(width: 44, height: 44) // or 32 if you want smaller
-                        .clipShape(Circle())          // ✅ makes it perfectly round
+                        .frame(width: 44, height: 44)
+                        .clipShape(Circle())
 
                     }
                     
@@ -558,25 +548,15 @@ struct MessageBubble: View {
             VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
                 // Show image if mediaURL exists
                 if let mediaURL = message.mediaURL, let url = URL(string: mediaURL) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .empty:
-                            ProgressView()
-                                .frame(width: 200, height: 200)
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 200, height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        case .failure:
-                            Image(systemName: "photo")
-                                .frame(width: 200, height: 200)
-                                .background(AppTheme.card)
-                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        @unknown default:
-                            EmptyView()
-                        }
+                    CachedAsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 200, height: 200)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    } placeholder: {
+                        ProgressView()
+                            .frame(width: 200, height: 200)
                     }
                     .frame(width: 200, height: 200)
                     .overlay(
@@ -783,8 +763,8 @@ struct NewChatView: View {
                                         }
                                     } label: {
                                         HStack(spacing: 12) {
-                                            // Profile Photo
-                                            AsyncImage(url: URL(string: profile.profileImageURL ?? "")) { image in
+                                            // Profile Photo (CACHED)
+                                            CachedAsyncImage(url: URL(string: profile.profileImageURL ?? "")) { image in
                                                 image
                                                     .resizable()
                                                     .scaledToFill()

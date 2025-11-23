@@ -431,40 +431,31 @@ struct ProfileCardView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
-                // Background Image/Gradient with Carousel
+                // Background Image/Gradient with Carousel (CACHED)
                 if !mediaURLs.isEmpty {
                     let currentURL = mediaURLs[currentImageIndex]
                     if let url = URL(string: currentURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .empty:
-                                // While loading: subtle gradient + blur shimmer
-                                ZStack {
-                                    AppTheme.gradient
-                                    Rectangle()
-                                        .fill(.ultraThinMaterial)
-                                        .opacity(0.4)
-                                    ProgressView()
-                                        .tint(.white)
-                                }
+                        CachedAsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .overlay(
+                                    // Add slight fade so gradient gently merges into image
+                                    AppTheme.gradient.opacity(0.15)
+                                )
                                 .transition(.opacity)
-
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .overlay(
-                                        // Add slight fade so gradient gently merges into image
-                                        AppTheme.gradient.opacity(0.15)
-                                    )
-                                    .transition(.opacity)
-                                    .animation(.easeInOut(duration: 0.4), value: UUID()) // harmless trigger
-
-                            case .failure:
+                                .animation(.easeInOut(duration: 0.3), value: UUID())
+                        } placeholder: {
+                            // While loading: subtle gradient + blur shimmer
+                            ZStack {
                                 AppTheme.gradient
-                            @unknown default:
-                                AppTheme.gradient
+                                Rectangle()
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(0.4)
+                                ProgressView()
+                                    .tint(.white)
                             }
+                            .transition(.opacity)
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
                         .id(currentImageIndex) // Force reload when index changes
