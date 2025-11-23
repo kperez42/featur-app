@@ -530,17 +530,32 @@ struct ProfileCardView: View {
                         Text(profile.displayName)
                             .font(.system(size: 32, weight: .bold))
                             .foregroundStyle(.white)
-                        
+
                         if let age = profile.age {
                             Text("\(age)")
                                 .font(.system(size: 28, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.9))
                         }
-                        
+
                         if profile.isVerified ?? false {
                             Image(systemName: "checkmark.seal.fill")
                                 .foregroundStyle(.blue)
                                 .font(.title3)
+                        }
+
+                        // Online Status Badge
+                        if PresenceManager.shared.isOnline(userId: profile.uid) {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(.green)
+                                    .frame(width: 8, height: 8)
+                                Text("LIVE")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.green, in: Capsule())
                         }
                     }
                     

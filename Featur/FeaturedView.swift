@@ -504,11 +504,26 @@ struct FeaturedCreatorCard: View {
                 HStack(spacing: 6) {
                     Text(creator.profile?.displayName ?? "Creator")
                         .font(.headline)
-                    
+
                     if creator.profile?.isVerified == true {
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundStyle(.blue)
                             .font(.caption)
+                    }
+
+                    // Online Status Badge
+                    if let profile = creator.profile, PresenceManager.shared.isOnline(userId: profile.uid) {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(.green)
+                                .frame(width: 6, height: 6)
+                            Text("LIVE")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.green)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.green.opacity(0.15), in: Capsule())
                     }
                 }
                 

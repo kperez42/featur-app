@@ -505,17 +505,34 @@ struct DiscoverProfileCard: View {
             
             // Profile Info
             VStack(alignment: .leading, spacing: 6) {
-                Text(profile.displayName)
-                    .font(.headline)
-                    .lineLimit(1)
-                
+                HStack(spacing: 6) {
+                    Text(profile.displayName)
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    // Online Status Badge
+                    if PresenceManager.shared.isOnline(userId: profile.uid) {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(.green)
+                                .frame(width: 6, height: 6)
+                            Text("LIVE")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.green)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.green.opacity(0.15), in: Capsule())
+                    }
+                }
+
                 if let bio = profile.bio {
                     Text(bio)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
-                
+
                 // Content Style Tag
                 if let firstStyle = profile.contentStyles.first {
                     Text(firstStyle.rawValue)
