@@ -406,20 +406,46 @@ final class FirebaseService: ObservableObject {
     // MARK: - Featured Creators
     
     func fetchFeaturedCreators() async throws -> [FeaturedCreator] {
+        print("🔍 Fetching featured creators from Firestore...")
+
+        // Fetch all featured documents (no complex query to avoid index requirements)
         let snapshot = try await db.collection("featured")
-            .whereField("expiresAt", isGreaterThan: Date())
-            .order(by: "priority", descending: true)
             .getDocuments()
-        
-        var featured = try snapshot.documents.compactMap { try $0.data(as: FeaturedCreator.self) }
-        
+
+        print("📊 Found \(snapshot.documents.count) total featured documents")
+
+        var featured = try snapshot.documents.compactMap { doc -> FeaturedCreator? in
+            do {
+                let creator = try doc.data(as: FeaturedCreator.self)
+                print("  - User: \(creator.userId), Expires: \(creator.expiresAt), Priority: \(creator.priority)")
+                return creator
+            } catch {
+                print("  ❌ Failed to decode document \(doc.documentID): \(error)")
+                return nil
+            }
+        }
+
+        // Filter out expired ones in code
+        let now = Date()
+        let beforeFilter = featured.count
+        featured = featured.filter { $0.expiresAt > now }
+        print("📅 Filtered: \(beforeFilter) → \(featured.count) (removed \(beforeFilter - featured.count) expired)")
+
+        // Sort by priority (highest first)
+        featured.sort { $0.priority > $1.priority }
+
         // Fetch profiles
+        print("👤 Fetching user profiles...")
         for i in featured.indices {
             if let profile = try? await fetchProfile(uid: featured[i].userId) {
                 featured[i].profile = profile
+                print("  ✅ Loaded profile for \(profile.displayName)")
+            } else {
+                print("  ⚠️ Could not load profile for user: \(featured[i].userId)")
             }
         }
-        
+
+        print("✅ Returning \(featured.count) featured creators")
         return featured
     }
     
