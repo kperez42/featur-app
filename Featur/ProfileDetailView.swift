@@ -541,13 +541,13 @@ private struct InterestsSection: View {
                     .padding(.vertical, 8)
                     .background(
                         LinearGradient(
-                            colors: [AppTheme.accent.opacity(0.15), AppTheme.accent.opacity(0.08)],
+                            colors: [AppTheme.accent.opacity(0.2), AppTheme.accent.opacity(0.1)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
                         in: Capsule()
                     )
-                    .overlay(Capsule().stroke(AppTheme.accent.opacity(0.25), lineWidth: 1))
+                    .overlay(Capsule().stroke(AppTheme.accent.opacity(0.3), lineWidth: 1))
                 }
             }
         }
