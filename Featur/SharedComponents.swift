@@ -217,16 +217,16 @@ struct ProfileDetailPlaceholder: View {
                                 image
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
-                                    .frame(height: 400)
+                                    .frame(maxWidth: .infinity, maxHeight: 400)
                                     .clipped()
                             default:
                                 AppTheme.gradient
-                                    .frame(height: 400)
+                                    .frame(maxWidth: .infinity, maxHeight: 400)
                             }
                         }
                     } else {
                         AppTheme.gradient
-                            .frame(height: 400)
+                            .frame(maxWidth: .infinity, maxHeight: 400)
                     }
                     
                     VStack(alignment: .leading, spacing: 16) {

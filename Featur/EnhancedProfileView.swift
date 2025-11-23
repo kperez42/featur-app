@@ -1,7 +1,25 @@
 // EnhancedProfileView.swift - PREMIUM PROFILE PAGE v2.0
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 import PhotosUI
+
+// MARK: - Stats Period Enum
+enum StatsPeriod: String, CaseIterable {
+    case week = "Week"
+    case month = "Month"
+    case year = "Year"
+    case allTime = "All Time"
+
+    var days: Int? {
+        switch self {
+        case .week: return 7
+        case .month: return 30
+        case .year: return 365
+        case .allTime: return nil
+        }
+    }
+}
 
 struct EnhancedProfileView: View {
     @EnvironmentObject var auth: AuthViewModel
@@ -11,6 +29,7 @@ struct EnhancedProfileView: View {
     @State private var showQRSheet = false
     @State private var showShareSheet = false
     @State private var showStatsSheet = false
+    @State private var showFeaturedSheet = false
     @State private var scrollOffset: CGFloat = 0
     
     var body: some View {
@@ -29,6 +48,7 @@ struct EnhancedProfileView: View {
                     showQRSheet: $showQRSheet,
                     showShareSheet: $showShareSheet,
                     showStatsSheet: $showStatsSheet,
+                    showFeaturedSheet: $showFeaturedSheet,
                     scrollOffset: $scrollOffset
                 )
             } else {
@@ -58,9 +78,11 @@ private struct MainProfileContent: View {
     @Binding var showQRSheet: Bool
     @Binding var showShareSheet: Bool
     @Binding var showStatsSheet: Bool
+    @Binding var showFeaturedSheet: Bool
     @Binding var scrollOffset: CGFloat
     @EnvironmentObject var auth: AuthViewModel
-    
+
+
     @State private var selectedTab = 0
     @State private var showSuccessBanner = false
     @State private var showProfilePreview = false
@@ -104,106 +126,50 @@ private struct MainProfileContent: View {
                     )
                     .padding(.horizontal)
                     .padding(.top, 20)
-                    
-                    // Profile Strength Indicator
-                    ProfileStrengthCard(profile: profile)
-                        .padding(.horizontal)
-                        .padding(.top, 16)
-                    
-                    // Achievement Showcase
-                    AchievementShowcase(profile: profile)
-                        .padding(.horizontal)
-                        .padding(.top, 16)
-                    
+
                     // Content Preview Section
                     ContentPreviewSection(profile: profile)
                         .padding(.top, 20)
-                    
+
                     // Bio & Info Section
                     BioInfoSection(profile: profile)
                         .padding(.horizontal)
                         .padding(.top, 20)
-                    
+
                     // Social Links Grid
                     SocialLinksSection(profile: profile)
                         .padding(.horizontal)
                         .padding(.top, 20)
-                    
+
                     if let prefs = profile.collaborationPreferences {
+                        // Collaboration Details Card
                         CollaborationDetailsCard(preferences: prefs)
-                        
-                        
-                        
                             .padding(.horizontal)
                             .padding(.top, 20)
-                        
+
                         // 3D Interactive Profile Card
                         Interactive3DProfileCard(profile: profile)
                             .padding(.horizontal)
                             .padding(.top, 20)
-                        
+
                         // Profile Insights Card
                         ProfileInsightsCard(profile: profile)
                             .padding(.horizontal)
                             .padding(.top, 20)
-                        
-                        // Activity Timeline
-                        ActivityTimelineSection()
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Featured Content Carousel
-                        FeaturedContentCarousel(profile: profile)
-                            .padding(.top, 20)
-                        
-                        // Skills & Expertise Section
-                        SkillsExpertiseSection(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
+
                         // Testimonials Section
-                        TestimonialsSection()
+                        TestimonialsSection(profile: profile)
                             .padding(.horizontal)
                             .padding(.top, 20)
-                        
+
                         // Collaboration History
                         CollaborationHistorySection(profile: profile)
                             .padding(.horizontal)
                             .padding(.top, 20)
-                        
-                        // Creator Stats Dashboard
-                        CreatorStatsDashboard(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Content Calendar Preview
-                        ContentCalendarPreview()
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Networking Score
-                        NetworkingScoreCard(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Profile Milestones
-                        ProfileMilestonesSection(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Recent Profile Visitors
-                        RecentVisitorsSection()
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Creator Badges Collection
-                        CreatorBadgesSection(profile: profile)
-                            .padding(.horizontal)
-                            .padding(.top, 20)
-                        
-                        // Bottom Padding
-                        Color.clear.frame(height: 100)
                     }
+
+                    // Bottom Padding
+                    Color.clear.frame(height: 100)
                 }
                 .coordinateSpace(name: "scroll")
                 .onPreferenceChange(ScrollOffsetKey.self) { value in
@@ -248,7 +214,7 @@ private struct MainProfileContent: View {
                         .opacity(scrollOffset < -100 ? 1 : 0)
                         .animation(.easeInOut, value: scrollOffset)
                 }
-                
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { showEditSheet = true } label: {
@@ -264,6 +230,9 @@ private struct MainProfileContent: View {
                             Label("Share Profile", systemImage: "square.and.arrow.up")
                         }
                         Divider()
+                        Button { showFeaturedSheet = true } label: {
+                            Label("Get FEATUREd", systemImage: "star.circle")
+                        }
                         Button { showStatsSheet = true } label: {
                             Label("Analytics", systemImage: "chart.bar")
                         }
@@ -282,13 +251,25 @@ private struct MainProfileContent: View {
                             .foregroundStyle(AppTheme.accent)
                             .symbolEffect(.bounce, value: showEditSheet)
                     }
+                    .menuOrder(.fixed)
+                    .menuStyle(.button)
                 }
             }
             .sheet(isPresented: $showEditSheet) {
-                EnhancedEditProfileSheet(profile: profile, viewModel: viewModel) {
-                    showSuccessBanner = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { showSuccessBanner = false }
+                if let currentProfile = viewModel.profile {
+                    EnhancedEditProfileSheet(profile: currentProfile, viewModel: viewModel) {
+                        showSuccessBanner = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation { showSuccessBanner = false }
+                        }
+                    }
+                }
+            }
+            .onChange(of: showEditSheet) { _, isShowing in
+                if isShowing {
+                    // Force refresh profile from Firestore when opening edit sheet
+                    Task {
+                        await viewModel.refreshProfile()
                     }
                 }
             }
@@ -301,8 +282,20 @@ private struct MainProfileContent: View {
             .sheet(isPresented: $showStatsSheet) {
                 EnhancedStatsSheet(profile: profile)
             }
+            .sheet(isPresented: $showFeaturedSheet) {
+                GetFeaturedSheet()
+            }
+            .sheet(isPresented: $showShareSheet) {
+                let profileURL = "https://featur.app/profile/\(profile.uid)"
+                let shareText = "Check out \(profile.displayName)'s profile on Featur!"
+                ShareSheet(items: [shareText, URL(string: profileURL)!])
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
             .fullScreenCover(isPresented: $showProfilePreview) {
-                ProfilePreviewView(profile: profile)
+                if let currentProfile = viewModel.profile {
+                    ProfilePreviewView(profile: currentProfile)
+                }
             }
         }
     }
@@ -564,9 +557,10 @@ private struct MainProfileContent: View {
     private struct EnhancedStatsGrid: View {
         let profile: UserProfile
         let onTapStats: () -> Void
-        
+
         @State private var animateNumbers = false
-        
+        @StateObject private var analytics = ProfileAnalyticsViewModel()
+
         var body: some View {
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
@@ -576,36 +570,36 @@ private struct MainProfileContent: View {
                         icon: "person.3.fill",
                         color: .purple,
                         animate: animateNumbers,
-                        trendData: generateTrendData()
+                        trendData: generateRealisticTrendData(currentValue: profile.followerCount ?? 0)
                     )
-                    
+
                     AnimatedStatCard(
                         title: "Matches",
-                        value: Int.random(in: 20...100),
+                        value: analytics.matchCount,
                         icon: "heart.fill",
                         color: .pink,
                         animate: animateNumbers,
-                        trendData: generateTrendData()
+                        trendData: generateRealisticTrendData(currentValue: analytics.matchCount)
                     )
                 }
-                
+
                 HStack(spacing: 12) {
                     AnimatedStatCard(
                         title: "Profile Views",
-                        value: Int.random(in: 500...2000),
+                        value: analytics.profileViewCount,
                         icon: "eye.fill",
                         color: .blue,
                         animate: animateNumbers,
-                        trendData: generateTrendData()
+                        trendData: generateRealisticTrendData(currentValue: analytics.profileViewCount)
                     )
-                    
+
                     AnimatedStatCard(
                         title: "Collabs",
-                        value: Int.random(in: 5...30),
+                        value: analytics.collabCount,
                         icon: "star.fill",
                         color: .orange,
                         animate: animateNumbers,
-                        trendData: generateTrendData()
+                        trendData: generateRealisticTrendData(currentValue: analytics.collabCount)
                     )
                 }
             }
@@ -617,10 +611,25 @@ private struct MainProfileContent: View {
                 }
             }
             .onTapGesture(perform: onTapStats)
+            .task {
+                await analytics.loadAnalytics(userId: profile.uid)
+            }
         }
-        
-        func generateTrendData() -> [Double] {
-            (0..<7).map { _ in Double.random(in: 0.3...1.0) }
+
+        // Generate realistic trend data that shows growth, never negative
+        func generateRealisticTrendData(currentValue: Int) -> [Double] {
+            guard currentValue > 0 else {
+                return Array(repeating: 0.0, count: 7)
+            }
+
+            let doubleValue = Double(currentValue)
+            // Generate a growth curve leading up to current value
+            // Values go from ~60% to 100% of current value over 7 days
+            return (0..<7).map { index in
+                let progress = Double(index) / 6.0  // 0.0 to 1.0
+                let growthFactor = 0.6 + (progress * 0.4)  // 0.6 to 1.0
+                return doubleValue * growthFactor
+            }
         }
     }
     
@@ -738,7 +747,7 @@ private struct MainProfileContent: View {
         var completionPercentage: Double {
             var score = 0.0
             if profile.profileImageURL != nil { score += 20 }
-            if profile.bio != nil && !profile.bio!.isEmpty { score += 15 }
+            if let bio = profile.bio, !bio.isEmpty { score += 15 }
             if !profile.contentStyles.isEmpty { score += 15 }
             if !(profile.mediaURLs ?? []).isEmpty {
                 score += 15
@@ -823,7 +832,7 @@ private struct MainProfileContent: View {
         
         var suggestions: [String] {
             var tips: [String] = []
-            if profile.bio == nil || profile.bio!.isEmpty { tips.append("Add a bio") }
+            if profile.bio?.isEmpty ?? true { tips.append("Add a bio") }
             if (profile.mediaURLs ?? []).isEmpty { tips.append("Upload content") }
             if profile.socialLinks?.instagram == nil && profile.socialLinks?.tiktok  == nil {
                 tips.append("Connect social accounts")
@@ -1171,17 +1180,23 @@ private struct MainProfileContent: View {
                 
                 // Interests
                 if !(profile.interests ?? []).isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Interests")
-                            .font(.headline)
-                        
-                        FlowLayout(spacing: 8) {
-                            ForEach(profile.interests ?? [], id: \.self) { interest in
-                                Text(interest)
-                                    .font(.caption)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(AppTheme.card, in: Capsule())
+                    let genderValues = ["Male", "Female", "Non-binary", "Prefer not to say"]
+                    let filteredInterests = (profile.interests ?? []).filter { !genderValues.contains($0) }
+
+                    if !filteredInterests.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Interests")
+                                .font(.headline)
+
+                            FlowLayout(spacing: 8) {
+                                ForEach(filteredInterests, id: \.self) { interest in
+                                    Text(interest)
+                                        .font(.caption)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                                        .foregroundStyle(AppTheme.accent)
+                                }
                             }
                         }
                     }
@@ -1523,17 +1538,17 @@ private struct MainProfileContent: View {
     // MARK: - Profile Insights Card
     private struct ProfileInsightsCard: View {
         let profile: UserProfile
-        
+        @StateObject private var insightsVM = ProfileInsightsViewModel()
         @State private var showInsights = false
-        
+
         var body: some View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Label("Profile Insights", systemImage: "chart.xyaxis.line")
                         .font(.headline)
-                    
+
                     Spacer()
-                    
+
                     Button {
                         withAnimation(.spring()) {
                             showInsights.toggle()
@@ -1544,54 +1559,63 @@ private struct MainProfileContent: View {
                             .foregroundStyle(AppTheme.accent)
                     }
                 }
-                
+
                 if showInsights {
-                    VStack(spacing: 16) {
-                        // Engagement Rate
-                        InsightRow(
-                            title: "Engagement Rate",
-                            value: "8.5%",
-                            trend: "+2.3%",
-                            isPositive: true,
-                            icon: "chart.line.uptrend.xyaxis",
-                            color: .green
-                        )
-                        
-                        // Response Rate
-                        InsightRow(
-                            title: "Response Rate",
-                            value: "92%",
-                            trend: "+5%",
-                            isPositive: true,
-                            icon: "message.badge.filled.fill",
-                            color: .blue
-                        )
-                        
-                        // Profile Completion
-                        InsightRow(
-                            title: "Profile Quality",
-                            value: "Excellent",
-                            trend: "Top 10%",
-                            isPositive: true,
-                            icon: "star.fill",
-                            color: .orange
-                        )
-                        
-                        // Weekly Growth
-                        InsightRow(
-                            title: "Weekly Growth",
-                            value: "+\(Int.random(in: 50...200))",
-                            trend: "Above average",
-                            isPositive: true,
-                            icon: "arrow.up.right.circle.fill",
-                            color: .purple
-                        )
+                    if insightsVM.isLoading {
+                        ProgressView("Loading insights...")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    } else {
+                        VStack(spacing: 16) {
+                            // Engagement Rate
+                            InsightRow(
+                                title: "Engagement Rate",
+                                value: String(format: "%.1f%%", insightsVM.engagementRate),
+                                trend: insightsVM.engagementTrend,
+                                isPositive: insightsVM.engagementTrendPositive,
+                                icon: "chart.line.uptrend.xyaxis",
+                                color: .green
+                            )
+
+                            // Response Rate
+                            InsightRow(
+                                title: "Response Rate",
+                                value: String(format: "%.0f%%", insightsVM.responseRate),
+                                trend: insightsVM.responseTrend,
+                                isPositive: insightsVM.responseTrendPositive,
+                                icon: "message.badge.filled.fill",
+                                color: .blue
+                            )
+
+                            // Profile Completion
+                            InsightRow(
+                                title: "Profile Quality",
+                                value: insightsVM.profileQuality,
+                                trend: insightsVM.profileCompletionText,
+                                isPositive: true,
+                                icon: "star.fill",
+                                color: .orange
+                            )
+
+                            // Weekly Growth
+                            InsightRow(
+                                title: "Weekly Growth",
+                                value: "+\(insightsVM.weeklyGrowth)",
+                                trend: insightsVM.growthTrend,
+                                isPositive: insightsVM.weeklyGrowth > 0,
+                                icon: "arrow.up.right.circle.fill",
+                                color: .purple
+                            )
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+            .task {
+                await insightsVM.loadInsights(userId: profile.uid)
+            }
         }
     }
     
@@ -1663,7 +1687,7 @@ private struct MainProfileContent: View {
                     .padding(.horizontal)
                 }
                 
-                if (profile.mediaURLs ?? []).isEmpty {
+                if !(profile.mediaURLs ?? []).isEmpty {
                     TabView(selection: $currentIndex) {
                         ForEach(Array((profile.mediaURLs ?? []).prefix(5).enumerated()), id: \.offset) { index, url in
                             FeaturedContentCard(imageURL: url, index: index)
@@ -1683,8 +1707,8 @@ private struct MainProfileContent: View {
     private struct FeaturedContentCard: View {
         let imageURL: String
         let index: Int
-        
-        @State private var isLiked = Bool.random()
+
+        @State private var isLiked = false
         
         var body: some View {
             ZStack(alignment: .bottomLeading) {
@@ -1694,14 +1718,16 @@ private struct MainProfileContent: View {
                         image
                             .resizable()
                             .scaledToFill()
+                            .frame(maxWidth: .infinity, maxHeight: 280)
                     case .empty:
                         Color.gray.opacity(0.2)
                             .overlay(ProgressView())
+                            .frame(maxWidth: .infinity, maxHeight: 280)
                     default:
                         Color.gray.opacity(0.2)
+                            .frame(maxWidth: .infinity, maxHeight: 280)
                     }
                 }
-                .frame(height: 280)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 
                 // Gradient Overlay
@@ -1710,7 +1736,7 @@ private struct MainProfileContent: View {
                     startPoint: .center,
                     endPoint: .bottom
                 )
-                .frame(height: 280)
+                .frame(maxWidth: .infinity, maxHeight: 280)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 
                 // Content Info
@@ -1847,113 +1873,73 @@ private struct MainProfileContent: View {
     
     // MARK: - Testimonials Section
     private struct TestimonialsSection: View {
+        let profile: UserProfile
+        @StateObject private var testimonialsVM = TestimonialsViewModel()
+        @State private var showAddTestimonial = false
+
         var body: some View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Text("Testimonials")
                         .font(.headline)
-                    
+
                     Spacer()
-                    
-                    HStack(spacing: 4) {
-                        ForEach(0..<5) { _ in
-                            Image(systemName: "star.fill")
-                                .font(.caption)
-                                .foregroundStyle(.yellow)
+
+                    if !testimonialsVM.testimonials.isEmpty {
+                        HStack(spacing: 4) {
+                            ForEach(0..<5) { index in
+                                Image(systemName: index < Int(testimonialsVM.averageRating) ? "star.fill" : "star")
+                                    .font(.caption)
+                                    .foregroundStyle(.yellow)
+                            }
+                            Text(String(format: "%.1f", testimonialsVM.averageRating))
+                                .font(.caption.bold())
                         }
-                        Text("4.9")
-                            .font(.caption.bold())
                     }
                 }
-                
-                VStack(spacing: 12) {
-                    TestimonialCard(
-                        name: "Sarah Johnson",
-                        role: "Content Creator",
-                        rating: 5,
-                        text: "Amazing collaborator! Professional and creative. Highly recommend!",
-                        imageURL: nil
-                    )
-                    
-                    TestimonialCard(
-                        name: "Marcus Chen",
-                        role: "Video Editor",
-                        rating: 5,
-                        text: "Great to work with! Delivered high-quality content on time.",
-                        imageURL: nil
-                    )
-                    
-                    TestimonialCard(
-                        name: "Alex Rivera",
-                        role: "Photographer",
-                        rating: 4,
-                        text: "Talented creator with excellent communication skills.",
-                        imageURL: nil
-                    )
+
+                if testimonialsVM.isLoading {
+                    ProgressView("Loading testimonials...")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding()
+                } else if testimonialsVM.testimonials.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "quote.bubble")
+                            .font(.largeTitle)
+                            .foregroundStyle(.secondary)
+                        Text("No testimonials yet")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(testimonialsVM.testimonials.prefix(3)) { testimonial in
+                            TestimonialCard(testimonial: testimonial)
+                        }
+
+                        if testimonialsVM.testimonials.count > 3 {
+                            Button("View All \(testimonialsVM.testimonials.count) Testimonials") {
+                                showAddTestimonial = true
+                            }
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.accent)
+                        }
+                    }
                 }
             }
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-        }
-    }
-    
-    private struct TestimonialCard: View {
-        let name: String
-        let role: String
-        let rating: Int
-        let text: String
-        let imageURL: String?
-        
-        var body: some View {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    if let imageURL = imageURL, let url = URL(string: imageURL) {
-                        AsyncImage(url: url) { image in
-                            image.resizable().scaledToFill()
-                        } placeholder: {
-                            Circle().fill(AppTheme.accent.opacity(0.3))
-                        }
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
-                    } else {
-                        ZStack {
-                            Circle()
-                                .fill(AppTheme.accent.opacity(0.3))
-                                .frame(width: 40, height: 40)
-                            
-                            Text(name.prefix(1))
-                                .font(.headline)
-                                .foregroundStyle(AppTheme.accent)
-                        }
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(name)
-                            .font(.subheadline.bold())
-                        
-                        Text(role)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    HStack(spacing: 2) {
-                        ForEach(0..<rating, id: \.self) { _ in
-                            Image(systemName: "star.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.yellow)
-                        }
-                    }
-                }
-                
-                Text(text)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
+            .task {
+                await testimonialsVM.loadTestimonials(profileUserId: profile.uid)
             }
-            .padding()
-            .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+            .sheet(isPresented: $showAddTestimonial) {
+                AllTestimonialsSheet(
+                    profile: profile,
+                    viewModel: testimonialsVM
+                )
+            }
         }
     }
     
@@ -2045,8 +2031,14 @@ private struct MainProfileContent: View {
         @State private var selectedInterests: Set<String>
         @State private var selectedContentStyles: Set<UserProfile.ContentStyle>
         @State private var selectedPhoto: PhotosPickerItem?
+        @State private var selectedGalleryPhotos: [PhotosPickerItem] = []
+        @State private var galleryImageURLs: [String]
         @State private var isUploading = false
-        
+        @State private var isUploadingGallery = false
+        @State private var showNetworkAlert = false
+        @State private var networkAlertMessage = ""
+        @State private var hasInitializedGallery = false
+
         let availableInterests = ["Music", "Art", "Gaming", "Fitness", "Travel", "Food", "Tech", "Fashion", "Sports", "Photography"]
         
         init(profile: UserProfile, viewModel: ProfileViewModel, onSave: @escaping () -> Void) {
@@ -2057,6 +2049,7 @@ private struct MainProfileContent: View {
             _bio = State(initialValue: profile.bio ?? "")
             _selectedInterests = State(initialValue: Set(profile.interests ?? []))
             _selectedContentStyles = State(initialValue: Set(profile.contentStyles))
+            _galleryImageURLs = State(initialValue: profile.mediaURLs ?? [])
         }
         
         var body: some View {
@@ -2090,9 +2083,9 @@ private struct MainProfileContent: View {
                         }
                     }
                     
-                    Section("Basic Info") {
+                    Section {
                         TextField("Display Name", text: $displayName)
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Bio")
                                 .font(.caption)
@@ -2100,6 +2093,106 @@ private struct MainProfileContent: View {
                             TextEditor(text: $bio)
                                 .frame(height: 100)
                         }
+                    } header: {
+                        Text("Basic Info")
+                    }
+
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Add up to 6 photos")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\(galleryImageURLs.count)/6")
+                                    .font(.caption)
+                                    .foregroundStyle(galleryImageURLs.count >= 6 ? .red : .secondary)
+                            }
+
+                            // Photo grid - use fixed size to prevent NaN errors
+                            LazyVGrid(columns: [GridItem(.fixed(100)), GridItem(.fixed(100)), GridItem(.fixed(100))], spacing: 12) {
+                                ForEach(galleryImageURLs, id: \.self) { url in
+                                    ZStack(alignment: .topTrailing) {
+                                        AsyncImage(url: URL(string: url)) { phase in
+                                            switch phase {
+                                            case .success(let image):
+                                                image
+                                                    .resizable()
+                                                    .scaledToFill()
+                                                    .frame(width: 100, height: 100)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            case .failure(_):
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(.red.opacity(0.2))
+                                                    .frame(width: 100, height: 100)
+                                                    .overlay(
+                                                        Image(systemName: "exclamationmark.triangle")
+                                                            .foregroundStyle(.red)
+                                                    )
+                                            case .empty:
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(.gray.opacity(0.2))
+                                                    .frame(width: 100, height: 100)
+                                                    .overlay(
+                                                        ProgressView()
+                                                            .tint(AppTheme.accent)
+                                                    )
+                                            @unknown default:
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(.gray.opacity(0.2))
+                                                    .frame(width: 100, height: 100)
+                                            }
+                                        }
+
+                                        Button {
+                                            let urlToDelete = url
+                                            print("🗑️ User clicked delete for photo")
+                                            // Remove from local array
+                                            withAnimation {
+                                                galleryImageURLs.removeAll { $0 == urlToDelete }
+                                            }
+                                            // Save removal to Firestore immediately
+                                            if let uid = Auth.auth().currentUser?.uid {
+                                                Task {
+                                                    await viewModel.removeMediaURL(userId: uid, url: urlToDelete)
+                                                    print("✅ Photo deleted from Firestore")
+                                                }
+                                            }
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.white)
+                                                .background(Circle().fill(.black.opacity(0.6)))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .padding(4)
+                                    }
+                                }
+
+                                // Add photo button
+                                if galleryImageURLs.count < 6 {
+                                    PhotosPicker(selection: $selectedGalleryPhotos, maxSelectionCount: 6 - galleryImageURLs.count, matching: .images) {
+                                        VStack(spacing: 8) {
+                                            Image(systemName: "plus")
+                                                .font(.title2)
+                                            Text("Add")
+                                                .font(.caption)
+                                        }
+                                        .foregroundStyle(AppTheme.accent)
+                                        .frame(width: 100, height: 100)
+                                        .background(AppTheme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                                    }
+                                }
+                            }
+
+                            if isUploadingGallery {
+                                ProgressView("Uploading photos...")
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                    } header: {
+                        Text("Photo Gallery")
+                    } footer: {
+                        Text("These photos will be visible to others on your profile")
                     }
                     
                     Section("Content Styles") {
@@ -2148,11 +2241,13 @@ private struct MainProfileContent: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") {
                             Task {
-                                var updated = profile
+                                // Get latest profile to avoid overwriting photos
+                                guard var updated = viewModel.profile else { return }
                                 updated.displayName = displayName
                                 updated.bio = bio.isEmpty ? nil : bio
                                 updated.interests = Array(selectedInterests)
                                 updated.contentStyles = Array(selectedContentStyles)
+                                // DON'T set mediaURLs here - photos are saved immediately via addMediaURL/removeMediaURL
                                 await viewModel.updateProfile(updated)
                                 Haptics.notify(.success)
                                 onSave()
@@ -2160,7 +2255,7 @@ private struct MainProfileContent: View {
                             }
                         }
                         .fontWeight(.bold)
-                        .disabled(displayName.isEmpty)
+                        .disabled(displayName.isEmpty || isUploadingGallery)
                     }
                 }
                 .onChange(of: selectedPhoto) { _, newValue in
@@ -2168,23 +2263,123 @@ private struct MainProfileContent: View {
                     Task {
                         isUploading = true
                         defer { isUploading = false }
-                        
+
                         if let data = try? await newValue.loadTransferable(type: Data.self),
-                           let compressed = UIImage(data: data)?.jpegData(compressionQuality: 0.7),
+                           let image = UIImage(data: data),
                            let uid = Auth.auth().currentUser?.uid {
-                            await viewModel.updateProfilePhoto(userId: uid, imageData: compressed)
+                            // Resize to max 1200px for faster upload
+                            let resized = resizeImage(image, maxWidth: 1200)
+                            if let compressed = resized.jpegData(compressionQuality: 0.5) {
+                                print("📦 Compressed profile photo: \(data.count / 1024)KB → \(compressed.count / 1024)KB")
+                                await viewModel.updateProfilePhoto(userId: uid, imageData: compressed)
+                            }
+                        }
+                    }
+                }
+                .onChange(of: selectedGalleryPhotos) { _, newPhotos in
+                    guard !newPhotos.isEmpty else { return }
+                    Task {
+                        isUploadingGallery = true
+                        defer {
+                            isUploadingGallery = false
+                            selectedGalleryPhotos = []
+                        }
+
+                        for photo in newPhotos {
+                            // Stop if we've reached the 6 photo limit
+                            guard galleryImageURLs.count < 6 else {
+                                print("⚠️ Reached 6 photo limit, stopping uploads")
+                                break
+                            }
+
+                            if let data = try? await photo.loadTransferable(type: Data.self),
+                               let image = UIImage(data: data),
+                               let uid = Auth.auth().currentUser?.uid {
+                                // Resize to 800px max width and compress aggressively
+                                let resized = resizeImage(image, maxWidth: 800)
+                                // Use 0.3 quality for much faster uploads (smaller file size)
+                                if let compressed = resized.jpegData(compressionQuality: 0.3) {
+                                    print("📦 Compressed image: \(data.count / 1024)KB → \(compressed.count / 1024)KB")
+                                    if let url = await viewModel.uploadGalleryPhoto(userId: uid, imageData: compressed) {
+                                        await MainActor.run {
+                                            galleryImageURLs.append(url)
+                                        }
+                                        // CRITICAL FIX: Save to Firestore immediately so photos don't get lost
+                                        await viewModel.addMediaURL(userId: uid, url: url)
+                                        print("✅ Photo saved to profile: \(galleryImageURLs.count)/6")
+                                    } else if let errorMsg = await viewModel.errorMessage {
+                                        // Show alert if upload failed (e.g., WiFi blocking)
+                                        await MainActor.run {
+                                            networkAlertMessage = errorMsg
+                                            showNetworkAlert = true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .alert("Upload Failed", isPresented: $showNetworkAlert) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text(networkAlertMessage)
+                }
+                .task {
+                    // Only sync once when sheet first appears
+                    guard !hasInitializedGallery else {
+                        print("⏭️ Gallery already initialized, skipping sync")
+                        return
+                    }
+
+                    // Wait a tiny bit for profile refresh to complete, then sync
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+
+                    // Sync galleryImageURLs with latest profile data when sheet opens
+                    if let latestProfile = viewModel.profile {
+                        let newURLs = latestProfile.mediaURLs ?? []
+                        print("🔄 Syncing gallery photos on sheet open")
+                        print("   Current: \(galleryImageURLs.count) photos")
+                        print("   From Firestore: \(newURLs.count) photos")
+
+                        // Only update if we haven't already initialized
+                        if !hasInitializedGallery {
+                            galleryImageURLs = newURLs
+                            hasInitializedGallery = true
+                            print("✅ Gallery initialized with \(galleryImageURLs.count) photos")
                         }
                     }
                 }
             }
         }
+
+        // MARK: - Image Helper
+
+        private func resizeImage(_ image: UIImage, maxWidth: CGFloat) -> UIImage {
+            let size = image.size
+
+            // If image is already smaller, return as-is
+            if size.width <= maxWidth {
+                return image
+            }
+
+            // Calculate new size maintaining aspect ratio
+            let ratio = maxWidth / size.width
+            let newHeight = size.height * ratio
+            let newSize = CGSize(width: maxWidth, height: newHeight)
+
+            // Resize the image
+            let renderer = UIGraphicsImageRenderer(size: newSize)
+            return renderer.image { _ in
+                image.draw(in: CGRect(origin: .zero, size: newSize))
+            }
+        }
     }
-    
+
     // MARK: - Enhanced QR Code Sheet
     struct EnhancedQRCodeSheet: View {
         let profile: UserProfile
         @Environment(\.dismiss) var dismiss
-        
+
         @State private var showShareSheet = false
         @State private var qrImage: UIImage?
         
@@ -2208,14 +2403,19 @@ private struct MainProfileContent: View {
                             )
                             .frame(width: 280, height: 280)
                             .shadow(color: AppTheme.accent.opacity(0.3), radius: 20, y: 10)
-                        
+
                         RoundedRectangle(cornerRadius: 20)
                             .fill(.white)
                             .frame(width: 240, height: 240)
-                        
-                        Image(systemName: "qrcode")
-                            .font(.system(size: 120))
-                            .foregroundStyle(.black)
+
+                        if let qrImage = qrImage {
+                            Image(uiImage: qrImage)
+                                .resizable()
+                                .interpolation(.none)
+                                .frame(width: 220, height: 220)
+                        } else {
+                            ProgressView()
+                        }
                     }
                     
                     VStack(spacing: 8) {
@@ -2241,36 +2441,20 @@ private struct MainProfileContent: View {
                     
                     Spacer()
                     
-                    HStack(spacing: 16) {
-                        Button {
-                            // Download QR
-                            Haptics.impact(.medium)
-                        } label: {
-                            HStack {
-                                Image(systemName: "square.and.arrow.down")
-                                Text("Save")
-                            }
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                    // Save/Share button - uses system Share sheet (no permissions needed)
+                    Button {
+                        showShareSheet = true
+                        Haptics.impact(.medium)
+                    } label: {
+                        HStack {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("Save or Share")
                         }
-                        
-                        Button {
-                            showShareSheet = true
-                            Haptics.impact(.medium)
-                        } label: {
-                            HStack {
-                                Image(systemName: "square.and.arrow.up")
-                                Text("Share")
-                            }
-                            .font(.headline)
-                            .foregroundStyle(AppTheme.accent)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(AppTheme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
-                        }
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal, 32)
                     .padding(.bottom, 20)
@@ -2282,6 +2466,25 @@ private struct MainProfileContent: View {
                         Button("Done") { dismiss() }
                     }
                 }
+                .task {
+                    // Generate QR code with unique profile URL
+                    // Each profile has a unique UID, so the QR code is unique to each user
+                    let profileURL = "https://featur.app/profile/\(profile.uid)"
+
+                    // Generate QR code without center image (avoid blocking network call that freezes UI)
+                    qrImage = QRCodeGenerator.generateStylized(
+                        from: profileURL,
+                        centerImage: nil,
+                        size: CGSize(width: 512, height: 512)
+                    )
+                }
+                .sheet(isPresented: $showShareSheet) {
+                    if let qrImage = qrImage {
+                        ShareSheet(items: [qrImage])
+                            .presentationDetents([.medium, .large])
+                            .presentationDragIndicator(.visible)
+                    }
+                }
             }
         }
     }
@@ -2290,16 +2493,10 @@ private struct MainProfileContent: View {
     struct EnhancedStatsSheet: View {
         let profile: UserProfile
         @Environment(\.dismiss) var dismiss
-        
+        @StateObject private var analyticsVM = DetailedAnalyticsViewModel()
+
         @State private var selectedPeriod: StatsPeriod = .week
-        
-        enum StatsPeriod: String, CaseIterable {
-            case week = "Week"
-            case month = "Month"
-            case year = "Year"
-            case allTime = "All Time"
-        }
-        
+
         var body: some View {
             NavigationStack {
                 ScrollView {
@@ -2312,93 +2509,106 @@ private struct MainProfileContent: View {
                         }
                         .pickerStyle(.segmented)
                         .padding(.horizontal)
-                        
-                        // Engagement Stats
-                        StatsSection(title: "Engagement", icon: "chart.line.uptrend.xyaxis") {
-                            VStack(spacing: 12) {
-                                DetailedStatRow(
-                                    label: "Profile Views",
-                                    value: "\(Int.random(in: 500...5000))",
-                                    change: "+12%",
-                                    isPositive: true
-                                )
-                                DetailedStatRow(
-                                    label: "New Followers",
-                                    value: "+\(Int.random(in: 50...500))",
-                                    change: "+8%",
-                                    isPositive: true
-                                )
-                                DetailedStatRow(
-                                    label: "Likes Received",
-                                    value: "\(Int.random(in: 100...1000))",
-                                    change: "+15%",
-                                    isPositive: true
-                                )
+                        .onChange(of: selectedPeriod) { _, newPeriod in
+                            Task {
+                                await analyticsVM.loadAnalytics(userId: profile.uid, period: newPeriod)
                             }
                         }
-                        
-                        // Match Stats
-                        StatsSection(title: "Matches", icon: "heart.fill") {
-                            VStack(spacing: 12) {
-                                DetailedStatRow(
-                                    label: "Total Matches",
-                                    value: "\(Int.random(in: 10...100))",
-                                    change: "+5%",
-                                    isPositive: true
-                                )
-                                DetailedStatRow(
-                                    label: "Match Rate",
-                                    value: "24%",
-                                    change: "+3%",
-                                    isPositive: true
-                                )
-                                DetailedStatRow(
-                                    label: "Messages Sent",
-                                    value: "\(Int.random(in: 50...500))",
-                                    change: "+10%",
-                                    isPositive: true
-                                )
+
+                        if analyticsVM.isLoading {
+                            ProgressView("Loading analytics...")
+                                .padding()
+                        } else {
+                            // Engagement Stats
+                            StatsSection(title: "Engagement", icon: "chart.line.uptrend.xyaxis") {
+                                VStack(spacing: 12) {
+                                    DetailedStatRow(
+                                        label: "Profile Views",
+                                        value: "\(analyticsVM.profileViews)",
+                                        change: analyticsVM.profileViewsChange,
+                                        isPositive: analyticsVM.profileViewsChangePositive
+                                    )
+                                    DetailedStatRow(
+                                        label: "New Followers",
+                                        value: "+\(analyticsVM.newFollowers)",
+                                        change: analyticsVM.followersChange,
+                                        isPositive: analyticsVM.followersChangePositive
+                                    )
+                                    DetailedStatRow(
+                                        label: "Likes Received",
+                                        value: "\(analyticsVM.likesReceived)",
+                                        change: analyticsVM.likesChange,
+                                        isPositive: analyticsVM.likesChangePositive
+                                    )
+                                }
                             }
-                        }
-                        
-                        // Content Stats
-                        StatsSection(title: "Content", icon: "photo.stack.fill") {
-                            VStack(spacing: 12) {
-                                DetailedStatRow(
-                                    label: "Total Photos",
-                                    value: "\((profile.mediaURLs ?? []).count)",
-                                    change: "+2",
-                                    isPositive: true
-                                )
-                                DetailedStatRow(
-                                    label: "Avg. Likes per Photo",
-                                    value: "\(Int.random(in: 50...200))",
-                                    change: "+18%",
-                                    isPositive: true
-                                )
+
+                            // Match Stats
+                            StatsSection(title: "Matches", icon: "heart.fill") {
+                                VStack(spacing: 12) {
+                                    DetailedStatRow(
+                                        label: "Total Matches",
+                                        value: "\(analyticsVM.totalMatches)",
+                                        change: analyticsVM.matchesChange,
+                                        isPositive: analyticsVM.matchesChangePositive
+                                    )
+                                    DetailedStatRow(
+                                        label: "Match Rate",
+                                        value: analyticsVM.matchRate,
+                                        change: analyticsVM.matchRateChange,
+                                        isPositive: analyticsVM.matchRateChangePositive
+                                    )
+                                    DetailedStatRow(
+                                        label: "Messages Sent",
+                                        value: "\(analyticsVM.messagesSent)",
+                                        change: analyticsVM.messagesChange,
+                                        isPositive: analyticsVM.messagesChangePositive
+                                    )
+                                }
                             }
+
+                            // Content Stats
+                            StatsSection(title: "Content", icon: "photo.stack.fill") {
+                                VStack(spacing: 12) {
+                                    DetailedStatRow(
+                                        label: "Total Photos",
+                                        value: "\((profile.mediaURLs ?? []).count)",
+                                        change: "—",
+                                        isPositive: true
+                                    )
+                                    DetailedStatRow(
+                                        label: "Active Collabs",
+                                        value: "\(analyticsVM.activeCollabs)",
+                                        change: analyticsVM.collabsChange,
+                                        isPositive: analyticsVM.collabsChangePositive
+                                    )
+                                }
+                            }
+
+                            // Summary Card
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Period Summary")
+                                    .font(.headline)
+
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(AppTheme.gradient.opacity(0.3))
+                                    .frame(height: 120)
+                                    .overlay(
+                                        VStack(spacing: 8) {
+                                            Image(systemName: "chart.bar.fill")
+                                                .font(.system(size: 40))
+                                                .foregroundStyle(.white)
+                                            Text("Total Activity: \(analyticsVM.totalActivity)")
+                                                .font(.headline)
+                                                .foregroundStyle(.white)
+                                            Text("in \(selectedPeriod.rawValue)")
+                                                .font(.caption)
+                                                .foregroundStyle(.white.opacity(0.8))
+                                        }
+                                    )
+                            }
+                            .padding(.horizontal)
                         }
-                        
-                        // Growth Chart Placeholder
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Growth Overview")
-                                .font(.headline)
-                            
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(AppTheme.gradient.opacity(0.3))
-                                .frame(height: 200)
-                                .overlay(
-                                    VStack {
-                                        Image(systemName: "chart.bar.fill")
-                                            .font(.system(size: 50))
-                                            .foregroundStyle(.white)
-                                        Text("Chart Coming Soon")
-                                            .font(.caption)
-                                            .foregroundStyle(.white)
-                                    }
-                                )
-                        }
-                        .padding(.horizontal)
                     }
                     .padding(.vertical)
                 }
@@ -2409,6 +2619,9 @@ private struct MainProfileContent: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Done") { dismiss() }
                     }
+                }
+                .task {
+                    await analyticsVM.loadAnalytics(userId: profile.uid, period: selectedPeriod)
                 }
             }
         }
@@ -2471,23 +2684,415 @@ private struct MainProfileContent: View {
         }
     }
     
+    // MARK: - Preview Profile Image Helper
+    struct PreviewProfileImage: View {
+        let imageURL: String?
+
+        var body: some View {
+            Group {
+                if let imageURL = imageURL, let url = URL(string: imageURL) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        placeholderView
+                    }
+                    .frame(width: UIScreen.main.bounds.width, height: 300)
+                    .clipped()
+                } else {
+                    placeholderView
+                }
+            }
+        }
+
+        private var placeholderView: some View {
+            Rectangle()
+                .fill(AppTheme.accent.opacity(0.2))
+                .frame(height: 300)
+                .overlay(ProgressView().tint(.white))
+        }
+    }
+
+    // MARK: - Profile Preview Content Sections
+    struct PreviewContentSection: View {
+        let profile: UserProfile
+
+        var body: some View {
+            VStack(spacing: 20) {
+                PreviewNameSection(profile: profile)
+                PreviewLocationAgeSection(profile: profile)
+                PreviewActionButtons()
+                PreviewBioSection(bio: profile.bio)
+                PreviewInterestsSection(interests: profile.interests)
+                PreviewContentStylesSection(styles: profile.contentStyles)
+                PreviewCollabPreferencesSection(preferences: profile.collaborationPreferences)
+                PreviewSocialLinksSection(profile: profile)
+            }
+            .padding()
+            .padding(.bottom, 100)
+        }
+    }
+
+    struct PreviewActionButtons: View {
+        var body: some View {
+            HStack(spacing: 12) {
+                // Like Button (preview only - non-functional)
+                HStack {
+                    Image(systemName: "heart")
+                    Text("Like")
+                }
+                .font(.headline)
+                .foregroundStyle(AppTheme.accent)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+
+                // Message Button (preview only - non-functional)
+                HStack {
+                    Image(systemName: "message.fill")
+                    Text("Message")
+                }
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+            }
+        }
+    }
+
+    struct PreviewNameSection: View {
+        let profile: UserProfile
+
+        var body: some View {
+            HStack {
+                Text(profile.displayName)
+                    .font(.system(size: 28, weight: .bold))
+                if profile.isVerified ?? false {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(.blue)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    struct PreviewBioSection: View {
+        let bio: String?
+
+        var body: some View {
+            Group {
+                if let bio = bio, !bio.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("About")
+                            .font(.headline)
+                        Text(bio)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    struct PreviewContentStylesSection: View {
+        let styles: [UserProfile.ContentStyle]
+
+        var body: some View {
+            Group {
+                if !styles.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Content Styles")
+                            .font(.headline)
+                        FlowLayout(spacing: 8) {
+                            ForEach(styles, id: \.self) { style in
+                                styleTag(style)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+
+        private func styleTag(_ style: UserProfile.ContentStyle) -> some View {
+            Text(style.rawValue)
+                .font(.caption)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                .foregroundStyle(AppTheme.accent)
+        }
+    }
+
+    struct PreviewLocationAgeSection: View {
+        let profile: UserProfile
+
+        var body: some View {
+            Group {
+                if hasLocationOrAge {
+                    HStack(spacing: 12) {
+                        if let location = profile.location {
+                            HStack(spacing: 4) {
+                                Image(systemName: "location.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(locationText(location))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if let location = profile.location, profile.age != nil {
+                            Text("•")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if let age = profile.age {
+                            HStack(spacing: 4) {
+                                Image(systemName: "person.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("\(age)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+
+        private var hasLocationOrAge: Bool {
+            (profile.location != nil && !locationText(profile.location!).isEmpty) || profile.age != nil
+        }
+
+        private func locationText(_ location: UserProfile.Location) -> String {
+            var parts: [String] = []
+            if let city = location.city, !city.isEmpty {
+                parts.append(city)
+            }
+            if let state = location.state, !state.isEmpty {
+                parts.append(state)
+            }
+            return parts.joined(separator: ", ")
+        }
+    }
+
+    struct PreviewInterestsSection: View {
+        let interests: [String]?
+
+        // Filter out gender-related values that shouldn't be in interests
+        private var filteredInterests: [String] {
+            let genderValues = ["Male", "Female", "Non-binary", "Prefer not to say"]
+            return (interests ?? []).filter { !genderValues.contains($0) }
+        }
+
+        var body: some View {
+            Group {
+                if !filteredInterests.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Interests")
+                            .font(.headline)
+                        FlowLayout(spacing: 8) {
+                            ForEach(filteredInterests, id: \.self) { interest in
+                                Text(interest)
+                                    .font(.caption)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(AppTheme.accent)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    struct PreviewCollabPreferencesSection: View {
+        let preferences: UserProfile.CollaborationPreferences?
+
+        var body: some View {
+            Group {
+                if let preferences = preferences, !preferences.lookingFor.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Looking For")
+                            .font(.headline)
+                        FlowLayout(spacing: 8) {
+                            ForEach(preferences.lookingFor, id: \.self) { collabType in
+                                HStack(spacing: 4) {
+                                    Image(systemName: "sparkles")
+                                        .font(.caption2)
+                                    Text(collabType.rawValue)
+                                        .font(.caption)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.orange.opacity(0.15), in: Capsule())
+                                .foregroundStyle(.orange)
+                            }
+                        }
+
+                        // Response Time
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(preferences.responseTime.rawValue)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    struct PreviewSocialLinksSection: View {
+        let profile: UserProfile
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                if hasAnySocialLinks {
+                    Text("Social Links")
+                        .font(.headline)
+
+                    VStack(spacing: 8) {
+                        if let handle = profile.socialLinks?.instagram?.username {
+                            socialLinkRow(icon: "camera.fill", color: .purple, handle: handle)
+                        }
+                        if let handle = profile.socialLinks?.tiktok?.username {
+                            socialLinkRow(icon: "music.note", color: .black, handle: handle)
+                        }
+                        if let handle = profile.socialLinks?.youtube?.username {
+                            socialLinkRow(icon: "play.rectangle.fill", color: .red, handle: handle)
+                        }
+                        if let handle = profile.socialLinks?.twitch?.username {
+                            socialLinkRow(icon: "tv.fill", color: .purple, handle: handle)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+
+        private var hasAnySocialLinks: Bool {
+            profile.socialLinks?.instagram?.username != nil || profile.socialLinks?.tiktok?.username != nil ||
+            profile.socialLinks?.youtube?.username != nil || profile.socialLinks?.twitch?.username != nil
+        }
+
+        private func socialLinkRow(icon: String, color: Color, handle: String) -> some View {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundStyle(color)
+                Text("@\(handle)")
+                Spacer()
+            }
+            .padding(12)
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
     // MARK: - Profile Preview View
     struct ProfilePreviewView: View {
         let profile: UserProfile
         @Environment(\.dismiss) var dismiss
-        
+        @State private var selectedImageIndex = 0
+
+        // Combine profile photo + gallery photos for carousel
+        private var allPhotos: [String] {
+            var photos: [String] = []
+            // Add gallery photos first
+            if let mediaURLs = profile.mediaURLs, !mediaURLs.isEmpty {
+                photos.append(contentsOf: mediaURLs)
+            }
+            // Add profile photo at the end if not already in gallery
+            if let profileImage = profile.profileImageURL,
+               !photos.contains(profileImage) {
+                photos.append(profileImage)
+            }
+            return photos
+        }
+
         var body: some View {
             NavigationStack {
-                ProfileDetailView(profile: profile)
-                    .navigationTitle("Preview")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button("Done") {
-                                dismiss()
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Photo Gallery Carousel (like ProfileDetailView)
+                        if !allPhotos.isEmpty {
+                            TabView(selection: $selectedImageIndex) {
+                                ForEach(Array(allPhotos.enumerated()), id: \.offset) { index, url in
+                                    AsyncImage(url: URL(string: url)) { phase in
+                                        switch phase {
+                                        case .success(let image):
+                                            image
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: UIScreen.main.bounds.width, height: 400)
+                                                .clipped()
+                                        case .empty:
+                                            Rectangle()
+                                                .fill(AppTheme.accent.opacity(0.2))
+                                                .frame(width: UIScreen.main.bounds.width, height: 400)
+                                                .overlay(ProgressView().tint(.white))
+                                        case .failure(_):
+                                            Rectangle()
+                                                .fill(.red.opacity(0.2))
+                                                .frame(width: UIScreen.main.bounds.width, height: 400)
+                                                .overlay(
+                                                    Image(systemName: "exclamationmark.triangle")
+                                                        .foregroundStyle(.red)
+                                                )
+                                        @unknown default:
+                                            Rectangle()
+                                                .fill(AppTheme.accent.opacity(0.2))
+                                                .frame(width: UIScreen.main.bounds.width, height: 400)
+                                        }
+                                    }
+                                    .tag(index)
+                                }
                             }
+                            .tabViewStyle(.page(indexDisplayMode: .always))
+                            .frame(height: 400)
+
+                            // Photo counter
+                            if allPhotos.count > 1 {
+                                Text("\(selectedImageIndex + 1) / \(allPhotos.count)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, -10)
+                            }
+                        } else {
+                            // Fallback if no photos
+                            Rectangle()
+                                .fill(AppTheme.accent.opacity(0.2))
+                                .frame(height: 300)
+                                .overlay(
+                                    Image(systemName: "person.circle.fill")
+                                        .font(.system(size: 80))
+                                        .foregroundStyle(AppTheme.accent)
+                                )
+                        }
+
+                        PreviewContentSection(profile: profile)
+                    }
+                }
+                .background(AppTheme.bg)
+                .navigationTitle("Preview")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Done") {
+                            dismiss()
                         }
                     }
+                }
             }
         }
     }
@@ -2746,122 +3351,76 @@ private struct MainProfileContent: View {
     // MARK: - Collaboration History Section
     private struct CollaborationHistorySection: View {
         let profile: UserProfile
-        
-        let collaborations = [
-            CollabItem(name: "Sarah J.", project: "Beauty Campaign", date: "2 weeks ago", image: nil, status: .completed),
-            CollabItem(name: "Marcus C.", project: "Gaming Stream", date: "1 month ago", image: nil, status: .completed),
-            CollabItem(name: "Alex R.", project: "Photography Series", date: "Ongoing", image: nil, status: .active)
-        ]
-        
+        @StateObject private var collabVM = CollaborationHistoryViewModel()
+        @State private var showAllCollabs = false
+
         var body: some View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Label("Collaboration History", systemImage: "person.2.fill")
                         .font(.headline)
-                    
+
                     Spacer()
-                    
-                    Text("\(collaborations.count)")
-                        .font(.caption.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(AppTheme.accent, in: Capsule())
+
+                    if !collabVM.collaborations.isEmpty {
+                        Text("\(collabVM.collaborations.count)")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(AppTheme.accent, in: Capsule())
+                    }
                 }
-                
-                VStack(spacing: 12) {
-                    ForEach(collaborations) { collab in
-                        CollabHistoryCard(collab: collab)
+
+                if collabVM.isLoading {
+                    ProgressView("Loading collaborations...")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding()
+                } else if collabVM.collaborations.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "person.2")
+                            .font(.largeTitle)
+                            .foregroundStyle(.secondary)
+                        Text("No collaborations yet")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(collabVM.collaborations.prefix(3)) { collabWithPartner in
+                            CollabHistoryCard(
+                                collaboration: collabWithPartner.collaboration,
+                                partnerProfile: collabWithPartner.partnerProfile
+                            )
+                        }
+
+                        if collabVM.collaborations.count > 3 {
+                            Button("View All \(collabVM.collaborations.count) Collaborations") {
+                                showAllCollabs = true
+                            }
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.accent)
+                        }
                     }
                 }
             }
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-        }
-    }
-    
-    struct CollabItem: Identifiable {
-        let id = UUID()
-        let name: String
-        let project: String
-        let date: String
-        let image: String?
-        let status: CollabStatus
-        
-        enum CollabStatus {
-            case active, completed, pending
-            
-            var color: Color {
-                switch self {
-                case .active: return .green
-                case .completed: return .blue
-                case .pending: return .orange
-                }
+            .task {
+                await collabVM.loadCollaborations(userId: profile.uid)
             }
-            
-            var icon: String {
-                switch self {
-                case .active: return "checkmark.circle.fill"
-                case .completed: return "checkmark.seal.fill"
-                case .pending: return "clock.fill"
-                }
+            .sheet(isPresented: $showAllCollabs) {
+                AllCollaborationsSheet(
+                    profile: profile,
+                    viewModel: collabVM
+                )
             }
         }
     }
-    
-    private struct CollabHistoryCard: View {
-        let collab: CollabItem
-        
-        var body: some View {
-            HStack(spacing: 12) {
-                // Avatar
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.accent.opacity(0.3))
-                        .frame(width: 50, height: 50)
-                    
-                    Text(collab.name.prefix(1))
-                        .font(.title3.bold())
-                        .foregroundStyle(AppTheme.accent)
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(collab.project)
-                        .font(.subheadline.bold())
-                    
-                    HStack(spacing: 6) {
-                        Text(collab.name)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        
-                        Circle()
-                            .fill(Color.secondary)
-                            .frame(width: 2, height: 2)
-                        
-                        Text(collab.date)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                Spacer()
-                
-                HStack(spacing: 4) {
-                    Image(systemName: collab.status.icon)
-                        .font(.caption)
-                    Text(collab.status == .active ? "Active" : collab.status == .completed ? "Done" : "Pending")
-                        .font(.caption2.bold())
-                }
-                .foregroundStyle(collab.status.color)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(collab.status.color.opacity(0.15), in: Capsule())
-            }
-            .padding()
-            .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
-        }
-    }
-    
+
+
     // MARK: - Creator Stats Dashboard
     private struct CreatorStatsDashboard: View {
         let profile: UserProfile
@@ -3386,9 +3945,10 @@ private struct MainProfileContent: View {
         static func generateVisitors() -> [Visitor] {
             let names = ["Emma Wilson", "James Lee", "Sofia Garcia", "Noah Kim", "Olivia Brown", "Liam Chen", "Ava Martinez", "Mason Taylor"]
             let times = ["2 min ago", "15 min ago", "1 hour ago", "3 hours ago", "5 hours ago", "1 day ago", "2 days ago", "3 days ago"]
-            
-            return zip(names, times).map { name, time in
-                Visitor(name: name, time: time, isVerified: Bool.random())
+            let verifiedStatus = [true, false, true, false, false, true, false, true]
+
+            return zip(zip(names, times), verifiedStatus).map { nameTime, verified in
+                Visitor(name: nameTime.0, time: nameTime.1, isVerified: verified)
             }
         }
     }
@@ -3737,4 +4297,1172 @@ private struct MainProfileContent: View {
         }
         return "\(number)"
     }
+
+// MARK: - Profile Analytics ViewModel
+@MainActor
+final class ProfileAnalyticsViewModel: ObservableObject {
+    @Published var matchCount: Int = 0
+    @Published var profileViewCount: Int = 0
+    @Published var collabCount: Int = 0
+    @Published var isLoading: Bool = false
+
+    private let service = FirebaseService()
+
+    func loadAnalytics(userId: String) async {
+        isLoading = true
+
+        async let matchesTask = fetchMatchCount(userId: userId)
+        async let viewsTask = fetchProfileViewCount(userId: userId)
+        async let collabsTask = fetchCollabCount(userId: userId)
+
+        let (matches, views, collabs) = await (matchesTask, viewsTask, collabsTask)
+
+        matchCount = matches
+        profileViewCount = views
+        collabCount = collabs
+        isLoading = false
+
+        print("✅ Analytics loaded - Matches: \(matches), Views: \(views), Collabs: \(collabs)")
+    }
+
+    private func fetchMatchCount(userId: String) async -> Int {
+        do {
+            let matches = try await service.fetchMatches(forUser: userId)
+            return matches.count
+        } catch {
+            print("❌ Error fetching match count: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchProfileViewCount(userId: String) async -> Int {
+        do {
+            // Count profile views from swipes collection (likes received)
+            let db = FirebaseFirestore.Firestore.firestore()
+            let snapshot = try await db.collection("swipes")
+                .whereField("targetUserId", isEqualTo: userId)
+                .getDocuments()
+            return snapshot.documents.count
+        } catch {
+            print("❌ Error fetching profile view count: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchCollabCount(userId: String) async -> Int {
+        do {
+            // Count completed conversations as collabs
+            // (Users who have exchanged messages indicate active collaboration interest)
+            let db = FirebaseFirestore.Firestore.firestore()
+            let snapshot = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .getDocuments()
+
+            // Count conversations with more than 5 messages as active collabs
+            var activeCollabs = 0
+            for doc in snapshot.documents {
+                let messageSnapshot = try await db.collection("conversations")
+                    .document(doc.documentID)
+                    .collection("messages")
+                    .getDocuments()
+
+                if messageSnapshot.documents.count >= 5 {
+                    activeCollabs += 1
+                }
+            }
+
+            return activeCollabs
+        } catch {
+            print("❌ Error fetching collab count: \(error)")
+            return 0
+        }
+    }
+}
+
+// MARK: - Detailed Analytics ViewModel (for Analytics Sheet)
+@MainActor
+final class DetailedAnalyticsViewModel: ObservableObject {
+    @Published var isLoading: Bool = false
+
+    // Engagement metrics
+    @Published var profileViews: Int = 0
+    @Published var profileViewsChange: String = "—"
+    @Published var profileViewsChangePositive: Bool = true
+
+    @Published var newFollowers: Int = 0
+    @Published var followersChange: String = "—"
+    @Published var followersChangePositive: Bool = true
+
+    @Published var likesReceived: Int = 0
+    @Published var likesChange: String = "—"
+    @Published var likesChangePositive: Bool = true
+
+    // Match metrics
+    @Published var totalMatches: Int = 0
+    @Published var matchesChange: String = "—"
+    @Published var matchesChangePositive: Bool = true
+
+    @Published var matchRate: String = "0%"
+    @Published var matchRateChange: String = "—"
+    @Published var matchRateChangePositive: Bool = true
+
+    @Published var messagesSent: Int = 0
+    @Published var messagesChange: String = "—"
+    @Published var messagesChangePositive: Bool = true
+
+    // Content metrics
+    @Published var activeCollabs: Int = 0
+    @Published var collabsChange: String = "—"
+    @Published var collabsChangePositive: Bool = true
+
+    @Published var totalActivity: Int = 0
+
+    private let service = FirebaseService()
+
+    func loadAnalytics(userId: String, period: StatsPeriod) async {
+        isLoading = true
+
+        let startDate = getStartDate(for: period)
+        let previousStartDate = getPreviousStartDate(for: period)
+
+        async let currentStats = fetchPeriodStats(userId: userId, startDate: startDate, endDate: Date())
+        async let previousStats = fetchPeriodStats(userId: userId, startDate: previousStartDate, endDate: startDate)
+
+        let (current, previous) = await (currentStats, previousStats)
+
+        // Update current values
+        profileViews = current.profileViews
+        newFollowers = current.newFollowers
+        likesReceived = current.likesReceived
+        totalMatches = current.totalMatches
+        messagesSent = current.messagesSent
+        activeCollabs = current.activeCollabs
+
+        // Calculate match rate
+        let totalSwipes = current.totalSwipes
+        if totalSwipes > 0 {
+            let rate = Double(current.totalMatches) / Double(totalSwipes) * 100
+            matchRate = String(format: "%.1f%%", rate)
+        } else {
+            matchRate = "0%"
+        }
+
+        // Calculate changes
+        profileViewsChange = calculateChange(current: current.profileViews, previous: previous.profileViews)
+        profileViewsChangePositive = current.profileViews >= previous.profileViews
+
+        followersChange = calculateChange(current: current.newFollowers, previous: previous.newFollowers)
+        followersChangePositive = current.newFollowers >= previous.newFollowers
+
+        likesChange = calculateChange(current: current.likesReceived, previous: previous.likesReceived)
+        likesChangePositive = current.likesReceived >= previous.likesReceived
+
+        matchesChange = calculateChange(current: current.totalMatches, previous: previous.totalMatches)
+        matchesChangePositive = current.totalMatches >= previous.totalMatches
+
+        messagesChange = calculateChange(current: current.messagesSent, previous: previous.messagesSent)
+        messagesChangePositive = current.messagesSent >= previous.messagesSent
+
+        collabsChange = calculateChange(current: current.activeCollabs, previous: previous.activeCollabs)
+        collabsChangePositive = current.activeCollabs >= previous.activeCollabs
+
+        // Calculate match rate change
+        if totalSwipes > 0 && previous.totalSwipes > 0 {
+            let currentRate = Double(current.totalMatches) / Double(totalSwipes) * 100
+            let previousRate = Double(previous.totalMatches) / Double(previous.totalSwipes) * 100
+            let diff = currentRate - previousRate
+            matchRateChange = diff >= 0 ? "+\(String(format: "%.1f", diff))%" : "\(String(format: "%.1f", diff))%"
+            matchRateChangePositive = diff >= 0
+        }
+
+        // Calculate total activity
+        totalActivity = profileViews + totalMatches + messagesSent + activeCollabs
+
+        isLoading = false
+        print("✅ Detailed analytics loaded for \(period.rawValue)")
+    }
+
+    private func fetchPeriodStats(userId: String, startDate: Date, endDate: Date) async -> PeriodStats {
+        let db = FirebaseFirestore.Firestore.firestore()
+
+        async let viewsTask = fetchCount(
+            db: db,
+            collection: "swipes",
+            field: "targetUserId",
+            userId: userId,
+            startDate: startDate,
+            endDate: endDate
+        )
+
+        async let likesTask = fetchCount(
+            db: db,
+            collection: "swipes",
+            field: "targetUserId",
+            userId: userId,
+            startDate: startDate,
+            endDate: endDate,
+            additionalFilter: ("action", "like")
+        )
+
+        async let matchesTask = fetchMatchesInPeriod(userId: userId, startDate: startDate, endDate: endDate)
+
+        async let messagesTask = fetchMessagesInPeriod(userId: userId, startDate: startDate, endDate: endDate)
+
+        async let collabsTask = fetchCollabsInPeriod(userId: userId, startDate: startDate, endDate: endDate)
+
+        async let swipesTask = fetchCount(
+            db: db,
+            collection: "swipes",
+            field: "userId",
+            userId: userId,
+            startDate: startDate,
+            endDate: endDate
+        )
+
+        let (views, likes, matches, messages, collabs, swipes) = await (viewsTask, likesTask, matchesTask, messagesTask, collabsTask, swipesTask)
+
+        return PeriodStats(
+            profileViews: views,
+            newFollowers: 0, // Would need follower tracking system
+            likesReceived: likes,
+            totalMatches: matches,
+            messagesSent: messages,
+            activeCollabs: collabs,
+            totalSwipes: swipes
+        )
+    }
+
+    private func fetchCount(
+        db: Firestore,
+        collection: String,
+        field: String,
+        userId: String,
+        startDate: Date,
+        endDate: Date,
+        additionalFilter: (String, String)? = nil
+    ) async -> Int {
+        do {
+            var query = db.collection(collection)
+                .whereField(field, isEqualTo: userId)
+                .whereField("timestamp", isGreaterThanOrEqualTo: startDate)
+                .whereField("timestamp", isLessThan: endDate)
+
+            if let (filterField, filterValue) = additionalFilter {
+                query = query.whereField(filterField, isEqualTo: filterValue)
+            }
+
+            let snapshot = try await query.getDocuments()
+            return snapshot.documents.count
+        } catch {
+            print("❌ Error fetching count from \(collection): \(error)")
+            return 0
+        }
+    }
+
+    private func fetchMatchesInPeriod(userId: String, startDate: Date, endDate: Date) async -> Int {
+        do {
+            let matches = try await service.fetchMatches(forUser: userId)
+            return matches.filter { $0.matchedAt >= startDate && $0.matchedAt < endDate }.count
+        } catch {
+            print("❌ Error fetching matches: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchMessagesInPeriod(userId: String, startDate: Date, endDate: Date) async -> Int {
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let conversations = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .getDocuments()
+
+            var messageCount = 0
+            for doc in conversations.documents {
+                let messages = try await db.collection("conversations")
+                    .document(doc.documentID)
+                    .collection("messages")
+                    .whereField("senderId", isEqualTo: userId)
+                    .whereField("sentAt", isGreaterThanOrEqualTo: startDate)
+                    .whereField("sentAt", isLessThan: endDate)
+                    .getDocuments()
+
+                messageCount += messages.documents.count
+            }
+
+            return messageCount
+        } catch {
+            print("❌ Error fetching messages: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchCollabsInPeriod(userId: String, startDate: Date, endDate: Date) async -> Int {
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let conversations = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .whereField("createdAt", isGreaterThanOrEqualTo: startDate)
+                .whereField("createdAt", isLessThan: endDate)
+                .getDocuments()
+
+            var activeCollabs = 0
+            for doc in conversations.documents {
+                let messageSnapshot = try await db.collection("conversations")
+                    .document(doc.documentID)
+                    .collection("messages")
+                    .getDocuments()
+
+                if messageSnapshot.documents.count >= 5 {
+                    activeCollabs += 1
+                }
+            }
+
+            return activeCollabs
+        } catch {
+            print("❌ Error fetching collabs: \(error)")
+            return 0
+        }
+    }
+
+    private func getStartDate(for period: StatsPeriod) -> Date {
+        let calendar = Calendar.current
+        let now = Date()
+
+        switch period {
+        case .week:
+            return calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        case .month:
+            return calendar.date(byAdding: .day, value: -30, to: now) ?? now
+        case .year:
+            return calendar.date(byAdding: .day, value: -365, to: now) ?? now
+        case .allTime:
+            return Date(timeIntervalSince1970: 0) // Beginning of time
+        }
+    }
+
+    private func getPreviousStartDate(for period: StatsPeriod) -> Date {
+        let calendar = Calendar.current
+        let currentStart = getStartDate(for: period)
+
+        switch period {
+        case .week:
+            return calendar.date(byAdding: .day, value: -7, to: currentStart) ?? currentStart
+        case .month:
+            return calendar.date(byAdding: .day, value: -30, to: currentStart) ?? currentStart
+        case .year:
+            return calendar.date(byAdding: .day, value: -365, to: currentStart) ?? currentStart
+        case .allTime:
+            return Date(timeIntervalSince1970: 0)
+        }
+    }
+
+    private func calculateChange(current: Int, previous: Int) -> String {
+        guard previous > 0 else {
+            return current > 0 ? "+100%" : "—"
+        }
+
+        let percentChange = Double(current - previous) / Double(previous) * 100
+
+        if percentChange > 0 {
+            return "+\(String(format: "%.1f", percentChange))%"
+        } else if percentChange < 0 {
+            return "\(String(format: "%.1f", percentChange))%"
+        } else {
+            return "0%"
+        }
+    }
+
+    struct PeriodStats {
+        let profileViews: Int
+        let newFollowers: Int
+        let likesReceived: Int
+        let totalMatches: Int
+        let messagesSent: Int
+        let activeCollabs: Int
+        let totalSwipes: Int
+    }
+}
+
+// MARK: - Testimonial Card
+struct TestimonialCard: View {
+    let testimonial: Testimonial
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                if let imageURL = testimonial.authorImageURL, let url = URL(string: imageURL) {
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(AppTheme.accent.opacity(0.3))
+                    }
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.accent.opacity(0.3))
+                            .frame(width: 40, height: 40)
+
+                        Text(testimonial.authorName.prefix(1))
+                            .font(.headline)
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(testimonial.authorName)
+                            .font(.subheadline.bold())
+                        if testimonial.isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.blue)
+                        }
+                    }
+
+                    if let role = testimonial.authorRole {
+                        Text(role)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                HStack(spacing: 2) {
+                    ForEach(0..<testimonial.rating, id: \.self) { _ in
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.yellow)
+                    }
+                }
+            }
+
+            Text(testimonial.text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Testimonials ViewModel
+@MainActor
+final class TestimonialsViewModel: ObservableObject {
+    @Published var testimonials: [Testimonial] = []
+    @Published var isLoading: Bool = false
+    @Published var averageRating: Double = 0.0
+
+    func loadTestimonials(profileUserId: String) async {
+        isLoading = true
+
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let snapshot = try await db.collection("testimonials")
+                .whereField("profileUserId", isEqualTo: profileUserId)
+                .order(by: "createdAt", descending: true)
+                .getDocuments()
+
+            testimonials = snapshot.documents.compactMap { doc in
+                try? doc.data(as: Testimonial.self)
+            }
+
+            // Calculate average rating
+            if !testimonials.isEmpty {
+                let totalRating = testimonials.reduce(0) { $0 + $1.rating }
+                averageRating = Double(totalRating) / Double(testimonials.count)
+            } else {
+                averageRating = 0.0
+            }
+
+            print("✅ Loaded \(testimonials.count) testimonials with average rating \(averageRating)")
+        } catch {
+            print("❌ Error loading testimonials: \(error)")
+        }
+
+        isLoading = false
+    }
+
+    func addTestimonial(
+        profileUserId: String,
+        authorUserId: String,
+        authorName: String,
+        authorImageURL: String?,
+        authorRole: String?,
+        rating: Int,
+        text: String,
+        isVerified: Bool
+    ) async throws {
+        let db = FirebaseFirestore.Firestore.firestore()
+
+        let testimonial = Testimonial(
+            profileUserId: profileUserId,
+            authorUserId: authorUserId,
+            authorName: authorName,
+            authorImageURL: authorImageURL,
+            authorRole: authorRole,
+            rating: rating,
+            text: text,
+            createdAt: Date(),
+            isVerified: isVerified
+        )
+
+        try db.collection("testimonials").addDocument(from: testimonial)
+
+        // Reload testimonials
+        await loadTestimonials(profileUserId: profileUserId)
+
+        print("✅ Testimonial added successfully")
+    }
+}
+
+// MARK: - All Testimonials Sheet
+struct AllTestimonialsSheet: View {
+    let profile: UserProfile
+    @ObservedObject var viewModel: TestimonialsViewModel
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var auth: AuthViewModel
+
+    @State private var showAddTestimonial = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    if !viewModel.testimonials.isEmpty {
+                        // Summary Card
+                        VStack(spacing: 12) {
+                            HStack(spacing: 4) {
+                                ForEach(0..<5) { index in
+                                    Image(systemName: index < Int(viewModel.averageRating.rounded()) ? "star.fill" : "star")
+                                        .font(.title2)
+                                        .foregroundStyle(.yellow)
+                                }
+                            }
+
+                            Text(String(format: "%.1f out of 5", viewModel.averageRating))
+                                .font(.headline)
+
+                            Text("\(viewModel.testimonials.count) testimonials")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal)
+
+                        // All testimonials
+                        VStack(spacing: 12) {
+                            ForEach(viewModel.testimonials) { testimonial in
+                                TestimonialCard(testimonial: testimonial)
+                            }
+                        }
+                        .padding(.horizontal)
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "quote.bubble")
+                                .font(.system(size: 60))
+                                .foregroundStyle(.secondary)
+                            Text("No testimonials yet")
+                                .font(.headline)
+                            Text("Be the first to leave a testimonial!")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                    }
+                }
+                .padding(.vertical)
+            }
+            .background(AppTheme.bg)
+            .navigationTitle("Testimonials")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Done") { dismiss() }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    if let currentUserId = auth.user?.uid, currentUserId != profile.uid {
+                        Button {
+                            showAddTestimonial = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showAddTestimonial) {
+                AddTestimonialSheet(
+                    profile: profile,
+                    viewModel: viewModel
+                )
+            }
+        }
+        }
+}
+
+// MARK: - Add Testimonial Sheet
+struct AddTestimonialSheet: View {
+    let profile: UserProfile
+    @ObservedObject var viewModel: TestimonialsViewModel
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var auth: AuthViewModel
+
+    @State private var rating: Int = 5
+    @State private var testimonialText: String = ""
+    @State private var isSubmitting: Bool = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Rating") {
+                    HStack {
+                        ForEach(1...5, id: \.self) { star in
+                            Button {
+                                rating = star
+                            } label: {
+                                Image(systemName: star <= rating ? "star.fill" : "star")
+                                    .font(.title2)
+                                    .foregroundStyle(star <= rating ? .yellow : .gray)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+
+                Section {
+                    TextEditor(text: $testimonialText)
+                        .frame(minHeight: 120)
+                } header: {
+                    Text("Your Testimonial")
+                } footer: {
+                    Text("Share your experience working with \(profile.displayName)")
+                }
+            }
+            .navigationTitle("Add Testimonial")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Submit") {
+                        Task { await submitTestimonial() }
+                    }
+                    .disabled(testimonialText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
+                }
+            }
+            .disabled(isSubmitting)
+        }
+    }
+
+    private func submitTestimonial() async {
+        guard let currentUser = auth.userProfile,
+              let currentUserId = auth.user?.uid else {
+            return
+        }
+
+        isSubmitting = true
+
+        do {
+            // Check if there's an active conversation (for verified badge)
+            let hasCollab = await checkHasCollaboration(userId: currentUserId, profileUserId: profile.uid)
+
+            try await viewModel.addTestimonial(
+                profileUserId: profile.uid,
+                authorUserId: currentUserId,
+                authorName: currentUser.displayName,
+                authorImageURL: currentUser.profileImageURL,
+                authorRole: currentUser.contentStyles.first?.rawValue,
+                rating: rating,
+                text: testimonialText.trimmingCharacters(in: .whitespacesAndNewlines),
+                isVerified: hasCollab
+            )
+
+            dismiss()
+        } catch {
+            print("❌ Error submitting testimonial: \(error)")
+        }
+
+        isSubmitting = false
+    }
+
+    private func checkHasCollaboration(userId: String, profileUserId: String) async -> Bool {
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let conversations = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .getDocuments()
+
+            // Check if any conversation includes both users
+            for doc in conversations.documents {
+                if let participantIds = doc.data()["participantIds"] as? [String],
+                   participantIds.contains(profileUserId) {
+                    // Check if they've exchanged messages
+                    let messages = try await db.collection("conversations")
+                        .document(doc.documentID)
+                        .collection("messages")
+                        .getDocuments()
+
+                    if messages.documents.count >= 3 {
+                        return true
+                    }
+                }
+            }
+            return false
+        } catch {
+            return false
+        }
+    }
+}
+
+// MARK: - Collaboration History ViewModel
+@MainActor
+final class CollaborationHistoryViewModel: ObservableObject {
+    @Published var collaborations: [CollaborationWithPartner] = []
+    @Published var isLoading: Bool = false
+
+    struct CollaborationWithPartner: Identifiable {
+        var id: String { collaboration.id ?? UUID().uuidString }
+        let collaboration: Collaboration
+        let partnerProfile: UserProfile?
+    }
+
+    func loadCollaborations(userId: String) async {
+        isLoading = true
+
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+
+            // Fetch collaborations where user is either user1 or user2
+            let query1 = db.collection("collaborations")
+                .whereField("user1Id", isEqualTo: userId)
+            let query2 = db.collection("collaborations")
+                .whereField("user2Id", isEqualTo: userId)
+
+            let snapshot1 = try await query1.getDocuments()
+            let snapshot2 = try await query2.getDocuments()
+
+            var allCollabs: [Collaboration] = []
+
+            allCollabs += snapshot1.documents.compactMap { doc in
+                try? doc.data(as: Collaboration.self)
+            }
+            allCollabs += snapshot2.documents.compactMap { doc in
+                try? doc.data(as: Collaboration.self)
+            }
+
+            // Sort by date
+            allCollabs.sort { $0.startedAt > $1.startedAt }
+
+            // Fetch partner profiles for each collaboration
+            var collabsWithPartners: [CollaborationWithPartner] = []
+
+            for collab in allCollabs {
+                if let partnerId = collab.getPartnerUserId(currentUserId: userId) {
+                    let partnerProfile = try? await fetchProfile(userId: partnerId)
+                    collabsWithPartners.append(
+                        CollaborationWithPartner(
+                            collaboration: collab,
+                            partnerProfile: partnerProfile
+                        )
+                    )
+                }
+            }
+
+            collaborations = collabsWithPartners
+
+            print("✅ Loaded \(collaborations.count) collaborations")
+        } catch {
+            print("❌ Error loading collaborations: \(error)")
+        }
+
+        isLoading = false
+    }
+
+    private func fetchProfile(userId: String) async throws -> UserProfile? {
+        let db = FirebaseFirestore.Firestore.firestore()
+        let doc = try await db.collection("users").document(userId).getDocument()
+        return try? doc.data(as: UserProfile.self)
+    }
+}
+
+// MARK: - All Collaborations Sheet
+struct AllCollaborationsSheet: View {
+    let profile: UserProfile
+    @ObservedObject var viewModel: CollaborationHistoryViewModel
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    if !viewModel.collaborations.isEmpty {
+                        // Stats Summary
+                        HStack(spacing: 16) {
+                            StatBox(
+                                title: "Total",
+                                value: "\(viewModel.collaborations.count)",
+                                color: .blue
+                            )
+                            StatBox(
+                                title: "Active",
+                                value: "\(viewModel.collaborations.filter { $0.collaboration.status == .active }.count)",
+                                color: .green
+                            )
+                            StatBox(
+                                title: "Completed",
+                                value: "\(viewModel.collaborations.filter { $0.collaboration.status == .completed }.count)",
+                                color: .purple
+                            )
+                        }
+                        .padding(.horizontal)
+
+                        // All collaborations
+                        VStack(spacing: 12) {
+                            ForEach(viewModel.collaborations) { collabWithPartner in
+                                CollabHistoryCard(
+                                    collaboration: collabWithPartner.collaboration,
+                                    partnerProfile: collabWithPartner.partnerProfile
+                                )
+                            }
+                        }
+                        .padding(.horizontal)
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.2")
+                                .font(.system(size: 60))
+                                .foregroundStyle(.secondary)
+                            Text("No collaborations yet")
+                                .font(.headline)
+                            Text("Start collaborating with other creators!")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                    }
+                }
+                .padding(.vertical)
+            }
+            .background(AppTheme.bg)
+            .navigationTitle("Collaboration History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    struct StatBox: View {
+        let title: String
+        let value: String
+        let color: Color
+
+        var body: some View {
+            VStack(spacing: 4) {
+                Text(value)
+                    .font(.title2.bold())
+                    .foregroundStyle(color)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
+// MARK: - Profile Insights ViewModel
+@MainActor
+final class ProfileInsightsViewModel: ObservableObject {
+    @Published var isLoading: Bool = false
+    @Published var engagementRate: Double = 0.0
+    @Published var engagementTrend: String = "—"
+    @Published var engagementTrendPositive: Bool = true
+    @Published var responseRate: Double = 0.0
+    @Published var responseTrend: String = "—"
+    @Published var responseTrendPositive: Bool = true
+    @Published var profileQuality: String = "Good"
+    @Published var profileCompletionText: String = "—"
+    @Published var weeklyGrowth: Int = 0
+    @Published var growthTrend: String = "—"
+
+    func loadInsights(userId: String) async {
+        isLoading = true
+
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let now = Date()
+            let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: now) ?? now
+            let twoWeeksAgo = Calendar.current.date(byAdding: .day, value: -14, to: now) ?? now
+
+            // Fetch profile views (from swipes collection)
+            let profileViewsSnapshot = try await db.collection("swipes")
+                .whereField("targetUserId", isEqualTo: userId)
+                .getDocuments()
+            let totalViews = profileViewsSnapshot.documents.count
+
+            // Fetch likes received (swipes with action="like")
+            let likesSnapshot = try await db.collection("swipes")
+                .whereField("targetUserId", isEqualTo: userId)
+                .whereField("action", isEqualTo: "like")
+                .getDocuments()
+            let totalLikes = likesSnapshot.documents.count
+
+            // Calculate engagement rate
+            if totalViews > 0 {
+                engagementRate = (Double(totalLikes) / Double(totalViews)) * 100
+            } else {
+                engagementRate = 0.0
+            }
+
+            // Engagement trend (compare to previous week)
+            let lastWeekViews = profileViewsSnapshot.documents.filter { doc in
+                if let timestamp = doc.data()["timestamp"] as? Timestamp {
+                    return timestamp.dateValue() >= weekAgo
+                }
+                return false
+            }.count
+
+            let lastWeekLikes = likesSnapshot.documents.filter { doc in
+                if let timestamp = doc.data()["timestamp"] as? Timestamp {
+                    return timestamp.dateValue() >= weekAgo
+                }
+                return false
+            }.count
+
+            let previousWeekViews = profileViewsSnapshot.documents.filter { doc in
+                if let timestamp = doc.data()["timestamp"] as? Timestamp {
+                    let date = timestamp.dateValue()
+                    return date >= twoWeeksAgo && date < weekAgo
+                }
+                return false
+            }.count
+
+            if previousWeekViews > 0 {
+                let previousWeekLikes = likesSnapshot.documents.filter { doc in
+                    if let timestamp = doc.data()["timestamp"] as? Timestamp {
+                        let date = timestamp.dateValue()
+                        return date >= twoWeeksAgo && date < weekAgo
+                    }
+                    return false
+                }.count
+
+                let previousRate = (Double(previousWeekLikes) / Double(previousWeekViews)) * 100
+                let currentRate = lastWeekViews > 0 ? (Double(lastWeekLikes) / Double(lastWeekViews)) * 100 : 0
+                let diff = currentRate - previousRate
+                engagementTrend = diff >= 0 ? "+\(String(format: "%.1f", diff))%" : "\(String(format: "%.1f", diff))%"
+                engagementTrendPositive = diff >= 0
+            } else {
+                engagementTrend = "New"
+                engagementTrendPositive = true
+            }
+
+            // Fetch messages sent and received
+            let conversationsSnapshot = try await db.collection("conversations")
+                .whereField("participantIds", arrayContains: userId)
+                .getDocuments()
+
+            var messagesSent = 0
+            var messagesReceived = 0
+
+            for convDoc in conversationsSnapshot.documents {
+                let messagesSnapshot = try await db.collection("conversations")
+                    .document(convDoc.documentID)
+                    .collection("messages")
+                    .getDocuments()
+
+                for msgDoc in messagesSnapshot.documents {
+                    if let senderId = msgDoc.data()["senderId"] as? String {
+                        if senderId == userId {
+                            messagesSent += 1
+                        } else {
+                            messagesReceived += 1
+                        }
+                    }
+                }
+            }
+
+            // Calculate response rate
+            if messagesReceived > 0 {
+                responseRate = (Double(messagesSent) / Double(messagesReceived)) * 100
+                responseRate = min(responseRate, 100) // Cap at 100%
+            } else {
+                responseRate = messagesSent > 0 ? 100 : 0
+            }
+
+            // Response trend
+            if responseRate >= 80 {
+                responseTrend = "Excellent"
+                responseTrendPositive = true
+            } else if responseRate >= 50 {
+                responseTrend = "Good"
+                responseTrendPositive = true
+            } else {
+                responseTrend = "Could improve"
+                responseTrendPositive = false
+            }
+
+            // Calculate profile quality based on completion
+            let completion = calculateProfileCompletion(userId: userId)
+            if completion >= 90 {
+                profileQuality = "Excellent"
+                profileCompletionText = "Top 10%"
+            } else if completion >= 70 {
+                profileQuality = "Good"
+                profileCompletionText = "\(completion)% complete"
+            } else if completion >= 50 {
+                profileQuality = "Fair"
+                profileCompletionText = "\(completion)% complete"
+            } else {
+                profileQuality = "Needs work"
+                profileCompletionText = "\(completion)% complete"
+            }
+
+            // Calculate weekly growth (new matches/likes in last 7 days)
+            let weeklyMatches = try await db.collection("matches")
+                .whereField("userId1", isEqualTo: userId)
+                .whereField("matchedAt", isGreaterThanOrEqualTo: weekAgo)
+                .getDocuments()
+
+            let weeklyMatches2 = try await db.collection("matches")
+                .whereField("userId2", isEqualTo: userId)
+                .whereField("matchedAt", isGreaterThanOrEqualTo: weekAgo)
+                .getDocuments()
+
+            weeklyGrowth = weeklyMatches.documents.count + weeklyMatches2.documents.count + lastWeekLikes
+
+            if weeklyGrowth >= 20 {
+                growthTrend = "Excellent"
+            } else if weeklyGrowth >= 10 {
+                growthTrend = "Above average"
+            } else if weeklyGrowth >= 5 {
+                growthTrend = "Average"
+            } else if weeklyGrowth > 0 {
+                growthTrend = "Steady"
+            } else {
+                growthTrend = "Inactive"
+            }
+
+            print("✅ Profile insights loaded - Engagement: \(engagementRate)%, Response: \(responseRate)%, Growth: \(weeklyGrowth)")
+        } catch {
+            print("❌ Error loading profile insights: \(error)")
+        }
+
+        isLoading = false
+    }
+
+    private func calculateProfileCompletion(userId: String) -> Int {
+        // This is a simplified calculation based on typical profile fields
+        // In a real app, you'd fetch the profile and check each field
+        var score = 0
+        score += 10 // Base for having an account
+        score += 20 // Profile image (assume they have one if viewing insights)
+        score += 15 // Display name (required)
+        score += 10 // Bio
+        score += 10 // Location
+        score += 10 // Content styles
+        score += 10 // Social links
+        score += 10 // Collaboration preferences
+        score += 5  // Age
+        return min(score, 100)
+    }
+}
+
+// MARK: - Collaboration History Card
+struct CollabHistoryCard: View {
+    let collaboration: Collaboration
+    let partnerProfile: UserProfile?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Avatar
+            if let imageURL = partnerProfile?.profileImageURL, let url = URL(string: imageURL) {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Circle().fill(AppTheme.accent.opacity(0.3))
+                }
+                .frame(width: 50, height: 50)
+                .clipShape(Circle())
+            } else {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.accent.opacity(0.3))
+                        .frame(width: 50, height: 50)
+
+                    if let name = partnerProfile?.displayName {
+                        Text(name.prefix(1))
+                            .font(.title3.bold())
+                            .foregroundStyle(AppTheme.accent)
+                    } else {
+                        Image(systemName: "person.fill")
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(collaboration.projectName)
+                    .font(.subheadline.bold())
+
+                HStack(spacing: 6) {
+                    Text(partnerProfile?.displayName ?? "Unknown")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Circle()
+                        .fill(Color.secondary)
+                        .frame(width: 2, height: 2)
+
+                    Text(formatDate(collaboration.startedAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            // Status Badge
+            HStack(spacing: 4) {
+                Image(systemName: collaboration.status.icon)
+                    .font(.caption2)
+                Text(collaboration.status.rawValue)
+                    .font(.caption2.bold())
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(getStatusColor(collaboration.status), in: Capsule())
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private func getStatusColor(_ status: Collaboration.CollabStatus) -> Color {
+        switch status {
+        case .active: return .green
+        case .completed: return .blue
+        case .pending: return .orange
+        }
+    }
+}
 

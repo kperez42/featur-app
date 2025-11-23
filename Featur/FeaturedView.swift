@@ -1,6 +1,7 @@
 // FeaturedView.swift - IMPROVED VERSION (Uses SharedComponents - No Duplicates!)
 import SwiftUI
 import FirebaseAuth
+import StoreKit
 
 struct FeaturedView: View {
     @StateObject private var viewModel = FeaturedViewModel()
@@ -38,19 +39,7 @@ struct FeaturedView: View {
                 }
                 .padding(.bottom, 80)
             }
-            
-            // Floating Banner Ad (like Discover) - Uses SharedComponents
-            VStack {
-                Spacer()
-                BannerAdPlaceholder()
-                    .frame(height: 50)
-                    .background(
-                        AppTheme.card
-                            .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
-                    )
-            }
-            .ignoresSafeArea(edges: .bottom)
-            
+
             // Error Toast
             if let error = viewModel.errorMessage {
                 VStack {
@@ -96,6 +85,9 @@ struct FeaturedView: View {
             GetFeaturedSheet()
         }
         .task {
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Featured", screenClass: "FeaturedView")
+
             await viewModel.loadFeatured()
         }
         .refreshable {
@@ -170,7 +162,14 @@ struct FeaturedView: View {
             ForEach(viewModel.filteredCreators) { creator in
                 NavigationLink {
                     if let profile = creator.profile {
-                        ProfileDetailPlaceholder(profile: profile) // Uses SharedComponents
+                        ProfileDetailView(profile: profile)
+                            .onAppear {
+                                // Track profile view analytics
+                                AnalyticsManager.shared.trackProfileView(
+                                    userId: profile.uid,
+                                    source: "featured"
+                                )
+                            }
                     }
                 } label: {
                     FeaturedCreatorCard(creator: creator)
@@ -277,12 +276,32 @@ struct FeaturedView: View {
     // MARK: - Error Toast
     
     private func errorToast(_ message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundStyle(.white)
-            .padding()
-            .background(.red, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Button {
+                Task {
+                    await viewModel.loadFeatured(forceRefresh: true)
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding()
+        .background(.red, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
 }
 
@@ -568,7 +587,10 @@ struct FeaturedCreatorCard: View {
 
 struct GetFeaturedSheet: View {
     @Environment(\.dismiss) var dismiss
-    
+    @StateObject private var store = StoreKitManager.shared
+    @State private var showSuccess = false
+    @State private var showError = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -631,25 +653,22 @@ struct GetFeaturedSheet: View {
                     VStack(spacing: 16) {
                         Text("Choose Your Plan")
                             .font(.headline)
-                        
-                        PricingCard(
-                            duration: "24 Hours",
-                            price: "$4.99",
-                            features: ["24-hour spotlight", "Featured badge", "Priority support"]
-                        )
-                        
-                        PricingCard(
-                            duration: "7 Days",
-                            price: "$19.99",
-                            popular: true,
-                            features: ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"]
-                        )
-                        
-                        PricingCard(
-                            duration: "30 Days",
-                            price: "$59.99",
-                            features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"]
-                        )
+
+                        if store.products.isEmpty {
+                            ProgressView("Loading plans...")
+                                .padding()
+                        } else {
+                            ForEach(store.products, id: \.id) { product in
+                                PricingCard(
+                                    product: product,
+                                    popular: product.id.contains("7d"),
+                                    store: store,
+                                    onPurchaseSuccess: {
+                                        showSuccess = true
+                                    }
+                                )
+                            }
+                        }
                     }
                     
                     Text("Payment processed securely via Apple Pay")
@@ -667,6 +686,24 @@ struct GetFeaturedSheet: View {
                         dismiss()
                     }
                 }
+            }
+            .task {
+                await store.loadProducts()
+            }
+            .alert("Success!", isPresented: $showSuccess) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("You're now featured! Your profile will appear prominently in the FEATUREd tab.")
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(store.purchaseError ?? "Purchase failed. Please try again.")
+            }
+            .onChange(of: store.purchaseError) { newValue in
+                showError = newValue != nil
             }
         }
     }
@@ -698,24 +735,46 @@ struct BenefitRow: View {
 }
 
 struct PricingCard: View {
-    let duration: String
-    let price: String
+    let product: Product
     var popular: Bool = false
-    let features: [String]
-    
+    @ObservedObject var store: StoreKitManager
+    let onPurchaseSuccess: () -> Void
+
+    private var duration: String {
+        if product.id.contains("24h") {
+            return "24 Hours"
+        } else if product.id.contains("7d") {
+            return "7 Days"
+        } else if product.id.contains("30d") {
+            return "30 Days"
+        } else {
+            return "Featured"
+        }
+    }
+
+    private var features: [String] {
+        if product.id.contains("24h") {
+            return ["24-hour spotlight", "Featured badge", "Priority support"]
+        } else if product.id.contains("7d") {
+            return ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"]
+        } else {
+            return ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"]
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(duration)
                         .font(.headline)
-                    Text(price)
+                    Text(product.displayPrice)
                         .font(.title.bold())
                         .foregroundStyle(AppTheme.accent)
                 }
-                
+
                 Spacer()
-                
+
                 if popular {
                     Text("POPULAR")
                         .font(.caption2.weight(.bold))
@@ -725,9 +784,9 @@ struct PricingCard: View {
                         .background(AppTheme.accent, in: Capsule())
                 }
             }
-            
+
             Divider()
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(features, id: \.self) { feature in
                     HStack(spacing: 8) {
@@ -739,18 +798,32 @@ struct PricingCard: View {
                     }
                 }
             }
-            
+
             Button {
-                // Handle purchase
-                Haptics.impact(.medium)
+                Task {
+                    do {
+                        try await store.purchase(product)
+                        onPurchaseSuccess()
+                    } catch {
+                        // Error handled by store
+                    }
+                }
             } label: {
-                Text("Select Plan")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+                if store.isPurchasing {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                } else {
+                    Text("Select Plan")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
             }
+            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+            .disabled(store.isPurchasing)
         }
         .padding()
         .background(
@@ -814,216 +887,49 @@ final class FeaturedViewModel: ObservableObject {
     
     func loadFeatured(forceRefresh: Bool = false) async {
         guard !isLoading else { return }
-        
+
         isLoading = true
         errorMessage = nil
-        
-        #if DEBUG
-        // 🧪 TEST DATA - Load immediately in debug mode
-        loadTestFeatured()
-        isLoading = false
-        return
-        #endif
-        
+
         do {
+            // Fetch real featured creators from Firebase
             featuredCreators = try await service.fetchFeaturedCreators()
             filteredCreators = featuredCreators
+
+            // Track analytics
+            for creator in featuredCreators {
+                if let userId = creator.profile?.uid {
+                    AnalyticsManager.shared.trackFeaturedCreatorView(userId: userId)
+                }
+            }
+
             isLoading = false
+            print("✅ Loaded \(featuredCreators.count) featured creators")
+
         } catch {
             isLoading = false
-            errorMessage = "Unable to load featured creators"
+
+            // Provide specific error messages based on error type
+            if let nsError = error as NSError? {
+                if nsError.domain == NSURLErrorDomain {
+                    errorMessage = "No internet connection"
+                } else {
+                    errorMessage = "Failed to load featured creators"
+                }
+            } else {
+                errorMessage = "Failed to load featured creators"
+            }
+
             print("❌ Error loading featured: \(error)")
-            
-            // Clear error after delay
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            errorMessage = nil
+
+            // Clear error after delay (not for network errors)
+            if errorMessage != "No internet connection" {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                errorMessage = nil
+            }
         }
     }
-    
-    #if DEBUG
-    // MARK: - 🧪 TEST DATA
-    func loadTestFeatured() {
-        featuredCreators = [
-            FeaturedCreator(
-                id: "featured1",
-                userId: "test1",
-                profile: UserProfile(
-                    id: "test1",
-                    uid: "test1",
-                    displayName: "Sarah Johnson",
-                    age: 24,
-                    bio: "Fitness & wellness content creator 💪 Let's collab!",
-                    location: UserProfile.Location(city: "Los Angeles", state: "CA", country: "USA", coordinates: nil),
-                    interests: ["Fitness", "Wellness", "Yoga"],
-                    contentStyles: [.fitness, .dance],
-                    socialLinks: UserProfile.SocialLinks(
-                        tiktok: UserProfile.SocialLinks.SocialAccount(username: "@sarahfit", followerCount: 125000, isVerified: true),
-                        instagram: UserProfile.SocialLinks.SocialAccount(username: "@sarahfitness", followerCount: 85000, isVerified: true),
-                        youtube: nil, twitch: nil, spotify: nil, snapchat: nil
-                    ),
-                    mediaURLs: [],
-                    isVerified: true,
-                    followerCount: 125000,
-                    collaborationPreferences: UserProfile.CollaborationPreferences(
-                        lookingFor: [.twitchStream, .contentSeries],
-                        availability: [.weekdays, .flexible],
-                        responseTime: .fast
-                    ),
-                    createdAt: Date(),
-                    updatedAt: Date()
-                ),
-                featuredAt: Date(),
-                expiresAt: Date().addingTimeInterval(86400 * 7),
-                category: "Trending",
-                highlightText: "🔥 Top fitness creator this week!",
-                priority: 100
-            ),
-            FeaturedCreator(
-                id: "featured2",
-                userId: "test2",
-                profile: UserProfile(
-                    id: "test2",
-                    uid: "test2",
-                    displayName: "Marcus Chen",
-                    age: 28,
-                    bio: "Gaming streamer & editor 🎮 Creating epic content!",
-                    location: UserProfile.Location(city: "San Francisco", state: "CA", country: "USA", coordinates: nil),
-                    interests: ["Gaming", "Editing", "Tech"],
-                    contentStyles: [.gaming, .editing],
-                    socialLinks: UserProfile.SocialLinks(
-                        tiktok: nil, instagram: nil,
-                        youtube: UserProfile.SocialLinks.SocialAccount(username: "@marcusgaming", followerCount: 250000, isVerified: true),
-                        twitch: UserProfile.SocialLinks.SocialAccount(username: "marcusplays", followerCount: 180000, isVerified: true),
-                        spotify: nil, snapchat: nil
-                    ),
-                    mediaURLs: [],
-                    isVerified: true,
-                    followerCount: 250000,
-                    collaborationPreferences: UserProfile.CollaborationPreferences(
-                        lookingFor: [.twitchStream, .contentSeries],
-                        availability: [.weekends, .flexible],
-                        responseTime: .moderate
-                    ),
-                    createdAt: Date(),
-                    updatedAt: Date()
-                ),
-                featuredAt: Date().addingTimeInterval(-86400),
-                expiresAt: Date().addingTimeInterval(86400 * 6),
-                category: "Gaming",
-                highlightText: "⭐ Top gaming streamer",
-                priority: 90
-            ),
-            FeaturedCreator(
-                id: "featured3",
-                userId: "test3",
-                profile: UserProfile(
-                    id: "test3",
-                    uid: "test3",
-                    displayName: "Zoe Martinez",
-                    age: 22,
-                    bio: "Beauty & fashion influencer ✨ Always down for creative collabs!",
-                    location: UserProfile.Location(city: "Miami", state: "FL", country: "USA", coordinates: nil),
-                    interests: ["Beauty", "Fashion", "Lifestyle"],
-                    contentStyles: [.beauty, .fashion],
-                    socialLinks: UserProfile.SocialLinks(
-                        tiktok: UserProfile.SocialLinks.SocialAccount(username: "@zoebeauty", followerCount: 500000, isVerified: true),
-                        instagram: UserProfile.SocialLinks.SocialAccount(username: "@zoestyle", followerCount: 320000, isVerified: true),
-                        youtube: nil, twitch: nil, spotify: nil, snapchat: nil
-                    ),
-                    mediaURLs: [],
-                    isVerified: true,
-                    followerCount: 500000,
-                    collaborationPreferences: UserProfile.CollaborationPreferences(
-                        lookingFor: [.brandDeal, .contentSeries, .tiktokLive],
-                        availability: [.flexible],
-                        responseTime: .fast
-                    ),
-                    createdAt: Date(),
-                    updatedAt: Date()
-                ),
-                featuredAt: Date(),
-                expiresAt: Date().addingTimeInterval(86400 * 7),
-                category: "Trending",
-                highlightText: "💄 Beauty influencer of the week",
-                priority: 95
-            ),
-            FeaturedCreator(
-                id: "featured4",
-                userId: "test4",
-                profile: UserProfile(
-                    id: "test4",
-                    uid: "test4",
-                    displayName: "Alex Thompson",
-                    age: 26,
-                    bio: "Chef & food content creator 🍳 Let's cook up something amazing!",
-                    location: UserProfile.Location(city: "New York", state: "NY", country: "USA", coordinates: nil),
-                    interests: ["Cooking", "Food", "Travel"],
-                    contentStyles: [.cooking, .mukbang],
-                    socialLinks: UserProfile.SocialLinks(
-                        tiktok: UserProfile.SocialLinks.SocialAccount(username: "@chefalexx", followerCount: 180000, isVerified: false),
-                        instagram: UserProfile.SocialLinks.SocialAccount(username: "@alexcooks", followerCount: 95000, isVerified: true),
-                        youtube: UserProfile.SocialLinks.SocialAccount(username: "@AlexThompsonCooks", followerCount: 220000, isVerified: true),
-                        twitch: nil, spotify: nil, snapchat: nil
-                    ),
-                    mediaURLs: [],
-                    isVerified: true,
-                    followerCount: 180000,
-                    collaborationPreferences: UserProfile.CollaborationPreferences(
-                        lookingFor: [.brandDeal, .contentSeries],
-                        availability: [.weekdays],
-                        responseTime: .moderate
-                    ),
-                    createdAt: Date(),
-                    updatedAt: Date()
-                ),
-                featuredAt: Date().addingTimeInterval(-172800),
-                expiresAt: Date().addingTimeInterval(86400 * 5),
-                category: "Food",
-                highlightText: "👨‍🍳 Rising culinary creator",
-                priority: 85
-            ),
-            FeaturedCreator(
-                id: "featured5",
-                userId: "test5",
-                profile: UserProfile(
-                    id: "test5",
-                    uid: "test5",
-                    displayName: "Riley Peterson",
-                    age: 25,
-                    bio: "Musician & producer 🎵 Making beats and vibes!",
-                    location: UserProfile.Location(city: "Nashville", state: "TN", country: "USA", coordinates: nil),
-                    interests: ["Music", "Production", "Art"],
-                    contentStyles: [.music, .art],
-                    socialLinks: UserProfile.SocialLinks(
-                        tiktok: UserProfile.SocialLinks.SocialAccount(username: "@rileymusic", followerCount: 75000, isVerified: false),
-                        instagram: UserProfile.SocialLinks.SocialAccount(username: "@rileybeats", followerCount: 45000, isVerified: false),
-                        youtube: UserProfile.SocialLinks.SocialAccount(username: "@RileyPeterson", followerCount: 150000, isVerified: true),
-                        twitch: nil,
-                        spotify: "RileyPeterson",
-                        snapchat: nil
-                    ),
-                    mediaURLs: [],
-                    isVerified: false,
-                    followerCount: 75000,
-                    collaborationPreferences: UserProfile.CollaborationPreferences(
-                        lookingFor: [.musicCollab, .contentSeries],
-                        availability: [.flexible],
-                        responseTime: .fast
-                    ),
-                    createdAt: Date(),
-                    updatedAt: Date()
-                ),
-                featuredAt: Date(),
-                expiresAt: Date().addingTimeInterval(86400 * 7),
-                category: "New Talent",
-                highlightText: "🎸 Fresh talent on the rise!",
-                priority: 80
-            )
-        ]
-        filteredCreators = featuredCreators
-    }
-    #endif
-    
+
     func filterByCategory(_ category: FeaturedCategory) {
         switch category {
         case .all:
