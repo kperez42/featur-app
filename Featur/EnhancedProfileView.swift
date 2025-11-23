@@ -1342,10 +1342,7 @@ private struct MainProfileContent: View {
                         showEmailVerification = true
                     }
 
-                    // Phone Verification - TEMPORARILY DISABLED
-                    // Requires custom URL scheme in Info.plist
-                    // See setup instructions in project
-                    /*
+                    // Phone Verification
                     VerificationRow(
                         title: "Phone Number",
                         subtitle: profile.phoneNumber ?? "Not provided",
@@ -1356,7 +1353,6 @@ private struct MainProfileContent: View {
                     ) {
                         showPhoneVerification = true
                     }
-                    */
                 }
             }
             .padding()
