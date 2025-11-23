@@ -3019,6 +3019,7 @@ private struct MainProfileContent: View {
         let profile: UserProfile
         @Environment(\.dismiss) var dismiss
         @State private var selectedImageIndex = 0
+        @StateObject private var presenceManager = PresenceManager.shared
 
         // Combine profile photo + gallery photos for carousel
         private var allPhotos: [String] {
@@ -3107,6 +3108,10 @@ private struct MainProfileContent: View {
                             dismiss()
                         }
                     }
+                }
+                .task {
+                    // Fetch current user's real online status from Firebase
+                    await presenceManager.fetchOnlineStatus(userId: profile.uid)
                 }
             }
         }
