@@ -2928,27 +2928,63 @@ private struct MainProfileContent: View {
         let profile: UserProfile
 
         var body: some View {
-            HStack {
-                Text(profile.displayName)
-                    .font(.system(size: 28, weight: .bold))
-                if profile.isVerified ?? false {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundStyle(.blue)
+            VStack(alignment: .leading, spacing: 8) {
+                // Name and verified badge
+                HStack {
+                    Text(profile.displayName)
+                        .font(.system(size: 28, weight: .bold))
+                    if profile.isVerified ?? false {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(.blue)
+                    }
+
+                    // Online Status Badge - uses real Firebase presence data
+                    if PresenceManager.shared.isOnline(userId: profile.uid) {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(.green)
+                                .frame(width: 8, height: 8)
+                            Text("ONLINE")
+                                .font(.caption.bold())
+                                .foregroundStyle(.green)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.green.opacity(0.15), in: Capsule())
+                    }
                 }
 
-                // Online Status Badge - uses real Firebase presence data
-                if PresenceManager.shared.isOnline(userId: profile.uid) {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(.green)
-                            .frame(width: 8, height: 8)
-                        Text("ONLINE")
-                            .font(.caption.bold())
-                            .foregroundStyle(.green)
+                // Verification Status Badges
+                HStack(spacing: 8) {
+                    // Email Verified Badge
+                    if profile.isEmailVerified ?? false {
+                        HStack(spacing: 4) {
+                            Image(systemName: "envelope.fill")
+                                .font(.caption2)
+                            Text("Email Verified")
+                                .font(.caption2.weight(.medium))
+                        }
+                        .foregroundStyle(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.blue.opacity(0.1), in: Capsule())
+                        .overlay(Capsule().stroke(.blue.opacity(0.3), lineWidth: 1))
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.green.opacity(0.15), in: Capsule())
+
+                    // Phone Verified Badge
+                    if profile.isPhoneVerified ?? false {
+                        HStack(spacing: 4) {
+                            Image(systemName: "phone.fill")
+                                .font(.caption2)
+                            Text("Phone Verified")
+                                .font(.caption2.weight(.medium))
+                        }
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.green.opacity(0.1), in: Capsule())
+                        .overlay(Capsule().stroke(.green.opacity(0.3), lineWidth: 1))
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
