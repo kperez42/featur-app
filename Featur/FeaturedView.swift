@@ -82,7 +82,12 @@ struct FeaturedView: View {
             }
         }
         .sheet(isPresented: $showPaymentSheet) {
-            GetFeaturedSheet()
+            GetFeaturedSheet {
+                // Refresh the Featured page after successful purchase
+                Task {
+                    await viewModel.loadFeatured(forceRefresh: true)
+                }
+            }
         }
         .task {
             // Track screen view
@@ -605,6 +610,7 @@ struct GetFeaturedSheet: View {
     @StateObject private var store = StoreKitManager.shared
     @State private var showSuccess = false
     @State private var showError = false
+    var onPurchaseComplete: (() -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -710,7 +716,10 @@ struct GetFeaturedSheet: View {
                                         productId: FeaturedProduct.featured24h.rawValue,
                                         features: ["24-hour spotlight", "Featured badge", "Priority support"],
                                         store: store,
-                                        onPurchaseSuccess: { showSuccess = true }
+                                        onPurchaseSuccess: {
+                                            showSuccess = true
+                                            onPurchaseComplete?()
+                                        }
                                     )
 
                                     TestProductCard(
@@ -720,7 +729,10 @@ struct GetFeaturedSheet: View {
                                         popular: true,
                                         features: ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"],
                                         store: store,
-                                        onPurchaseSuccess: { showSuccess = true }
+                                        onPurchaseSuccess: {
+                                            showSuccess = true
+                                            onPurchaseComplete?()
+                                        }
                                     )
 
                                     TestProductCard(
@@ -729,7 +741,10 @@ struct GetFeaturedSheet: View {
                                         productId: FeaturedProduct.featured30d.rawValue,
                                         features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"],
                                         store: store,
-                                        onPurchaseSuccess: { showSuccess = true }
+                                        onPurchaseSuccess: {
+                                            showSuccess = true
+                                            onPurchaseComplete?()
+                                        }
                                     )
 
                                     Text("🧪 Test Mode - Products not configured in App Store Connect")
@@ -751,6 +766,7 @@ struct GetFeaturedSheet: View {
                                     store: store,
                                     onPurchaseSuccess: {
                                         showSuccess = true
+                                        onPurchaseComplete?()
                                     }
                                 )
                             }
