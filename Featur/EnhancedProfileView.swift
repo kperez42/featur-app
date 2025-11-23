@@ -2,6 +2,7 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseFunctions
 import PhotosUI
 
 // MARK: - Stats Period Enum
@@ -4676,11 +4677,10 @@ struct EmailVerificationView: View {
     let profile: UserProfile
     @Environment(\.dismiss) var dismiss
     @State private var email: String = ""
-    @State private var verificationCode: String = ""
-    @State private var codeSent = false
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
+    @State private var verificationSent = false
 
     var body: some View {
         NavigationStack {
@@ -4695,14 +4695,14 @@ struct EmailVerificationView: View {
                 VStack(spacing: 8) {
                     Text("Verify Email")
                         .font(.title.bold())
-                    Text("Enter your email to receive a verification code")
+                    Text(verificationSent ? "Check your email inbox" : "Enter your email to receive a verification link")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(.horizontal)
 
-                if !codeSent {
+                if !verificationSent {
                     // Email input
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Email Address")
@@ -4718,16 +4718,16 @@ struct EmailVerificationView: View {
                     }
                     .padding(.horizontal)
 
-                    // Send code button
+                    // Send verification button
                     Button {
-                        sendVerificationCode()
+                        sendVerificationEmail()
                     } label: {
                         HStack {
                             if isLoading {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("Send Verification Code")
+                                Text("Send Verification Email")
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -4739,54 +4739,48 @@ struct EmailVerificationView: View {
                     .disabled(email.isEmpty || isLoading)
                     .padding(.horizontal)
                 } else {
-                    // Verification code input
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Verification Code")
-                            .font(.caption.weight(.medium))
+                    // Verification sent success
+                    VStack(spacing: 16) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundStyle(.green)
+
+                        Text("Verification email sent!")
+                            .font(.headline)
+
+                        Text("We sent a verification link to \(email). Click the link in your email to verify your address.")
+                            .font(.body)
                             .foregroundStyle(.secondary)
-
-                        TextField("Enter 6-digit code", text: $verificationCode)
-                            .textContentType(.oneTimeCode)
-                            .keyboardType(.numberPad)
                             .multilineTextAlignment(.center)
-                            .font(.title2.bold())
-                            .padding()
-                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    .padding(.horizontal)
+                            .padding(.horizontal)
 
-                    Text("Code sent to \(email)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    // Verify button
-                    Button {
-                        verifyCode()
-                    } label: {
-                        HStack {
-                            if isLoading {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Text("Verify Email")
+                        Button {
+                            checkVerificationStatus()
+                        } label: {
+                            HStack {
+                                if isLoading {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("I've Verified - Check Status")
+                                }
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.green)
+                            .foregroundStyle(.white)
+                            .cornerRadius(12)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(verificationCode.isEmpty ? Color.gray : Color.green)
-                        .foregroundStyle(.white)
-                        .cornerRadius(12)
-                    }
-                    .disabled(verificationCode.isEmpty || isLoading)
-                    .padding(.horizontal)
+                        .disabled(isLoading)
+                        .padding(.horizontal)
 
-                    // Resend code
-                    Button {
-                        sendVerificationCode()
-                    } label: {
-                        Text("Resend Code")
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.accent)
+                        Button {
+                            sendVerificationEmail()
+                        } label: {
+                            Text("Resend Email")
+                                .font(.subheadline)
+                                .foregroundStyle(AppTheme.accent)
+                        }
                     }
                 }
 
@@ -4820,54 +4814,64 @@ struct EmailVerificationView: View {
                 }
             }
         }
+        .onAppear {
+            // Pre-fill email if already in profile
+            if let profileEmail = profile.email {
+                email = profileEmail
+            }
+        }
     }
 
-    private func sendVerificationCode() {
+    private func sendVerificationEmail() {
         isLoading = true
         errorMessage = nil
+        successMessage = nil
 
         Task {
             do {
                 let db = FirebaseFirestore.Firestore.firestore()
 
-                // Generate 6-digit code
-                let code = String(format: "%06d", Int.random(in: 0...999999))
+                // Generate unique verification token
+                let verificationToken = UUID().uuidString
 
-                // Save code to Firestore with expiration
-                let codeData: [String: Any] = [
-                    "code": code,
+                // Save verification request to Firestore
+                let verificationData: [String: Any] = [
                     "email": email,
                     "userId": profile.uid,
+                    "token": verificationToken,
                     "createdAt": Date(),
-                    "expiresAt": Date().addingTimeInterval(600) // 10 minutes
+                    "verified": false,
+                    "expiresAt": Date().addingTimeInterval(86400) // 24 hours
                 ]
 
-                try await db.collection("emailVerificationCodes").document(profile.uid).setData(codeData)
-
-                // In production, you would send this via email service (SendGrid, AWS SES, etc.)
-                // For now, we'll just show it in the console
-                print("📧 Email verification code for \(email): \(code)")
+                try await db.collection("emailVerifications").document(profile.uid).setData(verificationData)
 
                 // Update user's email in profile
                 try await db.collection("users").document(profile.uid).updateData([
                     "email": email
                 ])
 
+                // Call Cloud Function to send email (you'll need to create this)
+                let functions = FirebaseFunctions.Functions.functions()
+                let data = ["email": email, "token": verificationToken, "userId": profile.uid]
+
+                try await functions.httpsCallable("sendEmailVerification").call(data)
+
                 await MainActor.run {
-                    codeSent = true
+                    verificationSent = true
                     isLoading = false
-                    successMessage = "Code sent! Check console for development."
+                    successMessage = "Verification email sent successfully!"
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Failed to send code: \(error.localizedDescription)"
+                    errorMessage = "Failed to send email: \(error.localizedDescription)"
                     isLoading = false
                 }
             }
         }
     }
 
-    private func verifyCode() {
+    private func checkVerificationStatus() {
         isLoading = true
         errorMessage = nil
 
@@ -4875,37 +4879,23 @@ struct EmailVerificationView: View {
             do {
                 let db = FirebaseFirestore.Firestore.firestore()
 
-                // Fetch stored code
-                let doc = try await db.collection("emailVerificationCodes").document(profile.uid).getDocument()
+                // Check if email was verified
+                let doc = try await db.collection("emailVerifications").document(profile.uid).getDocument()
 
                 guard let data = doc.data(),
-                      let storedCode = data["code"] as? String,
-                      let expiresAt = (data["expiresAt"] as? Timestamp)?.dateValue() else {
+                      let verified = data["verified"] as? Bool else {
                     await MainActor.run {
-                        errorMessage = "Verification code not found"
+                        errorMessage = "Verification status not found"
                         isLoading = false
                     }
                     return
                 }
 
-                // Check expiration
-                if Date() > expiresAt {
-                    await MainActor.run {
-                        errorMessage = "Code expired. Please request a new one."
-                        isLoading = false
-                    }
-                    return
-                }
-
-                // Verify code
-                if verificationCode == storedCode {
-                    // Mark email as verified
+                if verified {
+                    // Mark as verified in user profile
                     try await db.collection("users").document(profile.uid).updateData([
                         "isEmailVerified": true
                     ])
-
-                    // Delete used code
-                    try await db.collection("emailVerificationCodes").document(profile.uid).delete()
 
                     await MainActor.run {
                         successMessage = "Email verified successfully!"
@@ -4918,13 +4908,13 @@ struct EmailVerificationView: View {
                     }
                 } else {
                     await MainActor.run {
-                        errorMessage = "Invalid code. Please try again."
+                        errorMessage = "Email not verified yet. Please check your inbox and click the verification link."
                         isLoading = false
                     }
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Verification failed: \(error.localizedDescription)"
+                    errorMessage = "Failed to check status: \(error.localizedDescription)"
                     isLoading = false
                 }
             }
@@ -4942,6 +4932,7 @@ struct PhoneVerificationView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
+    @State private var verificationID: String?
 
     var body: some View {
         NavigationStack {
@@ -5017,6 +5008,12 @@ struct PhoneVerificationView: View {
                             .font(.title2.bold())
                             .padding()
                             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+                            .onChange(of: verificationCode) { newValue in
+                                // Auto-verify when 6 digits entered
+                                if newValue.count == 6 {
+                                    verifyCode()
+                                }
+                            }
                     }
                     .padding(.horizontal)
 
@@ -5085,33 +5082,35 @@ struct PhoneVerificationView: View {
                 }
             }
         }
+        .onAppear {
+            // Pre-fill phone if already in profile
+            if let profilePhone = profile.phoneNumber {
+                phoneNumber = profilePhone
+            }
+        }
     }
 
     private func sendSMSCode() {
         isLoading = true
         errorMessage = nil
+        successMessage = nil
 
         Task {
             do {
                 let db = FirebaseFirestore.Firestore.firestore()
 
-                // Generate 6-digit code
-                let code = String(format: "%06d", Int.random(in: 0...999999))
+                // Call Firebase Cloud Function to send SMS via Twilio/SNS
+                let functions = FirebaseFunctions.Functions.functions()
+                let data = ["phoneNumber": phoneNumber, "userId": profile.uid]
 
-                // Save code to Firestore with expiration
-                let codeData: [String: Any] = [
-                    "code": code,
-                    "phoneNumber": phoneNumber,
-                    "userId": profile.uid,
-                    "createdAt": Date(),
-                    "expiresAt": Date().addingTimeInterval(600) // 10 minutes
-                ]
+                let result = try await functions.httpsCallable("sendPhoneVerification").call(data)
 
-                try await db.collection("phoneVerificationCodes").document(profile.uid).setData(codeData)
+                guard let response = result.data as? [String: Any],
+                      let verId = response["verificationId"] as? String else {
+                    throw NSError(domain: "PhoneVerification", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get verification ID"])
+                }
 
-                // In production, you would send this via SMS service (Twilio, AWS SNS, etc.)
-                // For now, we'll just show it in the console
-                print("📱 SMS verification code for \(phoneNumber): \(code)")
+                verificationID = verId
 
                 // Update user's phone number in profile
                 try await db.collection("users").document(profile.uid).updateData([
@@ -5121,11 +5120,11 @@ struct PhoneVerificationView: View {
                 await MainActor.run {
                     codeSent = true
                     isLoading = false
-                    successMessage = "Code sent! Check console for development."
+                    successMessage = "SMS code sent successfully!"
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Failed to send code: \(error.localizedDescription)"
+                    errorMessage = "Failed to send SMS: \(error.localizedDescription)"
                     isLoading = false
                 }
             }
@@ -5133,6 +5132,11 @@ struct PhoneVerificationView: View {
     }
 
     private func verifyCode() {
+        guard let verificationID = verificationID else {
+            errorMessage = "Please request a code first"
+            return
+        }
+
         isLoading = true
         errorMessage = nil
 
@@ -5140,51 +5144,34 @@ struct PhoneVerificationView: View {
             do {
                 let db = FirebaseFirestore.Firestore.firestore()
 
-                // Fetch stored code
-                let doc = try await db.collection("phoneVerificationCodes").document(profile.uid).getDocument()
+                // Call Firebase Cloud Function to verify the code
+                let functions = FirebaseFunctions.Functions.functions()
+                let data = [
+                    "verificationId": verificationID,
+                    "code": verificationCode,
+                    "userId": profile.uid
+                ]
 
-                guard let data = doc.data(),
-                      let storedCode = data["code"] as? String,
-                      let expiresAt = (data["expiresAt"] as? Timestamp)?.dateValue() else {
-                    await MainActor.run {
-                        errorMessage = "Verification code not found"
-                        isLoading = false
-                    }
-                    return
+                let result = try await functions.httpsCallable("verifyPhoneCode").call(data)
+
+                guard let response = result.data as? [String: Any],
+                      let success = response["success"] as? Bool,
+                      success else {
+                    throw NSError(domain: "PhoneVerification", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid verification code"])
                 }
 
-                // Check expiration
-                if Date() > expiresAt {
-                    await MainActor.run {
-                        errorMessage = "Code expired. Please request a new one."
-                        isLoading = false
-                    }
-                    return
-                }
+                // Mark phone as verified
+                try await db.collection("users").document(profile.uid).updateData([
+                    "isPhoneVerified": true
+                ])
 
-                // Verify code
-                if verificationCode == storedCode {
-                    // Mark phone as verified
-                    try await db.collection("users").document(profile.uid).updateData([
-                        "isPhoneVerified": true
-                    ])
+                await MainActor.run {
+                    successMessage = "Phone verified successfully!"
+                    isLoading = false
 
-                    // Delete used code
-                    try await db.collection("phoneVerificationCodes").document(profile.uid).delete()
-
-                    await MainActor.run {
-                        successMessage = "Phone verified successfully!"
-                        isLoading = false
-
-                        // Dismiss after short delay
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            dismiss()
-                        }
-                    }
-                } else {
-                    await MainActor.run {
-                        errorMessage = "Invalid code. Please try again."
-                        isLoading = false
+                    // Dismiss after short delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        dismiss()
                     }
                 }
             } catch {
