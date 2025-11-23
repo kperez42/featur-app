@@ -688,8 +688,8 @@ private struct MainProfileContent: View {
                     .contentTransition(.numericText())
                     .frame(maxWidth: .infinity, alignment: .leading)
                 
-                // Mini sparkline chart
-                MiniSparklineChart(data: trendData, color: color)
+                // Mini bar chart (7 days)
+                MiniBarChart(data: trendData, baseColor: color)
                     .frame(height: 30)
             }
             .padding()
@@ -701,64 +701,57 @@ private struct MainProfileContent: View {
         }
     }
     
-    private struct MiniSparklineChart: View {
+    private struct MiniBarChart: View {
         let data: [Double]
-        let color: Color
-        
-        @State private var animateChart = false
-        
+        let baseColor: Color
+
+        @State private var animateBars = false
+
+        // 7 different colors for 7 days (rainbow gradient)
+        let barColors: [Color] = [
+            .purple,
+            .blue,
+            .cyan,
+            .green,
+            .yellow,
+            .orange,
+            .pink
+        ]
+
         var body: some View {
             GeometryReader { geometry in
-                let path = createPath(in: geometry.size)
-                
-                ZStack(alignment: .bottomLeading) {
-                    // Gradient fill
-                    path
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    color.opacity(0.3),
-                                    color.opacity(0.0)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
+                HStack(alignment: .bottom, spacing: 2) {
+                    ForEach(Array(data.enumerated()), id: \.offset) { index, value in
+                        let maxValue = data.max() ?? 1.0
+                        let normalizedHeight = maxValue > 0 ? CGFloat(value) / CGFloat(maxValue) : 0
+                        let barHeight = geometry.size.height * normalizedHeight
+
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        barColors[index].opacity(0.9),
+                                        barColors[index].opacity(0.6)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
                             )
-                        )
-                        .scaleEffect(y: animateChart ? 1 : 0, anchor: .bottom)
-                    
-                    // Line stroke
-                    path
-                        .stroke(color, lineWidth: 2)
-                        .scaleEffect(y: animateChart ? 1 : 0, anchor: .bottom)
+                            .frame(height: animateBars ? barHeight : 0)
+                            .frame(maxWidth: .infinity)
+                            .animation(
+                                .spring(response: 0.6, dampingFraction: 0.7)
+                                .delay(Double(index) * 0.05),
+                                value: animateBars
+                            )
+                    }
                 }
             }
             .onAppear {
-                withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
-                    animateChart = true
+                withAnimation {
+                    animateBars = true
                 }
             }
-        }
-        
-        func createPath(in size: CGSize) -> Path {
-            var path = Path()
-            
-            guard !data.isEmpty else { return path }
-            
-            let stepX = size.width / CGFloat(data.count - 1)
-            let maxValue = data.max() ?? 1.0
-            
-            path.move(to: CGPoint(
-                x: 0,
-                y: size.height - (CGFloat(data[0]) / CGFloat(maxValue)) * size.height
-            ))
-            
-            for (index, value) in data.enumerated() {
-                let x = CGFloat(index) * stepX
-                let y = size.height - (CGFloat(value) / CGFloat(maxValue)) * size.height
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
-            
-            return path
         }
     }
     
