@@ -1190,12 +1190,15 @@ private struct MainProfileContent: View {
 
                             FlowLayout(spacing: 8) {
                                 ForEach(filteredInterests, id: \.self) { interest in
-                                    Text(interest)
-                                        .font(.caption)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(AppTheme.accent.opacity(0.15), in: Capsule())
-                                        .foregroundStyle(AppTheme.accent)
+                                    HStack(spacing: 4) {
+                                        Image(systemName: iconForInterest(interest))
+                                        Text(interest)
+                                    }
+                                    .font(.caption)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(AppTheme.accent)
                                 }
                             }
                         }
@@ -1205,8 +1208,124 @@ private struct MainProfileContent: View {
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
         }
+
+        // Map interests to SF Symbols icons (same as ProfileDetailView)
+        private func iconForInterest(_ interest: String) -> String {
+            let lowercased = interest.lowercased()
+
+            // Sports & Fitness
+            if lowercased.contains("fitness") || lowercased.contains("gym") || lowercased.contains("workout") {
+                return "figure.run"
+            } else if lowercased.contains("yoga") || lowercased.contains("meditation") {
+                return "figure.yoga"
+            } else if lowercased.contains("basketball") {
+                return "basketball.fill"
+            } else if lowercased.contains("football") || lowercased.contains("soccer") {
+                return "soccerball"
+            } else if lowercased.contains("tennis") {
+                return "tennisball.fill"
+            } else if lowercased.contains("sports") {
+                return "sportscourt.fill"
+            } else if lowercased.contains("running") || lowercased.contains("jogging") {
+                return "figure.run"
+            } else if lowercased.contains("swimming") {
+                return "figure.pool.swim"
+            } else if lowercased.contains("cycling") || lowercased.contains("biking") {
+                return "bicycle"
+            }
+            // Creative Arts
+            else if lowercased.contains("music") || lowercased.contains("singing") {
+                return "music.note"
+            } else if lowercased.contains("art") || lowercased.contains("drawing") || lowercased.contains("painting") {
+                return "paintpalette.fill"
+            } else if lowercased.contains("photography") || lowercased.contains("camera") {
+                return "camera.fill"
+            } else if lowercased.contains("dance") || lowercased.contains("dancing") {
+                return "figure.dance"
+            } else if lowercased.contains("film") || lowercased.contains("movie") || lowercased.contains("cinema") {
+                return "film.fill"
+            } else if lowercased.contains("theater") || lowercased.contains("acting") {
+                return "theatermasks.fill"
+            } else if lowercased.contains("writing") || lowercased.contains("poetry") {
+                return "pencil.and.outline"
+            }
+            // Food & Drink
+            else if lowercased.contains("cooking") || lowercased.contains("baking") {
+                return "frying.pan.fill"
+            } else if lowercased.contains("food") || lowercased.contains("cuisine") {
+                return "fork.knife"
+            } else if lowercased.contains("coffee") {
+                return "cup.and.saucer.fill"
+            } else if lowercased.contains("wine") || lowercased.contains("cocktail") {
+                return "wineglass.fill"
+            }
+            // Technology
+            else if lowercased.contains("gaming") || lowercased.contains("video game") {
+                return "gamecontroller.fill"
+            } else if lowercased.contains("tech") || lowercased.contains("coding") || lowercased.contains("programming") {
+                return "laptopcomputer"
+            } else if lowercased.contains("ai") || lowercased.contains("robot") {
+                return "cpu"
+            }
+            // Nature & Outdoors
+            else if lowercased.contains("travel") || lowercased.contains("adventure") {
+                return "airplane"
+            } else if lowercased.contains("hiking") || lowercased.contains("camping") {
+                return "mountain.2.fill"
+            } else if lowercased.contains("nature") || lowercased.contains("outdoor") {
+                return "leaf.fill"
+            } else if lowercased.contains("beach") || lowercased.contains("ocean") {
+                return "beach.umbrella.fill"
+            } else if lowercased.contains("garden") {
+                return "leaf.arrow.triangle.circlepath"
+            }
+            // Animals
+            else if lowercased.contains("pet") || lowercased.contains("dog") || lowercased.contains("cat") {
+                return "pawprint.fill"
+            } else if lowercased.contains("animal") {
+                return "hare.fill"
+            }
+            // Fashion & Beauty
+            else if lowercased.contains("fashion") || lowercased.contains("style") {
+                return "tshirt.fill"
+            } else if lowercased.contains("beauty") || lowercased.contains("makeup") {
+                return "sparkles"
+            } else if lowercased.contains("shopping") {
+                return "bag.fill"
+            }
+            // Reading & Learning
+            else if lowercased.contains("reading") || lowercased.contains("book") {
+                return "book.fill"
+            } else if lowercased.contains("podcast") {
+                return "mic.fill"
+            } else if lowercased.contains("learning") || lowercased.contains("education") {
+                return "graduationcap.fill"
+            }
+            // Entertainment
+            else if lowercased.contains("tv") || lowercased.contains("series") {
+                return "tv.fill"
+            } else if lowercased.contains("anime") || lowercased.contains("manga") {
+                return "book.closed.fill"
+            }
+            // Health & Wellness
+            else if lowercased.contains("health") || lowercased.contains("wellness") {
+                return "heart.fill"
+            } else if lowercased.contains("mental health") || lowercased.contains("mindfulness") {
+                return "brain.head.profile"
+            }
+            // Social
+            else if lowercased.contains("social") || lowercased.contains("networking") {
+                return "person.2.fill"
+            } else if lowercased.contains("volunteer") || lowercased.contains("charity") {
+                return "hands.sparkles.fill"
+            }
+            // Default
+            else {
+                return "star.fill"
+            }
+        }
     }
-    
+
     // MARK: - Social Links Section
     private struct SocialLinksSection: View {
         let profile: UserProfile
