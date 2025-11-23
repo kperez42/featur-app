@@ -2773,6 +2773,21 @@ private struct MainProfileContent: View {
                     Image(systemName: "checkmark.seal.fill")
                         .foregroundStyle(.blue)
                 }
+
+                // Online Status Badge - uses real Firebase presence data
+                if PresenceManager.shared.isOnline(userId: profile.uid) {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 8, height: 8)
+                        Text("LIVE")
+                            .font(.caption.bold())
+                            .foregroundStyle(.green)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.green.opacity(0.15), in: Capsule())
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
