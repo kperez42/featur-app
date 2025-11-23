@@ -2944,7 +2944,7 @@ private struct MainProfileContent: View {
                             Circle()
                                 .fill(.green)
                                 .frame(width: 8, height: 8)
-                            Text("ONLINE")
+                            Text("Online")
                                 .font(.caption.bold())
                                 .foregroundStyle(.green)
                         }

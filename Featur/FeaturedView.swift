@@ -522,7 +522,7 @@ struct FeaturedCreatorCard: View {
                             Circle()
                                 .fill(.green)
                                 .frame(width: 6, height: 6)
-                            Text("ONLINE")
+                            Text("Online")
                                 .font(.caption2.bold())
                                 .foregroundStyle(.green)
                         }
