@@ -31,7 +31,6 @@ struct EnhancedProfileView: View {
     @State private var showShareSheet = false
     @State private var showStatsSheet = false
     @State private var showFeaturedSheet = false
-    @State private var showMigrationSheet = false
     @State private var scrollOffset: CGFloat = 0
     
     var body: some View {
@@ -51,7 +50,6 @@ struct EnhancedProfileView: View {
                     showShareSheet: $showShareSheet,
                     showStatsSheet: $showStatsSheet,
                     showFeaturedSheet: $showFeaturedSheet,
-                    showMigrationSheet: $showMigrationSheet,
                     scrollOffset: $scrollOffset
                 )
             } else {
@@ -82,7 +80,6 @@ private struct MainProfileContent: View {
     @Binding var showShareSheet: Bool
     @Binding var showStatsSheet: Bool
     @Binding var showFeaturedSheet: Bool
-    @Binding var showMigrationSheet: Bool
     @Binding var scrollOffset: CGFloat
     @EnvironmentObject var auth: AuthViewModel
 
@@ -222,10 +219,6 @@ private struct MainProfileContent: View {
                             Label("Settings", systemImage: "gear")
                         }
                         Divider()
-                        Button { showMigrationSheet = true } label: {
-                            Label("🔧 Update Test Accounts", systemImage: "arrow.triangle.2.circlepath")
-                        }
-                        Divider()
                         Button(role: .destructive) {
                             Task { await auth.signOut() }
                         } label: {
@@ -270,20 +263,6 @@ private struct MainProfileContent: View {
             }
             .sheet(isPresented: $showFeaturedSheet) {
                 GetFeaturedSheet()
-            }
-            .sheet(isPresented: $showMigrationSheet) {
-                NavigationStack {
-                    MigrateUserProfilesView()
-                        .navigationTitle("Update Test Accounts")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button("Done") {
-                                    showMigrationSheet = false
-                                }
-                            }
-                        }
-                }
             }
             .sheet(isPresented: $showShareSheet) {
                 let profileURL = "https://featur.app/profile/\(profile.uid)"
