@@ -331,7 +331,13 @@ private struct MainProfileContent: View {
                             animateGradient = true
                         }
                     }
-                
+
+                // White decorative texture overlay
+                WhiteTextureOverlay(animate: animateGradient)
+                    .frame(height: 320 + max(0, scrollOffset * 0.5))
+                    .opacity(0.12)
+                    .blendMode(.overlay)
+
                 // Animated mesh gradient overlay
                 MeshGradientOverlay()
                     .frame(height: 320 + max(0, scrollOffset * 0.5))
@@ -4355,7 +4361,7 @@ private struct MainProfileContent: View {
     
     private struct AnimatedGradientBackground: View {
         let animate: Bool
-        
+
         var body: some View {
             LinearGradient(
                 colors: [
@@ -4367,7 +4373,112 @@ private struct MainProfileContent: View {
             )
         }
     }
-    
+
+    private struct WhiteTextureOverlay: View {
+        let animate: Bool
+
+        var body: some View {
+            GeometryReader { geo in
+                ZStack {
+                    // Large decorative circles
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 200, height: 200)
+                        .offset(x: animate ? -50 : -30, y: -80)
+                        .opacity(0.08)
+
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 150, height: 150)
+                        .offset(x: geo.size.width - 70, y: geo.size.height - 60)
+                        .opacity(0.06)
+
+                    // Medium circles
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 100, height: 100)
+                        .offset(x: geo.size.width - 120, y: 30)
+                        .opacity(0.05)
+
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 80, height: 80)
+                        .offset(x: 40, y: geo.size.height - 100)
+                        .opacity(0.07)
+
+                    // Abstract curved lines
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: geo.size.height * 0.3))
+                        path.addQuadCurve(
+                            to: CGPoint(x: geo.size.width, y: geo.size.height * 0.4),
+                            control: CGPoint(x: geo.size.width * 0.5, y: geo.size.height * 0.2)
+                        )
+                    }
+                    .stroke(.white, lineWidth: 2)
+                    .opacity(0.1)
+
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: geo.size.height * 0.7))
+                        path.addQuadCurve(
+                            to: CGPoint(x: geo.size.width, y: geo.size.height * 0.6),
+                            control: CGPoint(x: geo.size.width * 0.5, y: geo.size.height * 0.8)
+                        )
+                    }
+                    .stroke(.white, lineWidth: 1.5)
+                    .opacity(0.08)
+
+                    // Small geometric shapes scattered
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.white)
+                        .frame(width: 40, height: 40)
+                        .rotationEffect(.degrees(animate ? 20 : 15))
+                        .offset(x: geo.size.width * 0.25, y: geo.size.height * 0.15)
+                        .opacity(0.06)
+
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(.white)
+                        .frame(width: 30, height: 30)
+                        .rotationEffect(.degrees(animate ? -25 : -20))
+                        .offset(x: geo.size.width * 0.75, y: geo.size.height * 0.5)
+                        .opacity(0.05)
+
+                    // Dots pattern
+                    ForEach(0..<15, id: \.self) { i in
+                        Circle()
+                            .fill(.white)
+                            .frame(width: CGFloat.random(in: 3...8), height: CGFloat.random(in: 3...8))
+                            .position(
+                                x: CGFloat.random(in: 0...geo.size.width),
+                                y: CGFloat.random(in: 0...geo.size.height)
+                            )
+                            .opacity(0.04)
+                    }
+
+                    // Diagonal lines pattern (top right)
+                    ForEach(0..<5, id: \.self) { i in
+                        Rectangle()
+                            .fill(.white)
+                            .frame(width: 1, height: 60)
+                            .rotationEffect(.degrees(45))
+                            .offset(
+                                x: geo.size.width * 0.7 + CGFloat(i * 15),
+                                y: 40 + CGFloat(i * 10)
+                            )
+                            .opacity(0.06)
+                    }
+
+                    // Abstract organic shapes
+                    Ellipse()
+                        .fill(.white)
+                        .frame(width: 120, height: 60)
+                        .rotationEffect(.degrees(-30))
+                        .offset(x: geo.size.width * 0.15, y: geo.size.height * 0.6)
+                        .opacity(0.05)
+                }
+            }
+        }
+    }
+
     private struct ParticleEffectView: View {
         @State private var particles: [Particle] = []
         
