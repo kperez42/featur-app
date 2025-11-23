@@ -31,12 +31,18 @@ struct LocationAccessPage: View {
 
                 
                 Button {
-                    locationManager.requestLocationAccess()
+                    print("🔴 [DEBUG] Requesting location access → button tapped")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        print("🔴 [DEBUG] Calling requestWhenInUseAuthorization()")
+                        locationManager.requestLocationAccess()
+                    }
+
                 } label: {
                     Text(buttonTitle(for: status))
                         .frame(maxWidth: .infinity)
                         .padding()
                 }
+
                 .buttonStyle(.borderedProminent)
                 .disabled(status == .authorizedWhenInUse)
                 .padding(.horizontal)
@@ -47,12 +53,24 @@ struct LocationAccessPage: View {
                         .foregroundStyle(.red)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                    
                 }
 
                 Spacer()
             }
+            
         }
+        .onAppear {
+            print("🟣 [DEBUG] LocationAccessPage appeared")
+            print("🟣 [DEBUG] Current auth status:", locationManager.manager.authorizationStatus.rawValue)
+
+            // Force-refresh
+            locationManager.authorizationStatus = locationManager.manager.authorizationStatus
+        }
+
+
     }
+    
 
     //  helper function that takes a value, not a wrapper
     private func buttonTitle(for status: CLAuthorizationStatus) -> String {

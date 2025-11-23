@@ -81,7 +81,7 @@ struct EnhancedHomeView: View {
         }
         .sheet(isPresented: $showProfileDetail) {
             if let profile = selectedProfile {
-                ProfileDetailPlaceholder(profile: profile)
+                ProfileDetailViewSimple(profile: profile)
             }
         }
         .task {
@@ -421,9 +421,13 @@ struct ProfileCardView: View {
                                 .animation(.easeInOut(duration: 0.4), value: UUID()) // harmless trigger
 
                         case .failure:
-                            AppTheme.gradient
+                            Image("placeholder")
+                                .resizable()
+                                .scaledToFill()
                         @unknown default:
-                            AppTheme.gradient
+                            Image("placeholder")
+                                .resizable()
+                                .scaledToFill()
                         }
                     }
                     

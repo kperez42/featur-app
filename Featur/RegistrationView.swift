@@ -82,11 +82,7 @@ struct RegistrationView: View {
             let uid = result.user.uid
             
             let db = Firestore.firestore()
-            try await db.collection("users").document(uid).setData([
-                "name": name,
-                "email": email,
-                "createdAt": Timestamp(date: Date())
-            ])
+            
             
             try await result.user.sendEmailVerification()
             print("Verification email sent to \(email)")

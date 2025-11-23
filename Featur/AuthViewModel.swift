@@ -9,6 +9,9 @@ import os.log
 final class AuthViewModel: NSObject, ObservableObject {
     @Published var user: User?
     @Published var errorMessage: String?
+    @Published var needsProfileSetup: Bool = false
+    @Published var isEmailVerified: Bool = false
+
     private var currentNonce: String?
     private var authHandle: AuthStateDidChangeListenerHandle?
 
@@ -117,6 +120,34 @@ final class AuthViewModel: NSObject, ObservableObject {
             self.errorMessage = "Sign out failed"
         }
     }
+    // function that checks firestore logic
+    func refreshUserState() async {
+        guard let firebaseUser = Auth.auth().currentUser else {
+            self.needsProfileSetup = false
+            self.isEmailVerified = false
+            return
+        }
+        do{
+            // Reload to update verification status
+            try await firebaseUser.reload()
+        }catch{
+            print("failed to reload user: \(error.localizedDescription)")
+        }
+        self.isEmailVerified = firebaseUser.isEmailVerified
+
+        let service = FirebaseService()
+        let profile = try? await service.fetchProfile(uid: firebaseUser.uid)
+
+        if profile == nil ||
+           profile?.age == nil ||
+           (profile?.mediaURLs?.isEmpty ?? true) ||
+           profile?.contentStyles.isEmpty == true {
+            self.needsProfileSetup = true
+        } else {
+            self.needsProfileSetup = false
+        }
+    }
+
     // MARK: - Helpers / Diagnostics
     private func dumpEnvironmentOnce() {
         let bundleID = Bundle.main.bundleIdentifier ?? "nil"

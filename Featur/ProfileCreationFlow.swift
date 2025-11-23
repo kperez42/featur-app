@@ -40,10 +40,12 @@ struct ProfileCreationFlow: View {
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
+                
                 // --- Step Progress Bar ---
                 stepProgressBar
                 // --- Step Header ---
                 HStack {
+                     
                     if step != .gender {
                         Button(action: onBack) {
                             Image(systemName: "chevron.left")
