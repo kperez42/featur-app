@@ -797,7 +797,7 @@ final class HomeViewModel: ObservableObject {
         profiles.first
     }
     
-    func loadProfiles(currentUserId: String) async {
+    func loadProfiles(currentUserId: String, excludeSwipedProfiles: Bool = true) async {
         isLoading = true
         errorMessage = nil
 
@@ -812,9 +812,15 @@ final class HomeViewModel: ObservableObject {
                              userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
             }
 
-            // Fetch swiped user IDs from Firebase to ensure consistency across tabs
-            let swipedIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
-            swipedUserIds = Set(swipedIds)
+            // Only fetch swiped user IDs if we want to exclude them
+            if excludeSwipedProfiles {
+                // Fetch swiped user IDs from Firebase to ensure consistency across tabs
+                let swipedIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
+                swipedUserIds = Set(swipedIds)
+            } else {
+                // Reset to see all profiles again
+                swipedUserIds.removeAll()
+            }
 
             // Fetch profiles from Firebase
             var fetched = try await service.fetchDiscoverProfiles(
@@ -836,7 +842,7 @@ final class HomeViewModel: ObservableObject {
             }
 
             isLoading = false
-            print("✅ Loaded \(profiles.count) profiles for Home")
+            print("✅ Loaded \(profiles.count) profiles for Home (exclude swiped: \(excludeSwipedProfiles))")
 
         } catch {
             isLoading = false
@@ -1014,7 +1020,8 @@ final class HomeViewModel: ObservableObject {
         swipeHistory.removeAll()
         matchesToday = 0
 
-        await loadProfiles(currentUserId: currentUserId)
+        // Don't exclude swiped profiles on refresh - show all profiles again
+        await loadProfiles(currentUserId: currentUserId, excludeSwipedProfiles: false)
     }
     
     func applyFilters() async {
