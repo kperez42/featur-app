@@ -705,7 +705,7 @@ private struct MainProfileContent: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(formatNumber(animate ? value : 0))
-                        .font(.system(size: 32, weight: .bold))
+                        .font(.system(size: 26, weight: .bold))
                         .foregroundStyle(.primary)
                         .contentTransition(.numericText())
 
