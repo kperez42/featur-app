@@ -11,10 +11,10 @@ struct EnhancedDiscoverView: View {
     @State private var scrollOffset: CGFloat = 0
     
     let featuredCategories = [
-        "New Creators",
-        "Looking to Collab",
-        "Verified Creators",
-        "Nearby"
+        "Music",
+        "Video Games",
+        "Art",
+        "Cooking"
     ]
     
     var body: some View {
@@ -403,10 +403,10 @@ struct EnhancedDiscoverView: View {
     
     private func categoryIcon(for category: String) -> String {
         switch category {
-        case "New Creators": return "sparkles"
-        case "Looking to Collab": return "person.2.fill"
-        case "Verified Creators": return "checkmark.seal.fill"
-        case "Nearby": return "location.fill"
+        case "Music": return "music.note"
+        case "Video Games": return "gamecontroller.fill"
+        case "Art": return "paintbrush.fill"
+        case "Cooking": return "fork.knife"
         default: return "star.fill"
         }
     }
@@ -1177,23 +1177,8 @@ final class DiscoverViewModel: ObservableObject {
     }
 
     private func matchesCategory(profile: UserProfile, category: String) -> Bool {
-        switch category {
-        case "New Creators":
-            // Profiles created in the last 30 days
-            let daysSinceCreation = Calendar.current.dateComponents([.day], from: profile.createdAt, to: Date()).day ?? 0
-            return daysSinceCreation <= 30
-        case "Looking to Collab":
-            // Profiles with collaboration preferences set
-            return !(profile.collaborationPreferences?.lookingFor ?? []).isEmpty
-        case "Verified Creators":
-            // Verified profiles only
-            return profile.isVerified ?? false
-        case "Nearby":
-            // Profiles with location nearby
-            return profile.location?.isNearby ?? false
-        default:
-            return false
-        }
+        // Match by content style
+        return profile.contentStyles.contains { $0.rawValue == category }
     }
     
     private func applyFilters() {
