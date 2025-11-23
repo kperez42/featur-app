@@ -1080,7 +1080,7 @@ private struct MainProfileContent: View {
                 if !contentImages.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(Array(contentImages.enumerated()), id: \.offset) { index, url in
+                            ForEach(Array(contentImages.enumerated()), id: \.element) { index, url in
                                 AsyncImage(url: URL(string: url)) { phase in
                                     switch phase {
                                     case .success(let image):
@@ -4465,7 +4465,7 @@ private struct MainProfileContent: View {
                 Color.black.ignoresSafeArea()
 
                 TabView(selection: $currentIndex) {
-                    ForEach(Array(images.enumerated()), id: \.offset) { index, url in
+                    ForEach(Array(images.enumerated()), id: \.element) { index, url in
                         ZoomableImageView(
                             imageURL: url,
                             scale: index == currentIndex ? $scale : .constant(1.0),
@@ -4553,19 +4553,20 @@ private struct MainProfileContent: View {
                                     }
                                 }
                         )
-                        .gesture(
+                        .simultaneousGesture(
+                            // Only enable drag when zoomed in to avoid conflicting with TabView swipe
+                            scale > 1.0 ?
                             DragGesture()
                                 .onChanged { value in
-                                    if scale > 1.0 {
-                                        offset = CGSize(
-                                            width: lastOffset.width + value.translation.width,
-                                            height: lastOffset.height + value.translation.height
-                                        )
-                                    }
+                                    offset = CGSize(
+                                        width: lastOffset.width + value.translation.width,
+                                        height: lastOffset.height + value.translation.height
+                                    )
                                 }
                                 .onEnded { _ in
                                     lastOffset = offset
                                 }
+                            : nil
                         )
                         .onTapGesture(count: 2) {
                             // Double tap to zoom
