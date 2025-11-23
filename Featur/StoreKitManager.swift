@@ -58,16 +58,39 @@ class StoreKitManager: ObservableObject {
         do {
             let productIDs = FeaturedProduct.allCases.map { $0.rawValue }
             products = try await Product.products(for: productIDs)
+
+            // Verify all products loaded
+            if products.isEmpty {
+                purchaseError = "No products available. Please try again later."
+                print("⚠️ Warning: No products loaded from App Store")
+            } else if products.count != productIDs.count {
+                print("⚠️ Warning: Only \(products.count) of \(productIDs.count) products loaded")
+                // Some products might not be approved yet
+            }
+
             print("✅ Loaded \(products.count) products")
         } catch {
             print("❌ Failed to load products: \(error)")
-            purchaseError = "Failed to load products"
+            purchaseError = "Failed to load products. Check your internet connection."
+
+            // Track analytics for debugging
+            AnalyticsManager.shared.trackError(
+                error: "products_load_failed",
+                context: error.localizedDescription
+            )
         }
     }
 
     // MARK: - Purchase
 
     func purchase(_ product: Product) async throws {
+        // Check if user is already featured
+        if try await isUserCurrentlyFeatured() {
+            purchaseError = "You're already featured! Wait for your current placement to expire."
+            Haptics.notify(.warning)
+            return
+        }
+
         isPurchasing = true
         purchaseError = nil
         defer { isPurchasing = false }
@@ -131,6 +154,27 @@ class StoreKitManager: ObservableObject {
             print("❌ Failed to restore purchases: \(error)")
             purchaseError = "Failed to restore purchases"
         }
+    }
+
+    // MARK: - Check if User Already Featured
+
+    func isUserCurrentlyFeatured() async throws -> Bool {
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            return false
+        }
+
+        let snapshot = try await Firestore.firestore()
+            .collection("featured")
+            .document(currentUserId)
+            .getDocument()
+
+        guard let data = snapshot.data(),
+              let expiresAt = (data["expiresAt"] as? Timestamp)?.dateValue() else {
+            return false
+        }
+
+        // Check if still valid
+        return expiresAt > Date()
     }
 
     // MARK: - Private Helpers
