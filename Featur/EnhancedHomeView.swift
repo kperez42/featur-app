@@ -802,6 +802,8 @@ final class HomeViewModel: ObservableObject {
         errorMessage = nil
 
         do {
+            print("🏠 HOME: Starting profile load for user: \(currentUserId)")
+
             guard !currentUserId.isEmpty else {
                 throw NSError(domain: "HomeViewModel", code: -1,
                              userInfo: [NSLocalizedDescriptionKey: "User not logged in"])
@@ -817,9 +819,11 @@ final class HomeViewModel: ObservableObject {
                 // Fetch swiped user IDs from Firebase to ensure consistency across tabs
                 let swipedIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
                 swipedUserIds = Set(swipedIds)
+                print("🏠 HOME: Found \(swipedIds.count) swiped users to exclude")
             } else {
                 // Reset to see all profiles again
                 swipedUserIds.removeAll()
+                print("🏠 HOME: Not excluding swiped profiles (refresh mode)")
             }
 
             // Fetch profiles from Firebase
@@ -828,12 +832,21 @@ final class HomeViewModel: ObservableObject {
                 limit: 50, // Fetch more to account for filtering
                 excludeUserIds: Array(swipedUserIds)
             )
+            print("🏠 HOME: Fetched \(fetched.count) profiles from Firebase")
 
             // Apply client-side filters
+            let beforeFilters = fetched.count
             fetched = applyClientFilters(to: fetched)
+            print("🏠 HOME: After client filters: \(beforeFilters) → \(fetched.count)")
 
             // Limit to 20 after filtering
             profiles = Array(fetched.prefix(20))
+            print("🏠 HOME: Final profiles to display: \(profiles.count)")
+
+            // Print each profile for debugging
+            for (index, profile) in profiles.enumerated() {
+                print("  [\(index + 1)] \(profile.displayName) (uid: \(profile.uid))")
+            }
 
             // Fetch online status for all profiles
             if !profiles.isEmpty {
@@ -842,7 +855,7 @@ final class HomeViewModel: ObservableObject {
             }
 
             isLoading = false
-            print("✅ Loaded \(profiles.count) profiles for Home (exclude swiped: \(excludeSwipedProfiles))")
+            print("✅ HOME: Loaded \(profiles.count) profiles for Home (exclude swiped: \(excludeSwipedProfiles))")
 
         } catch {
             isLoading = false
@@ -874,29 +887,46 @@ final class HomeViewModel: ObservableObject {
     /// Apply client-side filters to profile list
     private func applyClientFilters(to profiles: [UserProfile]) -> [UserProfile] {
         var filtered = profiles
+        print("🏠 FILTER: Starting with \(filtered.count) profiles")
 
         // Filter by age
+        let beforeAge = filtered.count
         filtered = filtered.filter { profile in
             guard let age = profile.age else { return true }
             return Double(age) >= minAge && Double(age) <= maxAge
         }
+        if beforeAge != filtered.count {
+            print("🏠 FILTER: Age filter removed \(beforeAge - filtered.count) profiles (min: \(minAge), max: \(maxAge))")
+        }
 
         // Filter by content styles
         if !selectedContentStyles.isEmpty {
+            let beforeStyles = filtered.count
             filtered = filtered.filter { profile in
                 !Set(profile.contentStyles).isDisjoint(with: selectedContentStyles)
+            }
+            if beforeStyles != filtered.count {
+                print("🏠 FILTER: Content styles filter removed \(beforeStyles - filtered.count) profiles")
             }
         }
 
         // Filter by verified status
         if verifiedOnly {
+            let beforeVerified = filtered.count
             filtered = filtered.filter { $0.isVerified == true }
+            if beforeVerified != filtered.count {
+                print("🏠 FILTER: Verified filter removed \(beforeVerified - filtered.count) profiles")
+            }
         }
 
+        print("🏠 FILTER: Final count: \(filtered.count) profiles")
         return filtered
     }
     
     func handleSwipe(profile: UserProfile, action: SwipeAction.Action) async {
+        print("🏠 HOME SWIPE: User swiped \(action.rawValue) on \(profile.displayName)")
+        print("🏠 HOME SWIPE: Profiles before removal: \(profiles.count)")
+
         guard let currentUserId = Auth.auth().currentUser?.uid else {
             errorMessage = "Please sign in to continue"
             return
@@ -904,6 +934,7 @@ final class HomeViewModel: ObservableObject {
 
         // Optimistically update UI
         swipedUserIds.insert(profile.uid)
+        print("🏠 HOME SWIPE: Total swiped users now: \(swipedUserIds.count)")
 
         let swipe = SwipeAction(
             userId: currentUserId,
@@ -922,6 +953,12 @@ final class HomeViewModel: ObservableObject {
         // Remove from UI immediately for smooth experience
         withAnimation(.spring(response: 0.3)) {
             profiles.removeAll { $0.id == profile.id }
+        }
+
+        print("🏠 HOME SWIPE: Profiles after removal: \(profiles.count)")
+        print("🏠 HOME SWIPE: Remaining profiles:")
+        for (index, p) in profiles.enumerated() {
+            print("  [\(index + 1)] \(p.displayName)")
         }
 
         do {
@@ -944,9 +981,13 @@ final class HomeViewModel: ObservableObject {
                 }
             }
 
-            // Preload more profiles when running low
-            if profiles.count < 5 {
+            // Only load more profiles when we've run out completely
+            // Don't auto-load if there are still cards to show, as this would replace the current stack
+            if profiles.isEmpty {
+                print("🏠 HOME AUTO-LOAD: No profiles remaining, loading more...")
                 await loadProfiles(currentUserId: currentUserId)
+            } else {
+                print("🏠 HOME: \(profiles.count) profiles remaining in stack")
             }
         } catch {
             // Rollback on error
