@@ -510,6 +510,35 @@ private struct CollaborationSection: View {
     }
 }
 
+// MARK: - Interests Section
+private struct InterestsSection: View {
+    let interests: [String]
+
+    // Filter out gender-related values that shouldn't be in interests
+    private var filteredInterests: [String] {
+        let genderValues = ["Male", "Female", "Non-binary", "Prefer not to say"]
+        return interests.filter { !genderValues.contains($0) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Interests")
+                .font(.headline)
+
+            FlowLayout(spacing: 8) {
+                ForEach(filteredInterests, id: \.self) { interest in
+                    Text(interest)
+                        .font(.caption)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                        .foregroundStyle(AppTheme.accent)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - View Model
 @MainActor
 final class ProfileDetailViewModel: ObservableObject {

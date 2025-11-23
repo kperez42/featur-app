@@ -1166,17 +1166,23 @@ private struct MainProfileContent: View {
                 
                 // Interests
                 if !(profile.interests ?? []).isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Interests")
-                            .font(.headline)
-                        
-                        FlowLayout(spacing: 8) {
-                            ForEach(profile.interests ?? [], id: \.self) { interest in
-                                Text(interest)
-                                    .font(.caption)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(AppTheme.card, in: Capsule())
+                    let genderValues = ["Male", "Female", "Non-binary", "Prefer not to say"]
+                    let filteredInterests = (profile.interests ?? []).filter { !genderValues.contains($0) }
+
+                    if !filteredInterests.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Interests")
+                                .font(.headline)
+
+                            FlowLayout(spacing: 8) {
+                                ForEach(filteredInterests, id: \.self) { interest in
+                                    Text(interest)
+                                        .font(.caption)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                                        .foregroundStyle(AppTheme.accent)
+                                }
                             }
                         }
                     }
