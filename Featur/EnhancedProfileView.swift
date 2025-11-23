@@ -244,6 +244,8 @@ private struct MainProfileContent: View {
                             .foregroundStyle(AppTheme.accent)
                             .symbolEffect(.bounce, value: showEditSheet)
                     }
+                    .menuOrder(.fixed)
+                    .menuStyle(.button)
                 }
             }
             .sheet(isPresented: $showEditSheet) {
@@ -277,6 +279,8 @@ private struct MainProfileContent: View {
                 let profileURL = "https://featur.app/profile/\(profile.uid)"
                 let shareText = "Check out \(profile.displayName)'s profile on Featur!"
                 ShareSheet(items: [shareText, URL(string: profileURL)!])
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
             .fullScreenCover(isPresented: $showProfilePreview) {
                 if let currentProfile = viewModel.profile {
@@ -2467,6 +2471,8 @@ private struct MainProfileContent: View {
                 .sheet(isPresented: $showShareSheet) {
                     if let qrImage = qrImage {
                         ShareSheet(items: [qrImage])
+                            .presentationDetents([.medium, .large])
+                            .presentationDragIndicator(.visible)
                     }
                 }
             }
