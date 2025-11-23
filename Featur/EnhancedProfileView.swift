@@ -136,8 +136,8 @@ private struct MainProfileContent: View {
                         .padding(.horizontal)
                         .padding(.top, 20)
 
-                    // Social Links Grid
-                    SocialLinksSection(profile: profile)
+                    // Verification Section
+                    VerificationSection(profile: profile)
                         .padding(.horizontal)
                         .padding(.top, 20)
 
@@ -1339,63 +1339,114 @@ private struct MainProfileContent: View {
         }
     }
 
-    // MARK: - Social Links Section
-    private struct SocialLinksSection: View {
+    // MARK: - Verification Section
+    private struct VerificationSection: View {
         let profile: UserProfile
-        
+        @State private var showEmailVerification = false
+        @State private var showPhoneVerification = false
+
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Social Links")
+                Text("Verification")
                     .font(.headline)
-                
-                VStack(spacing: 10) {
-                    if let instagram = profile.socialLinks?.instagram {
-                        SocialLinkRow(
-                            platform: "Instagram",
-                            username: instagram.username,
-                            followers: instagram.followerCount,
-                            isVerified: instagram.isVerified,
-                            icon: "camera.fill",
-                            color: Color(red: 0.8, green: 0.3, blue: 0.6)
-                        )
+
+                VStack(spacing: 12) {
+                    // Email Verification
+                    VerificationRow(
+                        title: "Email",
+                        subtitle: profile.email ?? "Not provided",
+                        isVerified: profile.isEmailVerified ?? false,
+                        icon: "envelope.fill",
+                        color: .blue,
+                        showButton: profile.isEmailVerified != true
+                    ) {
+                        showEmailVerification = true
                     }
-                    
-                    if let tiktok = profile.socialLinks?.tiktok {
-                        SocialLinkRow(
-                            platform: "TikTok",
-                            username: tiktok.username,
-                            followers: tiktok.followerCount,
-                            isVerified: tiktok.isVerified,
-                            icon: "music.note",
-                            color: .black
-                        )
-                    }
-                    
-                    if let youtube = profile.socialLinks?.youtube {
-                        SocialLinkRow(
-                            platform: "YouTube",
-                            username: youtube.username,
-                            followers: youtube.followerCount,
-                            isVerified: youtube.isVerified,
-                            icon: "play.rectangle.fill",
-                            color: .red
-                        )
-                    }
-                    
-                    if let twitch = profile.socialLinks?.twitch {
-                        SocialLinkRow(
-                            platform: "Twitch",
-                            username: twitch.username,
-                            followers: twitch.followerCount,
-                            isVerified: twitch.isVerified,
-                            icon: "videoprojector.fill",
-                            color: Color(red: 0.6, green: 0.4, blue: 0.9)
-                        )
+
+                    // Phone Verification
+                    VerificationRow(
+                        title: "Phone Number",
+                        subtitle: profile.phoneNumber ?? "Not provided",
+                        isVerified: profile.isPhoneVerified ?? false,
+                        icon: "phone.fill",
+                        color: .green,
+                        showButton: profile.isPhoneVerified != true
+                    ) {
+                        showPhoneVerification = true
                     }
                 }
             }
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+            .sheet(isPresented: $showEmailVerification) {
+                EmailVerificationView(profile: profile)
+            }
+            .sheet(isPresented: $showPhoneVerification) {
+                PhoneVerificationView(profile: profile)
+            }
+        }
+    }
+
+    private struct VerificationRow: View {
+        let title: String
+        let subtitle: String
+        let isVerified: Bool
+        let icon: String
+        let color: Color
+        let showButton: Bool
+        let onVerifyTap: () -> Void
+
+        var body: some View {
+            HStack(spacing: 12) {
+                // Icon
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(color)
+                    .frame(width: 32)
+
+                // Info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                // Status or button
+                if isVerified {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(.green)
+                        Text("Verified")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.green)
+                    }
+                } else if showButton {
+                    Button {
+                        onVerifyTap()
+                    } label: {
+                        Text("Verify")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.accent, in: Capsule())
+                    }
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isVerified ? Color.green.opacity(0.1) : AppTheme.bg)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isVerified ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
         }
     }
     
@@ -4619,6 +4670,532 @@ private struct MainProfileContent: View {
         }
         return "\(number)"
     }
+
+// MARK: - Email Verification View
+struct EmailVerificationView: View {
+    let profile: UserProfile
+    @Environment(\.dismiss) var dismiss
+    @State private var email: String = ""
+    @State private var verificationCode: String = ""
+    @State private var codeSent = false
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var successMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                // Icon
+                Image(systemName: "envelope.badge.shield.half.filled")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.blue)
+                    .padding(.top, 40)
+
+                // Title
+                VStack(spacing: 8) {
+                    Text("Verify Email")
+                        .font(.title.bold())
+                    Text("Enter your email to receive a verification code")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal)
+
+                if !codeSent {
+                    // Email input
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Email Address")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+
+                        TextField("your@email.com", text: $email)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .autocapitalization(.none)
+                            .padding()
+                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal)
+
+                    // Send code button
+                    Button {
+                        sendVerificationCode()
+                    } label: {
+                        HStack {
+                            if isLoading {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Send Verification Code")
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(email.isEmpty ? Color.gray : AppTheme.accent)
+                        .foregroundStyle(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(email.isEmpty || isLoading)
+                    .padding(.horizontal)
+                } else {
+                    // Verification code input
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Verification Code")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+
+                        TextField("Enter 6-digit code", text: $verificationCode)
+                            .textContentType(.oneTimeCode)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.center)
+                            .font(.title2.bold())
+                            .padding()
+                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal)
+
+                    Text("Code sent to \(email)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    // Verify button
+                    Button {
+                        verifyCode()
+                    } label: {
+                        HStack {
+                            if isLoading {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Verify Email")
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(verificationCode.isEmpty ? Color.gray : Color.green)
+                        .foregroundStyle(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(verificationCode.isEmpty || isLoading)
+                    .padding(.horizontal)
+
+                    // Resend code
+                    Button {
+                        sendVerificationCode()
+                    } label: {
+                        Text("Resend Code")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                }
+
+                // Error/Success message
+                if let error = errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal)
+                }
+
+                if let success = successMessage {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text(success)
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                    .padding(.horizontal)
+                }
+
+                Spacer()
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private func sendVerificationCode() {
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            do {
+                let db = FirebaseFirestore.Firestore.firestore()
+
+                // Generate 6-digit code
+                let code = String(format: "%06d", Int.random(in: 0...999999))
+
+                // Save code to Firestore with expiration
+                let codeData: [String: Any] = [
+                    "code": code,
+                    "email": email,
+                    "userId": profile.uid,
+                    "createdAt": Date(),
+                    "expiresAt": Date().addingTimeInterval(600) // 10 minutes
+                ]
+
+                try await db.collection("emailVerificationCodes").document(profile.uid).setData(codeData)
+
+                // In production, you would send this via email service (SendGrid, AWS SES, etc.)
+                // For now, we'll just show it in the console
+                print("📧 Email verification code for \(email): \(code)")
+
+                // Update user's email in profile
+                try await db.collection("users").document(profile.uid).updateData([
+                    "email": email
+                ])
+
+                await MainActor.run {
+                    codeSent = true
+                    isLoading = false
+                    successMessage = "Code sent! Check console for development."
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to send code: \(error.localizedDescription)"
+                    isLoading = false
+                }
+            }
+        }
+    }
+
+    private func verifyCode() {
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            do {
+                let db = FirebaseFirestore.Firestore.firestore()
+
+                // Fetch stored code
+                let doc = try await db.collection("emailVerificationCodes").document(profile.uid).getDocument()
+
+                guard let data = doc.data(),
+                      let storedCode = data["code"] as? String,
+                      let expiresAt = (data["expiresAt"] as? Timestamp)?.dateValue() else {
+                    await MainActor.run {
+                        errorMessage = "Verification code not found"
+                        isLoading = false
+                    }
+                    return
+                }
+
+                // Check expiration
+                if Date() > expiresAt {
+                    await MainActor.run {
+                        errorMessage = "Code expired. Please request a new one."
+                        isLoading = false
+                    }
+                    return
+                }
+
+                // Verify code
+                if verificationCode == storedCode {
+                    // Mark email as verified
+                    try await db.collection("users").document(profile.uid).updateData([
+                        "isEmailVerified": true
+                    ])
+
+                    // Delete used code
+                    try await db.collection("emailVerificationCodes").document(profile.uid).delete()
+
+                    await MainActor.run {
+                        successMessage = "Email verified successfully!"
+                        isLoading = false
+
+                        // Dismiss after short delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            dismiss()
+                        }
+                    }
+                } else {
+                    await MainActor.run {
+                        errorMessage = "Invalid code. Please try again."
+                        isLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Verification failed: \(error.localizedDescription)"
+                    isLoading = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Phone Verification View
+struct PhoneVerificationView: View {
+    let profile: UserProfile
+    @Environment(\.dismiss) var dismiss
+    @State private var phoneNumber: String = ""
+    @State private var verificationCode: String = ""
+    @State private var codeSent = false
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var successMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                // Icon
+                Image(systemName: "phone.badge.checkmark")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.green)
+                    .padding(.top, 40)
+
+                // Title
+                VStack(spacing: 8) {
+                    Text("Verify Phone Number")
+                        .font(.title.bold())
+                    Text("Enter your phone number to receive a verification code via SMS")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal)
+
+                if !codeSent {
+                    // Phone input
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Phone Number")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+
+                        TextField("+1 (555) 123-4567", text: $phoneNumber)
+                            .textContentType(.telephoneNumber)
+                            .keyboardType(.phonePad)
+                            .padding()
+                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal)
+
+                    Text("Include country code (e.g., +1 for US)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+
+                    // Send SMS button
+                    Button {
+                        sendSMSCode()
+                    } label: {
+                        HStack {
+                            if isLoading {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Send SMS Code")
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(phoneNumber.isEmpty ? Color.gray : Color.green)
+                        .foregroundStyle(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(phoneNumber.isEmpty || isLoading)
+                    .padding(.horizontal)
+                } else {
+                    // Verification code input
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Verification Code")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+
+                        TextField("Enter 6-digit code", text: $verificationCode)
+                            .textContentType(.oneTimeCode)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.center)
+                            .font(.title2.bold())
+                            .padding()
+                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal)
+
+                    Text("Code sent to \(phoneNumber)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    // Verify button
+                    Button {
+                        verifyCode()
+                    } label: {
+                        HStack {
+                            if isLoading {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("Verify Phone Number")
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(verificationCode.isEmpty ? Color.gray : Color.green)
+                        .foregroundStyle(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(verificationCode.isEmpty || isLoading)
+                    .padding(.horizontal)
+
+                    // Resend code
+                    Button {
+                        sendSMSCode()
+                    } label: {
+                        Text("Resend Code")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                }
+
+                // Error/Success message
+                if let error = errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal)
+                }
+
+                if let success = successMessage {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text(success)
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                    .padding(.horizontal)
+                }
+
+                Spacer()
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private func sendSMSCode() {
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            do {
+                let db = FirebaseFirestore.Firestore.firestore()
+
+                // Generate 6-digit code
+                let code = String(format: "%06d", Int.random(in: 0...999999))
+
+                // Save code to Firestore with expiration
+                let codeData: [String: Any] = [
+                    "code": code,
+                    "phoneNumber": phoneNumber,
+                    "userId": profile.uid,
+                    "createdAt": Date(),
+                    "expiresAt": Date().addingTimeInterval(600) // 10 minutes
+                ]
+
+                try await db.collection("phoneVerificationCodes").document(profile.uid).setData(codeData)
+
+                // In production, you would send this via SMS service (Twilio, AWS SNS, etc.)
+                // For now, we'll just show it in the console
+                print("📱 SMS verification code for \(phoneNumber): \(code)")
+
+                // Update user's phone number in profile
+                try await db.collection("users").document(profile.uid).updateData([
+                    "phoneNumber": phoneNumber
+                ])
+
+                await MainActor.run {
+                    codeSent = true
+                    isLoading = false
+                    successMessage = "Code sent! Check console for development."
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to send code: \(error.localizedDescription)"
+                    isLoading = false
+                }
+            }
+        }
+    }
+
+    private func verifyCode() {
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            do {
+                let db = FirebaseFirestore.Firestore.firestore()
+
+                // Fetch stored code
+                let doc = try await db.collection("phoneVerificationCodes").document(profile.uid).getDocument()
+
+                guard let data = doc.data(),
+                      let storedCode = data["code"] as? String,
+                      let expiresAt = (data["expiresAt"] as? Timestamp)?.dateValue() else {
+                    await MainActor.run {
+                        errorMessage = "Verification code not found"
+                        isLoading = false
+                    }
+                    return
+                }
+
+                // Check expiration
+                if Date() > expiresAt {
+                    await MainActor.run {
+                        errorMessage = "Code expired. Please request a new one."
+                        isLoading = false
+                    }
+                    return
+                }
+
+                // Verify code
+                if verificationCode == storedCode {
+                    // Mark phone as verified
+                    try await db.collection("users").document(profile.uid).updateData([
+                        "isPhoneVerified": true
+                    ])
+
+                    // Delete used code
+                    try await db.collection("phoneVerificationCodes").document(profile.uid).delete()
+
+                    await MainActor.run {
+                        successMessage = "Phone verified successfully!"
+                        isLoading = false
+
+                        // Dismiss after short delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            dismiss()
+                        }
+                    }
+                } else {
+                    await MainActor.run {
+                        errorMessage = "Invalid code. Please try again."
+                        isLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Verification failed: \(error.localizedDescription)"
+                    isLoading = false
+                }
+            }
+        }
+    }
+}
 
 // MARK: - Profile Analytics ViewModel
 @MainActor

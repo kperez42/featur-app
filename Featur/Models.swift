@@ -19,7 +19,13 @@ struct UserProfile: Identifiable, Codable {
     var collaborationPreferences: CollaborationPreferences?
     var createdAt: Date
     var updatedAt: Date
-    
+
+    // Verification fields
+    var email: String?
+    var isEmailVerified: Bool?
+    var phoneNumber: String?
+    var isPhoneVerified: Bool?
+
     struct Location: Codable {
         var city: String?
         var state: String?
