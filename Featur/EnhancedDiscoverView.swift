@@ -9,7 +9,8 @@ struct EnhancedDiscoverView: View {
     @State private var showFilterSheet = false
     @State private var showSortMenu = false
     @State private var scrollOffset: CGFloat = 0
-    
+    @State private var selectedProfile: UserProfile?
+
     let featuredCategories = [
         "Twitch Streamers",
         "Music Collabs",
@@ -303,19 +304,24 @@ struct EnhancedDiscoverView: View {
         }
     }
     
+
     private var profilesGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
             ForEach(viewModel.filteredProfiles) { profile in
-                NavigationLink {
-                    ProfileDetailPlaceholder(profile: profile)
-                } label: {
-                    DiscoverProfileCard(profile: profile)
-                }
-                .buttonStyle(.plain)
+                DiscoverProfileCard(profile: profile)
+                    .onTapGesture {
+                        selectedProfile = profile
+                    }
+                    .buttonStyle(.plain)
             }
         }
         .padding(.horizontal)
+        .sheet(item: $selectedProfile) { profile in
+            ProfileDetailViewSimple(profile: profile)
+                .interactiveDismissDisabled(false)
+        }
     }
+
     
     private var loadingView: some View {
         VStack(spacing: 20) {
@@ -858,226 +864,6 @@ final class DiscoverViewModel: ObservableObject {
     }
 
 
-    /**
-    #if DEBUG
-    // MARK: - 🧪 TEST DATA
-    func loadTestProfiles() {
-        allProfiles = [
-            UserProfile(
-                id: "discover1",
-                uid: "discover1",
-                displayName: "Emma Rodriguez",
-                age: 23,
-                bio: "Travel vlogger ✈️ Exploring the world one video at a time!",
-                location: UserProfile.Location(city: "Austin", state: "TX", country: "USA", coordinates: nil),
-                interests: ["Travel", "Photography", "Lifestyle"],
-                contentStyles: [.fashion, .art],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@emmatravels", followerCount: 89000, isVerified: false),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@emmaontheroad", followerCount: 52000, isVerified: true),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@EmmaRodriguez", followerCount: 145000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 89000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.contentSeries, .brandDeal],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 30),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover2",
-                uid: "discover2",
-                displayName: "Jake Morrison",
-                age: 27,
-                bio: "Tech reviewer 📱 Latest gadgets and honest reviews!",
-                location: UserProfile.Location(city: "Seattle", state: "WA", country: "USA", coordinates: nil),
-                interests: ["Technology", "Gaming", "Reviews"],
-                contentStyles: [.tech, .gaming],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@jaketech", followerCount: 210000, isVerified: true),
-                    instagram: nil,
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@JakeMorrisonTech", followerCount: 380000, isVerified: true),
-                    twitch: UserProfile.SocialLinks.SocialAccount(username: "jaketech", followerCount: 45000, isVerified: false),
-                    spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 210000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.brandDeal, .twitchStream, .contentSeries],
-                    availability: [.weekdays, .weekends],
-                    responseTime: .moderate
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 60),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover3",
-                uid: "discover3",
-                displayName: "Sophia Lee",
-                age: 21,
-                bio: "Dance & choreography 💃 Let's create something amazing!",
-                location: UserProfile.Location(city: "Los Angeles", state: "CA", country: "USA", coordinates: nil),
-                interests: ["Dance", "Music", "Fitness"],
-                contentStyles: [.dance, .music, .fitness],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@sophiadance", followerCount: 675000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@sophialee", followerCount: 320000, isVerified: true),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@SophiaLeeChoreography", followerCount: 150000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 675000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.musicCollab, .tiktokLive, .contentSeries],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover4",
-                uid: "discover4",
-                displayName: "Michael Chen",
-                age: 29,
-                bio: "Comedy & sketches 😂 Making people laugh daily!",
-                location: UserProfile.Location(city: "Chicago", state: "IL", country: "USA", coordinates: nil),
-                interests: ["Comedy", "Acting", "Writing"],
-                contentStyles: [.comedy, .editing],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@michaelcomedy", followerCount: 420000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@mikechencomedy", followerCount: 185000, isVerified: false),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@MichaelChenComedy", followerCount: 290000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 420000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.contentSeries, .podcastGuest],
-                    availability: [.weekends],
-                    responseTime: .moderate
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 45),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover5",
-                uid: "discover5",
-                displayName: "Olivia Martinez",
-                age: 25,
-                bio: "Pet content creator 🐾 Dogs, cats, and everything cute!",
-                location: UserProfile.Location(city: "Denver", state: "CO", country: "USA", coordinates: nil),
-                interests: ["Pets", "Animals", "Lifestyle"],
-                contentStyles: [.pet, .comedy],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@oliviapets", followerCount: 550000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@oliviaandpets", followerCount: 380000, isVerified: true),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@OliviaPetLife", followerCount: 205000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 550000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.brandDeal, .contentSeries],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 15),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover6",
-                uid: "discover6",
-                displayName: "David Park",
-                age: 26,
-                bio: "Sports content & commentary ⚽ Game highlights and analysis!",
-                location: UserProfile.Location(city: "Boston", state: "MA", country: "USA", coordinates: nil),
-                interests: ["Sports", "Fitness", "Gaming"],
-                contentStyles: [.sports, .gaming],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@davidsports", followerCount: 98000, isVerified: false),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@davidparksp", followerCount: 75000, isVerified: false),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@DavidParkSports", followerCount: 175000, isVerified: true),
-                    twitch: UserProfile.SocialLinks.SocialAccount(username: "davidparksports", followerCount: 32000, isVerified: false),
-                    spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: false,
-                followerCount: 98000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.twitchStream, .podcastGuest],
-                    availability: [.weekends],
-                    responseTime: .slow
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 90),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover7",
-                uid: "discover7",
-                displayName: "Isabella Santos",
-                age: 24,
-                bio: "Makeup artist & tutorials 💄 Glam looks and everyday beauty!",
-                location: UserProfile.Location(city: "Miami", state: "FL", country: "USA", coordinates: nil),
-                interests: ["Beauty", "Fashion", "Photography"],
-                contentStyles: [.beauty, .fashion],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@isabellamakeup", followerCount: 780000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@isabellasantos", followerCount: 620000, isVerified: true),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@IsabellaSantosBeauty", followerCount: 340000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 780000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.brandDeal, .tiktokLive, .contentSeries],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "discover8",
-                uid: "discover8",
-                displayName: "Ryan Kim",
-                age: 28,
-                bio: "Fitness coach & nutrition 💪 Helping you reach your goals!",
-                location: UserProfile.Location(city: "San Diego", state: "CA", country: "USA", coordinates: nil),
-                interests: ["Fitness", "Health", "Nutrition"],
-                contentStyles: [.fitness, .cooking],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@ryanfitcoach", followerCount: 340000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@ryankimfit", followerCount: 290000, isVerified: true),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@RyanKimFitness", followerCount: 185000, isVerified: true),
-                    twitch: nil, spotify: nil, snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 340000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.brandDeal, .contentSeries],
-                    availability: [.weekdays],
-                    responseTime: .moderate
-                ),
-                createdAt: Date().addingTimeInterval(-86400 * 20),
-                updatedAt: Date()
-            )
-        ]
-        filteredProfiles = allProfiles
-    }
-    #endif
-    */
     func loadMore() async {
         guard !isLoadingMore else { return }
         

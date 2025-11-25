@@ -10,7 +10,6 @@ struct EnhancedHomeView: View {
     @State private var swipeCount = 0
     @State private var showFilters = false
     @State private var selectedProfile: UserProfile? = nil
-    @State private var showProfileDetail = false
     
     var body: some View {
         ZStack {
@@ -79,11 +78,10 @@ struct EnhancedHomeView: View {
         .sheet(isPresented: $showFilters) {
             HomeFiltersSheet(viewModel: viewModel)
         }
-        .sheet(isPresented: $showProfileDetail) {
-            if let profile = selectedProfile {
-                ProfileDetailViewSimple(profile: profile)
-            }
+        .sheet(item: $selectedProfile) { profile in
+            ProfileDetailViewSimple(profile: profile)
         }
+
         .task {
            // fetch the latest profiles using current user id, if nil default to an empty string
             await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
@@ -159,8 +157,7 @@ struct EnhancedHomeView: View {
                         },
                         onTap: {
                             selectedProfile = profile
-                            showProfileDetail = true
-                            Haptics.impact(.light)
+                            
                         }
                     )
                     .zIndex(Double(3 - index))

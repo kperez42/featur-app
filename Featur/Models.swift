@@ -13,7 +13,11 @@ struct UserProfile: Identifiable, Codable {
     var interests: [String]?
     var contentStyles: [ContentStyle]
     var socialLinks: SocialLinks?
-    var mediaURLs: [String]?
+    var mediaURLs: [String]? {
+        didSet {
+            mediaURLs = mediaURLs?.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        }
+    }
     var profileImageURL: String?
     var isVerified: Bool?
     var followerCount: Int?

@@ -6,7 +6,8 @@ struct FeaturedView: View {
     @StateObject private var viewModel = FeaturedViewModel()
     @State private var selectedCategory: FeaturedCategory = .all
     @State private var showPaymentSheet = false
-    
+    @State private var selectedProfile: UserProfile?
+
     var body: some View {
         ZStack(alignment: .bottom) {
             AppTheme.bg.ignoresSafeArea()
@@ -168,17 +169,22 @@ struct FeaturedView: View {
     private var featuredCreatorsList: some View {
         LazyVStack(spacing: 16) {
             ForEach(viewModel.filteredCreators) { creator in
-                NavigationLink {
-                    if let profile = creator.profile {
-                        ProfileDetailPlaceholder(profile: profile) // Uses SharedComponents
+                FeaturedCreatorCard(creator: creator)
+                    .onTapGesture {
+                        if let profile = creator.profile {
+                            selectedProfile = profile
+                        }
                     }
-                } label: {
-                    FeaturedCreatorCard(creator: creator)
-                }
-                .buttonStyle(.plain)
+                    .buttonStyle(.plain)
             }
         }
         .padding(.horizontal)
+        .sheet(item: $selectedProfile) { profile in
+            ProfileDetailViewSimple(profile: profile)
+                .interactiveDismissDisabled(false)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
     }
     
     // MARK: - Promotion CTA
