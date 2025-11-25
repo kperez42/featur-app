@@ -771,9 +771,13 @@ final class HomeViewModel: ObservableObject {
                 }
             }
             
-            withAnimation(.spring(response: 0.3)) {
-                profiles.removeAll { $0.id == profile.id }
+            // REMOVE WITH SMALL DELAY to let next card render
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.spring(response: 0.3)) {
+                    self.profiles.removeAll { $0.uid == profile.uid }
+                }
             }
+
             
             if profiles.count < 3 {
                 await loadProfiles(currentUserId: currentUserId)

@@ -3,8 +3,9 @@ import FirebaseFirestore
 
 // MARK: - User Profile Model
 struct UserProfile: Identifiable, Codable {
-    @DocumentID var id: String?
+    @DocumentID var firestoreID: String?
     var uid: String
+    var id: String {uid}
     var displayName: String
     var age: Int?
     var bio: String?
@@ -29,7 +30,6 @@ struct UserProfile: Identifiable, Codable {
         socialLinks: SocialLinks? = nil,
         profileImageURL: String? = nil
     ) {
-        self.id = nil
         self.uid = uid
         self.displayName = displayName
         self.age = age
@@ -123,7 +123,7 @@ struct UserProfile: Identifiable, Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        id = try? container.decode(String?.self, forKey: .id)
+        firestoreID = try? container.decode(String?.self, forKey: .firestoreID)
         uid = (try? container.decode(String.self, forKey: .uid)) ?? "unknown"
         displayName = (try? container.decode(String.self, forKey: .displayName)) ?? "Unknown"
 
