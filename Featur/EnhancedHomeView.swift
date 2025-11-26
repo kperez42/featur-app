@@ -22,7 +22,7 @@ struct EnhancedHomeView: View {
                 // Main Swipe Card Stack
                 if viewModel.isLoading && viewModel.profiles.isEmpty {
                     loadingView
-                } else if viewModel.profiles.isEmpty {
+                } else if viewModel.filteredProfiles.isEmpty {
                     emptyState
                 } else {
                     swipeCardStack
@@ -109,7 +109,7 @@ struct EnhancedHomeView: View {
         HStack(spacing: 16) {
             StatBadge(
                 icon: "person.3.fill",
-                value: "\(viewModel.profiles.count)",
+                value: "\(viewModel.filteredProfiles.count)",
                 label: "Available",
                 color: .blue
             )
@@ -138,7 +138,7 @@ struct EnhancedHomeView: View {
     
     private var swipeCardStack: some View {
         ZStack {
-            ForEach(Array(viewModel.profiles.prefix(3).enumerated()), id: \.element.id) { index, profile in
+            ForEach(Array(viewModel.filteredProfiles.prefix(3).enumerated()), id: \.element.id) { index, profile in
                 if index == 0 {
                     TinderSwipeCard(
                         profile: profile,
@@ -625,15 +625,43 @@ struct HomeFiltersSheet: View {
                             VStack(alignment: .leading) {
                                 Text("Min: \(Int(viewModel.minAge))")
                                     .font(.caption)
-                                Slider(value: $viewModel.minAge, in: 18...viewModel.maxAge, step: 1)
-                                    .tint(AppTheme.accent)
+                                let safeMaxForMin = max( (viewModel.maxAge - 1), 18 )
+
+                                Slider(
+                                    value: Binding(
+                                        get: { viewModel.minAge },
+                                        set: { newValue in
+                                            viewModel.minAge = newValue
+                                        }
+                                    ),
+                                    in: 18...safeMaxForMin,
+                                    step: 1
+                                )
+                                .tint(AppTheme.accent)
+
+
                             }
                             
                             VStack(alignment: .leading) {
                                 Text("Max: \(Int(viewModel.maxAge))")
                                     .font(.caption)
-                                Slider(value: $viewModel.maxAge, in: viewModel.minAge...100, step: 1)
-                                    .tint(AppTheme.accent)
+
+                                let safeMinForMax = min( (viewModel.minAge + 1), 68 )
+
+                                Slider(
+                                    value: Binding(
+                                        get: { viewModel.maxAge },
+                                        set: { newValue in
+                                            viewModel.maxAge = newValue
+                                        }
+                                    ),
+                                    in: safeMinForMax...69,
+                                    step: 1
+                                )
+
+
+                                .tint(AppTheme.accent)
+
                             }
                         }
                     }
@@ -675,6 +703,7 @@ struct HomeFiltersSheet: View {
 @MainActor
 final class HomeViewModel: ObservableObject {
     @Published var profiles: [UserProfile] = []
+    
     @Published var isLoading = false
     @Published var showMatchAlert = false
     @Published var lastMatch: UserProfile?
@@ -687,13 +716,57 @@ final class HomeViewModel: ObservableObject {
     
     // Filters
     @Published var selectedContentStyles: Set<UserProfile.ContentStyle> = []
-    @Published var minAge: Double = 18
-    @Published var maxAge: Double = 100
+    @Published var minAge: Double = 18 {
+        didSet {
+            if minAge >= maxAge {
+                maxAge = minAge + 1
+            }
+        }
+    }
+
+    @Published var maxAge: Double = 100 {
+        didSet {
+            if maxAge <= minAge {
+                minAge = maxAge - 1
+            }
+        }
+    }
+
     @Published var verifiedOnly = false
     
     private let service = FirebaseService()
     private var swipedUserIds: Set<String> = []
-    
+    var filteredProfiles: [UserProfile] {
+        profiles.filter { profile in
+            
+            // --- Age Filter ---
+            if let age = profile.age {
+                if age < Int(minAge) || age > Int(maxAge) {
+                    return false
+                }
+            } else {
+                return false
+            }
+            
+            // --- Verified Filter ---
+            if verifiedOnly {
+                if profile.isVerified != true {
+                    return false
+                }
+            }
+            
+            // --- Content Styles Filter ---
+            if !selectedContentStyles.isEmpty {
+                let profileStyles = Set(profile.contentStyles)
+                if profileStyles.isDisjoint(with: selectedContentStyles) {
+                    return false
+                }
+            }
+            
+            return true
+        }
+    }
+
     var currentProfile: UserProfile? {
         profiles.first
     }
@@ -803,8 +876,7 @@ final class HomeViewModel: ObservableObject {
     }
 
     func applyFilters() async {
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-        await loadProfiles(currentUserId: currentUserId)
+        
     }
 }
 
