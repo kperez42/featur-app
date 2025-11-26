@@ -45,7 +45,7 @@ struct EnhancedHomeView: View {
                 .animation(.spring(), value: viewModel.errorMessage)
             }
         }
-        .navigationTitle("Discover")
+        .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
