@@ -50,11 +50,7 @@ struct RegistrationView: View {
                 .padding(32)
             }
         }
-        .navigationDestination(for: String.self) { destination in
-            if destination == "VerifyEmailView" {
-                VerifyEmailView()
-            }
-        }
+        
     }
     
     func inputField(_ placeholder: String, text: Binding<String>, secure: Bool = false) -> some View {
@@ -78,17 +74,27 @@ struct RegistrationView: View {
     func register() async {
         isLoading = true
         do {
+            //1. Create Firebase Auth user
             let result = try await Auth.auth().createUser(withEmail: email, password: password)
             let uid = result.user.uid
+            //2. Save name + email into Firestore
             
             let db = Firestore.firestore()
             
-            
+            try await db.collection("users").document(uid).setData([
+                        "name": name,
+                        "email": email,
+                        "createdAt": Timestamp()
+                    ])
+            //3. Send email verification
             try await result.user.sendEmailVerification()
             print("Verification email sent to \(email)")
-            
-            DispatchQueue.main.async {
-                navigationPath.append("VerifyEmailView")
+            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+
+            //4. Navigate to verify email view
+            await MainActor.run {
+                navigationPath = NavigationPath()
+
             }
         } catch {
             print("Registration failed: \(error.localizedDescription)")

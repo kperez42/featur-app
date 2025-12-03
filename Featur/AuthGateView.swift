@@ -4,51 +4,44 @@ import AuthenticationServices
 struct AuthGateView: View {
     @EnvironmentObject var auth: AuthViewModel
     @State private var navigationPath = NavigationPath()
-    @State private var showAppleSheet = false
 
     var body: some View {
-        Group {
 
-            // 1) Not logged in → Login/Register flow
+        Group {
             if auth.user == nil {
+
                 NavigationStack(path: $navigationPath) {
                     LoginView(navigationPath: $navigationPath)
                         .navigationDestination(for: String.self) { destination in
                             switch destination {
                             case "RegistrationView":
                                 RegistrationView(navigationPath: $navigationPath)
-                            case "VerifyEmailView":
-                                VerifyEmailView()
                             default:
                                 EmptyView()
                             }
                         }
                 }
-            }
 
-            // 2) Logged in but not verified
-            else if !auth.isEmailVerified {
-                VerifyEmailView()
-            }
+            } else if !auth.isEmailVerified {
 
-            // 3) Logged in + verified but no Firestore profile
-            else if auth.needsProfileSetup {
+                VerifyEmailView(navigationPath: $navigationPath)
+
+            } else if auth.needsProfileSetup {
+
                 ProfileCreationFlow(viewModel: ProfileViewModel())
-            }
 
-            // 4) Fully onboarded
-            else {
+            } else {
+
                 ContentView()
             }
         }
-        .onAppear {
-            Task { await auth.refreshUserState() }
-        }
-        .onChange(of: auth.user) { _ in
+        .onChange(of: auth.user) { 
             Task { await auth.refreshUserState() }
         }
     }
 }
+
+
 
 
 /// Small wrapper for Apple Sign-In

@@ -17,6 +17,8 @@ struct ProfileCreationFlow: View {
     @State private var mediaURLs: [String] = []
     @State private var profileImageURL: String?
     @StateObject private var locationManager = LocationManager()
+    @EnvironmentObject var auth: AuthViewModel
+
     // Custom view for step progress bar
         private var stepProgressBar: some View {
             GeometryReader { geometry in
@@ -194,6 +196,8 @@ struct ProfileCreationFlow: View {
 
 
         await viewModel.updateProfile(newProfile)
-        viewModel.needsSetup = false
+        //refresh user auth state 
+        await auth.refreshUserState()
+
     }
 }

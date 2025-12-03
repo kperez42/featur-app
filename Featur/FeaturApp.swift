@@ -14,6 +14,7 @@ struct FeaturApp: App {
         WindowGroup {
             ZStack {
                 
+                
                 // your main app content
                 AuthGateView()
                     .environmentObject(auth)
