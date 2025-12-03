@@ -234,8 +234,11 @@ struct ConversationRow: View {
                 groupAvatar
             } else if let otherProfile = conversation.participantProfiles?.values.first {
                 profileAvatar(otherProfile)
+            } else {
+                // Fallback avatar when profile not loaded
+                defaultAvatar
             }
-            
+
             // Content
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -325,8 +328,20 @@ struct ConversationRow: View {
             Circle()
                 .fill(AppTheme.card)
                 .frame(width: 56, height: 56)
-            
+
             Image(systemName: "person.3.fill")
+                .foregroundStyle(AppTheme.accent)
+        }
+    }
+
+    private var defaultAvatar: some View {
+        ZStack {
+            Circle()
+                .fill(AppTheme.accent.opacity(0.2))
+                .frame(width: 56, height: 56)
+
+            Image(systemName: "person.fill")
+                .font(.title2)
                 .foregroundStyle(AppTheme.accent)
         }
     }
