@@ -79,17 +79,22 @@ struct RegistrationView: View {
         do {
             let result = try await Auth.auth().createUser(withEmail: email, password: password)
             let uid = result.user.uid
-            
+            let now = Timestamp(date: Date())
+
             let db = Firestore.firestore()
+            // Create a proper UserProfile document with all required fields
             try await db.collection("users").document(uid).setData([
-                "name": name,
+                "uid": uid,
+                "displayName": name,
                 "email": email,
-                "createdAt": Timestamp(date: Date())
+                "contentStyles": [],  // Required field - user will set this in profile setup
+                "createdAt": now,
+                "updatedAt": now
             ])
-            
+
             try await result.user.sendEmailVerification()
             print("Verification email sent to \(email)")
-            
+
             DispatchQueue.main.async {
                 navigationPath.append("VerifyEmailView")
             }
