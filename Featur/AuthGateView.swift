@@ -1,5 +1,6 @@
 import SwiftUI
 import AuthenticationServices
+import FirebaseAuth
 
 struct AuthGateView: View {
     @EnvironmentObject var auth: AuthViewModel
@@ -8,8 +9,30 @@ struct AuthGateView: View {
     var body: some View {
 
         Group {
-            if auth.user == nil {
-
+            // Allow Apple Sign-In users (they are inherently verified) or verified email users
+            if let user = auth.user, (user.isEmailVerified || isAppleSignIn(user: user)) {
+                // Check if user has completed profile setup
+                if auth.isLoadingProfile {
+                    // Show loading while checking for profile
+                    ZStack {
+                        AppTheme.gradient.ignoresSafeArea()
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(1.5)
+                            Text("Loading your profile...")
+                                .foregroundStyle(.white)
+                                .font(.subheadline)
+                        }
+                    }
+                } else if auth.userProfile == nil || auth.needsProfileSetup {
+                    // No profile exists or needs setup - show setup flow
+                    ProfileSetupView()
+                } else {
+                    // Profile exists - show main app
+                    ContentView()
+                }
+            } else if auth.user == nil {
                 NavigationStack(path: $navigationPath) {
                     LoginView(navigationPath: $navigationPath)
                         .navigationDestination(for: String.self) { destination in
@@ -35,9 +58,14 @@ struct AuthGateView: View {
                 ContentView()
             }
         }
-        .onChange(of: auth.user) { 
+        .onChange(of: auth.user) {
             Task { await auth.refreshUserState() }
         }
+    }
+
+    /// Check if user signed in with Apple (they are inherently verified)
+    private func isAppleSignIn(user: FirebaseAuth.User) -> Bool {
+        return user.providerData.contains { $0.providerID == "apple.com" }
     }
 }
 

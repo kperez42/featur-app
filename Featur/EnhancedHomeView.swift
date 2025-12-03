@@ -2,11 +2,11 @@
 import SwiftUI
 import FirebaseAuth
 
-
 struct EnhancedHomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @EnvironmentObject var auth: AuthViewModel
-    
+    @EnvironmentObject var appState: AppStateManager
+
     @State private var swipeCount = 0
     @State private var showFilters = false
     @State private var selectedProfile: UserProfile? = nil
@@ -80,10 +80,14 @@ struct EnhancedHomeView: View {
         }
         .sheet(item: $selectedProfile) { profile in
             ProfileDetailViewSimple(profile: profile)
+                .presentationDragIndicator(.visible)
         }
 
         .task {
-           // fetch the latest profiles using current user id, if nil default to an empty string
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Home", screenClass: "EnhancedHomeView")
+
+            // fetch the latest profiles using current user id, if nil default to an empty string
             await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
         }
         .refreshable {
@@ -93,7 +97,9 @@ struct EnhancedHomeView: View {
         }
         .alert("It's a Match! 🎉", isPresented: $viewModel.showMatchAlert) {
             Button("Send Message") {
-                // Navigate to chat
+                if let match = viewModel.lastMatch {
+                    appState.navigateToChat(withUserId: match.uid)
+                }
             }
             Button("Keep Swiping", role: .cancel) { }
         } message: {
@@ -157,7 +163,12 @@ struct EnhancedHomeView: View {
                         },
                         onTap: {
                             selectedProfile = profile
-                            
+                            Haptics.impact(.light)
+                            // Track profile view analytics
+                            AnalyticsManager.shared.trackProfileView(
+                                userId: profile.uid,
+                                source: "home"
+                            )
                         }
                     )
                     .zIndex(Double(3 - index))
@@ -293,14 +304,34 @@ struct EnhancedHomeView: View {
     }
     
     // MARK: - Error Toast
-    
+
     private func errorToast(_ message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundStyle(.white)
-            .padding()
-            .background(.red, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Button {
+                Task {
+                    await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding()
+        .background(.red, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
 }
 
@@ -384,17 +415,34 @@ struct TinderSwipeCard: View {
 
 struct ProfileCardView: View {
     let profile: UserProfile
-    
+    @State private var currentImageIndex = 0
+
+    private var mediaURLs: [String] {
+        profile.mediaURLs ?? []
+    }
+
+    private var hasMultipleImages: Bool {
+        mediaURLs.count > 1
+    }
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
-                // Background Image/Gradient
-                if let firstMediaURL = profile.mediaURLs?.first,
-                   let url = URL(string: firstMediaURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                    
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .empty:
+                // Background Image/Gradient with Carousel (CACHED)
+                if !mediaURLs.isEmpty {
+                    let currentURL = mediaURLs[currentImageIndex]
+                    if let url = URL(string: currentURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                        CachedAsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .overlay(
+                                    // Add slight fade so gradient gently merges into image
+                                    AppTheme.gradient.opacity(0.15)
+                                )
+                                .transition(.opacity)
+                                .animation(.easeInOut(duration: 0.3), value: UUID())
+                        } placeholder: {
                             // While loading: subtle gradient + blur shimmer
                             ZStack {
                                 AppTheme.gradient
@@ -405,31 +453,55 @@ struct ProfileCardView: View {
                                     .tint(.white)
                             }
                             .transition(.opacity)
-                            
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .overlay(
-                                    // Add slight fade so gradient gently merges into image
-                                    AppTheme.gradient.opacity(0.15)
-                                )
-                                .transition(.opacity)
-                                .animation(.easeInOut(duration: 0.4), value: UUID()) // harmless trigger
-
-                        case .failure:
-                            Image("placeholder")
-                                .resizable()
-                                .scaledToFill()
-                        @unknown default:
-                            Image("placeholder")
-                                .resizable()
-                                .scaledToFill()
                         }
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .id(currentImageIndex) // Force reload when index changes
                     }
-                    
                 } else {
                     AppTheme.gradient
+                }
+
+                // Image Navigation Areas (tap left/right to navigate)
+                if hasMultipleImages {
+                    HStack(spacing: 0) {
+                        // Left tap area - previous image
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation {
+                                    currentImageIndex = max(0, currentImageIndex - 1)
+                                }
+                                Haptics.impact(.light)
+                            }
+
+                        // Right tap area - next image
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation {
+                                    currentImageIndex = min(mediaURLs.count - 1, currentImageIndex + 1)
+                                }
+                                Haptics.impact(.light)
+                            }
+                    }
+                }
+
+                // Image Indicators (dots at top)
+                if hasMultipleImages {
+                    VStack {
+                        HStack(spacing: 6) {
+                            ForEach(0..<mediaURLs.count, id: \.self) { index in
+                                Capsule()
+                                    .fill(index == currentImageIndex ? .white : .white.opacity(0.5))
+                                    .frame(height: 4)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+
+                        Spacer()
+                    }
                 }
 
                 
@@ -446,17 +518,32 @@ struct ProfileCardView: View {
                         Text(profile.displayName)
                             .font(.system(size: 32, weight: .bold))
                             .foregroundStyle(.white)
-                        
+
                         if let age = profile.age {
                             Text("\(age)")
                                 .font(.system(size: 28, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.9))
                         }
-                        
+
                         if profile.isVerified ?? false {
                             Image(systemName: "checkmark.seal.fill")
                                 .foregroundStyle(.blue)
                                 .font(.title3)
+                        }
+
+                        // Online Status Badge
+                        if PresenceManager.shared.isOnline(userId: profile.uid) {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(.green)
+                                    .frame(width: 8, height: 8)
+                                Text("Online")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.green, in: Capsule())
                         }
                     }
                     
@@ -770,64 +857,178 @@ final class HomeViewModel: ObservableObject {
     var currentProfile: UserProfile? {
         profiles.first
     }
-    // this function loads discoverable profiles while excluding all the profiles each user has ever
-    // previously swiped on
-    func loadProfiles(currentUserId: String) async {
+
+    // This function loads discoverable profiles while excluding previously swiped profiles
+    func loadProfiles(currentUserId: String, excludeSwipedProfiles: Bool = true) async {
         isLoading = true
         errorMessage = nil
-        
-        do {
-            guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
-                throw NSError(domain: "Missing current user profile", code: 0)
-            }
-            let previouslySwiped = try await service.fetchSwipedUserIds(for: currentUserId)
-            swipedUserIds.formUnion(previouslySwiped)
 
-            // 2. Load profiles excluding all of them
-            let fetched = try await service.fetchDiscoverProfiles(
+        do {
+            print("🏠 HOME: Starting profile load for user: \(currentUserId)")
+
+            guard !currentUserId.isEmpty else {
+                throw NSError(domain: "HomeViewModel", code: -1,
+                             userInfo: [NSLocalizedDescriptionKey: "User not logged in"])
+            }
+
+            guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
+                throw NSError(domain: "HomeViewModel", code: -2,
+                             userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
+            }
+
+            // Only fetch swiped user IDs if we want to exclude them
+            if excludeSwipedProfiles {
+                // Fetch swiped user IDs from Firebase to ensure consistency across tabs
+                let swipedIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
+                swipedUserIds = Set(swipedIds)
+                print("🏠 HOME: Found \(swipedIds.count) swiped users to exclude")
+            } else {
+                // Reset to see all profiles again
+                swipedUserIds.removeAll()
+                print("🏠 HOME: Not excluding swiped profiles (refresh mode)")
+            }
+
+            // Fetch profiles from Firebase
+            var fetched = try await service.fetchDiscoverProfiles(
                 for: currentUser,
-                limit: 20,
+                limit: 50, // Fetch more to account for filtering
                 excludeUserIds: Array(swipedUserIds)
             )
-            
-            profiles = fetched
+            print("🏠 HOME: Fetched \(fetched.count) profiles from Firebase")
+
+            // Apply client-side filters
+            let beforeFilters = fetched.count
+            fetched = applyClientFilters(to: fetched)
+            print("🏠 HOME: After client filters: \(beforeFilters) → \(fetched.count)")
+
+            // Limit to 20 after filtering
+            profiles = Array(fetched.prefix(20))
+            print("🏠 HOME: Final profiles to display: \(profiles.count)")
+
+            // Print each profile for debugging
+            for (index, profile) in profiles.enumerated() {
+                print("  [\(index + 1)] \(profile.displayName) (uid: \(profile.uid))")
+            }
+
+            // Fetch online status for all profiles
+            if !profiles.isEmpty {
+                let userIds = profiles.map { $0.uid }
+                await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+            }
+
             isLoading = false
-            
+            print("✅ HOME: Loaded \(profiles.count) profiles for Home (exclude swiped: \(excludeSwipedProfiles))")
+
         } catch {
             isLoading = false
             profiles = []
-            errorMessage = "Unable to load profiles. Pull to refresh."
-            
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            errorMessage = nil
-            
+
+            // Provide specific error messages based on error type
+            if let nsError = error as NSError? {
+                if nsError.domain == NSURLErrorDomain {
+                    errorMessage = "No internet connection"
+                } else if nsError.domain == "HomeViewModel" {
+                    errorMessage = nsError.localizedDescription
+                } else {
+                    errorMessage = "Failed to load profiles"
+                }
+            } else {
+                errorMessage = "Failed to load profiles"
+            }
+
+            // Don't auto-dismiss critical errors
+            if errorMessage != "No internet connection" {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                errorMessage = nil
+            }
+
             print("❌ Error loading profiles: \(error)")
         }
     }
+
+    /// Apply client-side filters to profile list
+    private func applyClientFilters(to profiles: [UserProfile]) -> [UserProfile] {
+        var filtered = profiles
+        print("🏠 FILTER: Starting with \(filtered.count) profiles")
+
+        // Filter by age
+        let beforeAge = filtered.count
+        filtered = filtered.filter { profile in
+            guard let age = profile.age else { return true }
+            return Double(age) >= minAge && Double(age) <= maxAge
+        }
+        if beforeAge != filtered.count {
+            print("🏠 FILTER: Age filter removed \(beforeAge - filtered.count) profiles (min: \(minAge), max: \(maxAge))")
+        }
+
+        // Filter by content styles
+        if !selectedContentStyles.isEmpty {
+            let beforeStyles = filtered.count
+            filtered = filtered.filter { profile in
+                !Set(profile.contentStyles).isDisjoint(with: selectedContentStyles)
+            }
+            if beforeStyles != filtered.count {
+                print("🏠 FILTER: Content styles filter removed \(beforeStyles - filtered.count) profiles")
+            }
+        }
+
+        // Filter by verified status
+        if verifiedOnly {
+            let beforeVerified = filtered.count
+            filtered = filtered.filter { $0.isVerified == true }
+            if beforeVerified != filtered.count {
+                print("🏠 FILTER: Verified filter removed \(beforeVerified - filtered.count) profiles")
+            }
+        }
+
+        print("🏠 FILTER: Final count: \(filtered.count) profiles")
+        return filtered
+    }
     
     func handleSwipe(profile: UserProfile, action: SwipeAction.Action) async {
-        
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-        
+        print("🏠 HOME SWIPE: User swiped \(action.rawValue) on \(profile.displayName)")
+        print("🏠 HOME SWIPE: Profiles before removal: \(profiles.count)")
+
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            errorMessage = "Please sign in to continue"
+            return
+        }
+
+        // Optimistically update UI
         swipedUserIds.insert(profile.uid)
-        
+        print("🏠 HOME SWIPE: Total swiped users now: \(swipedUserIds.count)")
+
         let swipe = SwipeAction(
             userId: currentUserId,
             targetUserId: profile.uid,
             action: action,
             timestamp: Date()
         )
-        
-        swipeHistory.append(SwipeRecord(profile: profile, action: action))
+
+        // Add to history for undo
+        let record = SwipeRecord(profile: profile, action: action, swipeData: swipe)
+        swipeHistory.append(record)
         if swipeHistory.count > 10 {
             swipeHistory.removeFirst()
         }
-        
-        do {
-            try await service.recordSwipe(swipe)
-            print("Swipe recorded to Firestore: \(action) → \(profile.displayName) (\(profile.uid))")
 
-            
+        // Remove from UI immediately for smooth experience
+        withAnimation(.spring(response: 0.3)) {
+            profiles.removeAll { $0.id == profile.id }
+        }
+
+        print("🏠 HOME SWIPE: Profiles after removal: \(profiles.count)")
+        print("🏠 HOME SWIPE: Remaining profiles:")
+        for (index, p) in profiles.enumerated() {
+            print("  [\(index + 1)] \(p.displayName)")
+        }
+
+        do {
+            // Save swipe to Firebase
+            try await service.recordSwipe(swipe)
+            print("✅ Swipe recorded: \(action.rawValue) → \(profile.displayName)")
+
+            // Check for match on likes
             if action == .like || action == .superLike {
                 let matches = try await service.fetchMatches(forUser: currentUserId)
                 if matches.contains(where: {
@@ -838,41 +1039,92 @@ final class HomeViewModel: ObservableObject {
                     matchesToday += 1
                     hasNewMatches = true
                     Haptics.notify(.success)
-                }
-            }
-            
-            // REMOVE WITH SMALL DELAY to let next card render
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation(.spring(response: 0.3)) {
-                    self.profiles.removeAll { $0.uid == profile.uid }
+                    print("🎉 Match created with \(profile.displayName)")
                 }
             }
 
-            
-            if profiles.count < 3 {
+            // Only load more profiles when we've run out completely
+            // Don't auto-load if there are still cards to show, as this would replace the current stack
+            if profiles.isEmpty {
+                print("🏠 HOME AUTO-LOAD: No profiles remaining, loading more...")
                 await loadProfiles(currentUserId: currentUserId)
+            } else {
+                print("🏠 HOME: \(profiles.count) profiles remaining in stack")
             }
         } catch {
-            errorMessage = "Failed to process swipe"
+            // Rollback on error
+            swipedUserIds.remove(profile.uid)
+
+            // Re-add profile to top of stack
+            withAnimation(.spring(response: 0.3)) {
+                profiles.insert(profile, at: 0)
+            }
+
+            // Remove from history
+            swipeHistory.removeAll { $0.id == record.id }
+
+            // Show error
+            if let nsError = error as NSError?, nsError.domain == NSURLErrorDomain {
+                errorMessage = "Connection lost - swipe not saved"
+            } else {
+                errorMessage = "Failed to save swipe"
+            }
+
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            errorMessage = nil
+
             print("❌ Error handling swipe: \(error)")
         }
     }
     
     func undoSwipe(_ record: SwipeRecord) async {
+        guard let currentUserId = Auth.auth().currentUser?.uid,
+              let swipeData = record.swipeData else {
+            print("⚠️ Cannot undo: missing user ID or swipe data")
+            return
+        }
+
+        // Optimistically update UI
         swipedUserIds.remove(record.profile.uid)
         swipeHistory.removeAll { $0.id == record.id }
-        
+
         withAnimation(.spring(response: 0.3)) {
             profiles.insert(record.profile, at: 0)
         }
-        
+
         Haptics.impact(.medium)
+
+        do {
+            // Remove swipe from Firebase
+            try await service.deleteSwipe(
+                userId: swipeData.userId,
+                targetUserId: swipeData.targetUserId
+            )
+            print("✅ Swipe undone: \(record.profile.displayName)")
+        } catch {
+            // Rollback UI on error
+            swipedUserIds.insert(record.profile.uid)
+            swipeHistory.append(record)
+
+            withAnimation(.spring(response: 0.3)) {
+                profiles.removeAll { $0.id == record.profile.id }
+            }
+
+            errorMessage = "Failed to undo swipe"
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            errorMessage = nil
+
+            print("❌ Error undoing swipe: \(error)")
+        }
     }
-    
+
     func refresh(currentUserId: String) async {
         swipedUserIds.removeAll()
         swipeHistory.removeAll()
-        await loadProfiles(currentUserId: currentUserId)
+        matchesToday = 0
+
+        // Don't exclude swiped profiles on refresh - show all profiles again
+        await loadProfiles(currentUserId: currentUserId, excludeSwipedProfiles: false)
     }
 
     func applyFilters() async {
@@ -887,6 +1139,7 @@ struct SwipeRecord: Identifiable {
     let profile: UserProfile
     let action: SwipeAction.Action
     let timestamp = Date()
+    let swipeData: SwipeAction? // Store for undo functionality
 }
 
 // MARK: - Haptics Helper

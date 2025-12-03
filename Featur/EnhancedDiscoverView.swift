@@ -12,10 +12,10 @@ struct EnhancedDiscoverView: View {
     @State private var selectedProfile: UserProfile?
 
     let featuredCategories = [
-        "Twitch Streamers",
-        "Music Collabs",
-        "Podcast Guests",
-        "Tiktok Lives"
+        "Music",
+        "Video Games",
+        "Art",
+        "Cooking"
     ]
     
     var body: some View {
@@ -77,19 +77,7 @@ struct EnhancedDiscoverView: View {
                 }
                 .padding(.bottom, 80)
             }
-            
-            // Floating Banner Ad
-            VStack {
-                Spacer()
-                BannerAdPlaceholder()
-                    .frame(height: 50)
-                    .background(
-                        AppTheme.card
-                            .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
-                    )
-            }
-            .ignoresSafeArea(edges: .bottom)
-            
+
             // Error Toast
             if let error = viewModel.errorMessage {
                 VStack {
@@ -118,7 +106,11 @@ struct EnhancedDiscoverView: View {
             ImprovedFilterSheet(viewModel: viewModel)
         }
         .task {
-            await viewModel.loadProfiles()
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Discover", screenClass: "EnhancedDiscoverView")
+
+            // Don't exclude swiped profiles on Discover page - show everyone
+            await viewModel.loadProfiles(excludeSwipedProfiles: false)
         }
         .refreshable {
             await viewModel.refresh()
@@ -177,6 +169,12 @@ struct EnhancedDiscoverView: View {
                         withAnimation(.spring(response: 0.3)) {
                             selectedCategory = category
                             Task { await viewModel.filterByCategory(category) }
+
+                            // Track analytics
+                            AnalyticsManager.shared.trackFilterApplied(
+                                filterType: "category",
+                                value: category
+                            )
                         }
                         Haptics.impact(.medium)
                     }
@@ -311,8 +309,12 @@ struct EnhancedDiscoverView: View {
                 DiscoverProfileCard(profile: profile)
                     .onTapGesture {
                         selectedProfile = profile
+                        // Track profile view analytics
+                        AnalyticsManager.shared.trackProfileView(
+                            userId: profile.uid,
+                            source: "discover"
+                        )
                     }
-                    .buttonStyle(.plain)
             }
         }
         .padding(.horizontal)
@@ -371,24 +373,44 @@ struct EnhancedDiscoverView: View {
     
     
     // MARK: - Error Toast
-    
+
     private func errorToast(_ message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundStyle(.white)
-            .padding()
-            .background(.red, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Button {
+                Task {
+                    await viewModel.loadProfiles()
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding()
+        .background(.red, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
     
     // MARK: - Helper
     
     private func categoryIcon(for category: String) -> String {
         switch category {
-        case "Twitch Streamers": return "play.rectangle.fill"
-        case "Music Collabs": return "music.note"
-        case "Podcast Guests": return "mic.fill"
-        case "Tiktok Lives": return "video.fill"
+        case "Music": return "music.note"
+        case "Video Games": return "gamecontroller.fill"
+        case "Art": return "paintbrush.fill"
+        case "Cooking": return "fork.knife"
         default: return "star.fill"
         }
     }
@@ -398,26 +420,57 @@ struct EnhancedDiscoverView: View {
 
 struct DiscoverProfileCard: View {
     let profile: UserProfile
-    
+    @State private var currentImageIndex = 0
+
+    private var mediaURLs: [String] {
+        profile.mediaURLs ?? []
+    }
+
+    private var hasMultipleImages: Bool {
+        mediaURLs.count > 1
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Profile Image
+            // Profile Image with Carousel
             ZStack(alignment: .topTrailing) {
-                if let firstMediaURL = (profile.mediaURLs ?? []).first {
-                    AsyncImage(url: URL(string: firstMediaURL)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        default:
+                if !mediaURLs.isEmpty {
+                    let currentURL = mediaURLs[currentImageIndex]
+                    CachedAsyncImage(url: URL(string: currentURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } placeholder: {
+                        ZStack {
                             AppTheme.gradient
+                            ProgressView()
+                                .tint(.white)
                         }
                     }
+                    .id(currentImageIndex) // Force reload when index changes
                 } else {
                     AppTheme.gradient
                 }
-                
+
+                // Image Indicators (dots)
+                if hasMultipleImages {
+                    VStack {
+                        HStack(spacing: 4) {
+                            ForEach(0..<mediaURLs.count, id: \.self) { index in
+                                Circle()
+                                    .fill(index == currentImageIndex ? .white : .white.opacity(0.5))
+                                    .frame(width: 6, height: 6)
+                            }
+                        }
+                        .padding(8)
+                        .background(.black.opacity(0.3), in: Capsule())
+                        .padding(.top, 8)
+
+                        Spacer()
+                    }
+                }
+
                 // Verified Badge
                 if profile.isVerified ?? false {
                     Image(systemName: "checkmark.seal.fill")
@@ -428,20 +481,63 @@ struct DiscoverProfileCard: View {
             }
             .frame(height: 200)
             .clipped()
+            .overlay(
+                // Image Navigation Areas (tap left/right)
+                HStack(spacing: 0) {
+                    if hasMultipleImages {
+                        // Left tap area
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation {
+                                    currentImageIndex = max(0, currentImageIndex - 1)
+                                }
+                                Haptics.impact(.light)
+                            }
+
+                        // Right tap area
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation {
+                                    currentImageIndex = min(mediaURLs.count - 1, currentImageIndex + 1)
+                                }
+                                Haptics.impact(.light)
+                            }
+                    }
+                }
+            )
             
             // Profile Info
             VStack(alignment: .leading, spacing: 6) {
-                Text(profile.displayName)
-                    .font(.headline)
-                    .lineLimit(1)
-                
+                HStack(spacing: 6) {
+                    Text(profile.displayName)
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    // Online Status Badge
+                    if PresenceManager.shared.isOnline(userId: profile.uid) {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(.green)
+                                .frame(width: 6, height: 6)
+                            Text("Online")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.green)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.green.opacity(0.15), in: Capsule())
+                    }
+                }
+
                 if let bio = profile.bio {
                     Text(bio)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
-                
+
                 // Content Style Tag
                 if let firstStyle = profile.contentStyles.first {
                     Text(firstStyle.rawValue)
@@ -763,22 +859,31 @@ final class DiscoverViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var errorMessage: String?
-    
+
     @Published var currentSort: SortOption = .relevance
     @Published var currentFilter: String?
     @Published var currentSearchQuery: String = ""
-    
+
     @Published var activeFilters = DiscoverFilters()
     @Published var selectedContentStyles: Set<UserProfile.ContentStyle> = []
     @Published var selectedCollabTypes: Set<UserProfile.CollaborationPreferences.CollabType> = []
-    
+
     private let service = FirebaseService()
     private var loadTask: Task<Void, Never>?
+    private var searchTask: Task<Void, Never>?
     private var currentPage = 0
     private let pageSize = 20
+
+    // Search optimization
+    private var searchCache: [String: (results: [UserProfile], timestamp: Date)] = [:]
+    private let cacheValidityDuration: TimeInterval = 300 // 5 minutes
     
     var totalProfiles: Int { filteredProfiles.count }
-    var onlineCount: Int { filteredProfiles.filter { $0.isOnline }.count }
+    var onlineCount: Int {
+        filteredProfiles.filter { profile in
+            PresenceManager.shared.isOnline(userId: profile.uid)
+        }.count
+    }
     var newTodayCount: Int { filteredProfiles.filter { Calendar.current.isDateInToday($0.createdAt) }.count }
     
     var hasActiveFilters: Bool {
@@ -810,7 +915,7 @@ final class DiscoverViewModel: ObservableObject {
         filteredProfiles.count >= pageSize && !isLoadingMore
     }
     
-    func loadProfiles() async {
+    func loadProfiles(excludeSwipedProfiles: Bool = true) async {
         loadTask?.cancel()
 
         loadTask = Task {
@@ -823,26 +928,38 @@ final class DiscoverViewModel: ObservableObject {
             do {
                 //  Step 1: Get current user ID from Firebase Auth
                 guard let currentUserId = Auth.auth().currentUser?.uid else {
-                    print(" No logged-in user found")
-                    isLoading = false
-                    return
+                    throw NSError(domain: "DiscoverViewModel", code: -1,
+                                 userInfo: [NSLocalizedDescriptionKey: "User not logged in"])
                 }
 
                 //  Step 2: Fetch the user's profile from Firestore
                 guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
-                    print(" Could not fetch current user profile")
-                    isLoading = false
-                    return
+                    throw NSError(domain: "DiscoverViewModel", code: -2,
+                                 userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
+                }
+
+                //  Step 2.5: Fetch swiped user IDs to exclude them from discovery (only if requested)
+                var swipedUserIds: [String] = []
+                if excludeSwipedProfiles {
+                    swipedUserIds = try await service.fetchSwipedUserIds(forUser: currentUserId)
                 }
 
                 //  Step 3: Fetch discoverable profiles using that user
-                allProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: pageSize)
+                allProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: 100, excludeUserIds: swipedUserIds)
 
                 guard !Task.isCancelled else { return }
+
+                // Step 3.5: Fetch online status for all profiles
+                if !allProfiles.isEmpty {
+                    let userIds = allProfiles.map { $0.uid }
+                    await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+                }
 
                 // Step 4: Apply filters & finish
                 applyFilters()
                 isLoading = false
+
+                print("✅ Loaded \(filteredProfiles.count) profiles for Discover")
 
             } catch {
                 guard !Task.isCancelled else { return }
@@ -851,11 +968,25 @@ final class DiscoverViewModel: ObservableObject {
                 allProfiles = []
                 filteredProfiles = []
 
-                errorMessage = "Unable to load profiles. Please check your connection."
+                // Provide specific error messages based on error type
+                if let nsError = error as NSError? {
+                    if nsError.domain == NSURLErrorDomain {
+                        errorMessage = "No internet connection"
+                    } else if nsError.domain == "DiscoverViewModel" {
+                        errorMessage = nsError.localizedDescription
+                    } else {
+                        errorMessage = "Failed to load creators"
+                    }
+                } else {
+                    errorMessage = "Failed to load creators"
+                }
 
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                if !Task.isCancelled {
-                    errorMessage = nil
+                // Don't auto-dismiss critical errors
+                if errorMessage != "No internet connection" {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    if !Task.isCancelled {
+                        errorMessage = nil
+                    }
                 }
 
                 print("❌ Error loading profiles: \(error.localizedDescription)")
@@ -866,32 +997,62 @@ final class DiscoverViewModel: ObservableObject {
 
     func loadMore() async {
         guard !isLoadingMore else { return }
-        
+
         isLoadingMore = true
         currentPage += 1
-        
+
         do {
-            // You can optionally pass the current user for consistency
-            guard let currentUserId = Auth.auth().currentUser?.uid,
-                  let currentUser = try await service.fetchProfile(uid: currentUserId) else {
-                print("⚠️ Missing current user while loading more profiles.")
+            guard let currentUserId = Auth.auth().currentUser?.uid else {
+                errorMessage = "Please sign in to continue"
                 isLoadingMore = false
                 return
             }
 
-            // ✅ Fetch more profiles (real Firestore data)
-            let newProfiles = try await service.fetchDiscoverProfiles(for: currentUser, limit: pageSize)
-            allProfiles.append(contentsOf: newProfiles)
-            applyFilters()
+            guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
+                errorMessage = "User profile not found"
+                isLoadingMore = false
+                return
+            }
+
+            // Don't exclude swiped profiles on Discover page - show everyone
+            // Fetch more profiles
+            let newProfiles = try await service.fetchDiscoverProfiles(
+                for: currentUser,
+                limit: 50,
+                excludeUserIds: [] // Empty - don't exclude swiped profiles
+            )
+
+            // Fetch online status for new profiles
+            if !newProfiles.isEmpty {
+                let userIds = newProfiles.map { $0.uid }
+                await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+
+                // Add new profiles to existing list
+                allProfiles.append(contentsOf: newProfiles)
+                applyFilters()
+
+                print("✅ Loaded \(newProfiles.count) more profiles")
+            }
+
         } catch {
+            if let nsError = error as NSError?, nsError.domain == NSURLErrorDomain {
+                errorMessage = "Connection lost"
+            } else {
+                errorMessage = "Failed to load more"
+            }
+
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            errorMessage = nil
+
             print("❌ Error loading more: \(error)")
         }
-        
+
         isLoadingMore = false
     }
 
     func refresh() async {
-        await loadProfiles()
+        // On refresh, show all profiles again including previously swiped ones
+        await loadProfiles(excludeSwipedProfiles: false)
     }
     
     func filterByCategory(_ category: String?) async {
@@ -900,31 +1061,112 @@ final class DiscoverViewModel: ObservableObject {
     }
     
     func search(query: String) async {
+        // Cancel any existing search task (debouncing)
+        searchTask?.cancel()
+
         currentSearchQuery = query
-        
-        if !query.isEmpty {
+
+        // If query is empty, show all profiles with filters
+        if query.isEmpty {
+            applyFilters()
+            return
+        }
+
+        // Minimum query length
+        guard query.count >= 2 else {
+            filteredProfiles = []
+            return
+        }
+
+        searchTask = Task {
+            // Debounce: wait 300ms before searching
+            try? await Task.sleep(nanoseconds: 300_000_000)
+
+            guard !Task.isCancelled else { return }
+
+            // Check cache first
+            let cacheKey = "\(query)_\(currentFilter ?? "")"
+            if let cached = searchCache[cacheKey],
+               Date().timeIntervalSince(cached.timestamp) < cacheValidityDuration {
+                print("✅ Using cached search results for '\(query)'")
+                filteredProfiles = cached.results
+                applySorting()
+                return
+            }
+
+            // Perform search
             do {
                 let results = try await service.searchProfiles(
                     query: query,
                     filters: currentFilter.map { [$0] }
                 )
+
+                guard !Task.isCancelled else { return }
+
+                // Cache the results
+                searchCache[cacheKey] = (results, Date())
+
+                // Limit cache size to prevent memory issues
+                if searchCache.count > 20 {
+                    // Remove oldest entries
+                    let sortedKeys = searchCache.keys.sorted {
+                        searchCache[$0]!.timestamp < searchCache[$1]!.timestamp
+                    }
+                    for key in sortedKeys.prefix(5) {
+                        searchCache.removeValue(forKey: key)
+                    }
+                }
+
                 filteredProfiles = results
                 applySorting()
+
+                // Track analytics
+                await AnalyticsManager.shared.trackSearch(query: query, resultsCount: results.count)
+
+                print("✅ Search completed: \(results.count) results for '\(query)'")
+
             } catch {
+                guard !Task.isCancelled else { return }
                 errorMessage = "Search failed"
+                print("❌ Search error: \(error)")
             }
-        } else {
-            applyFilters()
         }
+    }
+
+    /// Clear the search cache (useful when data changes)
+    func clearSearchCache() {
+        searchCache.removeAll()
+        print("🗑️ Search cache cleared")
     }
     
     func sortBy(_ option: SortOption) {
         currentSort = option
         applySorting()
+
+        // Track analytics
+        let sortValue: String
+        switch option {
+        case .relevance: sortValue = "relevance"
+        case .distance: sortValue = "distance"
+        case .followers: sortValue = "followers"
+        case .newest: sortValue = "newest"
+        }
+        AnalyticsManager.shared.trackFilterApplied(filterType: "sort", value: sortValue)
     }
-    
+
     func applyAdvancedFilters() async {
         applyFilters()
+
+        // Track analytics for advanced filters
+        if activeFilters.verifiedOnly {
+            AnalyticsManager.shared.trackFilterApplied(filterType: "verified", value: "true")
+        }
+        if activeFilters.onlineOnly {
+            AnalyticsManager.shared.trackFilterApplied(filterType: "online", value: "true")
+        }
+        if activeFilters.maxDistance < 1000 {
+            AnalyticsManager.shared.trackFilterApplied(filterType: "distance", value: "\(Int(activeFilters.maxDistance))mi")
+        }
     }
     
     func clearAllFilters() {
@@ -954,16 +1196,21 @@ final class DiscoverViewModel: ObservableObject {
     
     func categoryCount(for category: String) -> Int {
         allProfiles.filter { profile in
-            profile.contentStyles.contains { $0.rawValue.lowercased().contains(category.lowercased()) }
+            matchesCategory(profile: profile, category: category)
         }.count
+    }
+
+    private func matchesCategory(profile: UserProfile, category: String) -> Bool {
+        // Match by content style
+        return profile.contentStyles.contains { $0.rawValue == category }
     }
     
     private func applyFilters() {
         var results = allProfiles
-        
+
         if let filter = currentFilter {
             results = results.filter { profile in
-                profile.contentStyles.contains { $0.rawValue == filter }
+                matchesCategory(profile: profile, category: filter)
             }
         }
         
@@ -995,7 +1242,9 @@ final class DiscoverViewModel: ObservableObject {
         }
         
         if activeFilters.onlineOnly {
-            results = results.filter { $0.isOnline }
+            results = results.filter { profile in
+                PresenceManager.shared.isOnline(userId: profile.uid)
+            }
         }
         
         if activeFilters.maxDistance < 1000 {

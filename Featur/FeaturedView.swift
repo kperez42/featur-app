@@ -1,6 +1,7 @@
 // FeaturedView.swift - IMPROVED VERSION (Uses SharedComponents - No Duplicates!)
 import SwiftUI
 import FirebaseAuth
+import StoreKit
 
 struct FeaturedView: View {
     @StateObject private var viewModel = FeaturedViewModel()
@@ -39,19 +40,7 @@ struct FeaturedView: View {
                 }
                 .padding(.bottom, 80)
             }
-            
-            // Floating Banner Ad (like Discover) - Uses SharedComponents
-            VStack {
-                Spacer()
-                BannerAdPlaceholder()
-                    .frame(height: 50)
-                    .background(
-                        AppTheme.card
-                            .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
-                    )
-            }
-            .ignoresSafeArea(edges: .bottom)
-            
+
             // Error Toast
             if let error = viewModel.errorMessage {
                 VStack {
@@ -94,9 +83,17 @@ struct FeaturedView: View {
             }
         }
         .sheet(isPresented: $showPaymentSheet) {
-            GetFeaturedSheet()
+            GetFeaturedSheet {
+                // Refresh the Featured page after successful purchase
+                Task {
+                    await viewModel.loadFeatured(forceRefresh: true)
+                }
+            }
         }
         .task {
+            // Track screen view
+            AnalyticsManager.shared.trackScreenView(screenName: "Featured", screenClass: "FeaturedView")
+
             await viewModel.loadFeatured()
         }
         .refreshable {
@@ -173,9 +170,13 @@ struct FeaturedView: View {
                     .onTapGesture {
                         if let profile = creator.profile {
                             selectedProfile = profile
+                            // Track profile view analytics
+                            AnalyticsManager.shared.trackProfileView(
+                                userId: profile.uid,
+                                source: "featured"
+                            )
                         }
                     }
-                    .buttonStyle(.plain)
             }
         }
         .padding(.horizontal)
@@ -283,12 +284,32 @@ struct FeaturedView: View {
     // MARK: - Error Toast
     
     private func errorToast(_ message: String) -> some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundStyle(.white)
-            .padding()
-            .background(.red, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Button {
+                Task {
+                    await viewModel.loadFeatured(forceRefresh: true)
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding()
+        .background(.red, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
     }
 }
 
@@ -456,14 +477,15 @@ struct FeaturedCreatorCard: View {
             // Profile Image / Avatar
             ZStack {
                 if let profile = creator.profile, let firstMedia = profile.mediaURLs?.first {
-                    AsyncImage(url: URL(string: firstMedia)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        default:
+                    CachedAsyncImage(url: URL(string: firstMedia)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        ZStack {
                             AppTheme.gradient
+                            ProgressView()
+                                .tint(.white)
                         }
                     }
                 } else {
@@ -491,11 +513,26 @@ struct FeaturedCreatorCard: View {
                 HStack(spacing: 6) {
                     Text(creator.profile?.displayName ?? "Creator")
                         .font(.headline)
-                    
+
                     if creator.profile?.isVerified == true {
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundStyle(.blue)
                             .font(.caption)
+                    }
+
+                    // Online Status Badge
+                    if let profile = creator.profile, PresenceManager.shared.isOnline(userId: profile.uid) {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(.green)
+                                .frame(width: 6, height: 6)
+                            Text("Online")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.green)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.green.opacity(0.15), in: Capsule())
                     }
                 }
                 
@@ -574,7 +611,11 @@ struct FeaturedCreatorCard: View {
 
 struct GetFeaturedSheet: View {
     @Environment(\.dismiss) var dismiss
-    
+    @StateObject private var store = StoreKitManager.shared
+    @State private var showSuccess = false
+    @State private var showError = false
+    var onPurchaseComplete: (() -> Void)? = nil
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -637,25 +678,103 @@ struct GetFeaturedSheet: View {
                     VStack(spacing: 16) {
                         Text("Choose Your Plan")
                             .font(.headline)
-                        
-                        PricingCard(
-                            duration: "24 Hours",
-                            price: "$4.99",
-                            features: ["24-hour spotlight", "Featured badge", "Priority support"]
-                        )
-                        
-                        PricingCard(
-                            duration: "7 Days",
-                            price: "$19.99",
-                            popular: true,
-                            features: ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"]
-                        )
-                        
-                        PricingCard(
-                            duration: "30 Days",
-                            price: "$59.99",
-                            features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"]
-                        )
+
+                        if store.products.isEmpty {
+                            if let error = store.purchaseError {
+                                // Show error state if products failed to load (production only)
+                                VStack(spacing: 12) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 48))
+                                        .foregroundStyle(.orange)
+
+                                    Text("Plans Unavailable")
+                                        .font(.headline)
+
+                                    Text(error)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal)
+
+                                    Button {
+                                        Task {
+                                            await store.loadProducts()
+                                        }
+                                    } label: {
+                                        Label("Try Again", systemImage: "arrow.clockwise")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 10)
+                                            .background(AppTheme.accent, in: Capsule())
+                                    }
+                                }
+                                .padding(.vertical, 40)
+                            } else {
+                                #if DEBUG
+                                // 🧪 DEBUG MODE: Show test products
+                                VStack(spacing: 12) {
+                                    TestProductCard(
+                                        duration: "24 Hours",
+                                        price: "$4.99",
+                                        productId: FeaturedProduct.featured24h.rawValue,
+                                        features: ["24-hour spotlight", "Featured badge", "Priority support"],
+                                        store: store,
+                                        onPurchaseSuccess: {
+                                            showSuccess = true
+                                            onPurchaseComplete?()
+                                        }
+                                    )
+
+                                    TestProductCard(
+                                        duration: "7 Days",
+                                        price: "$19.99",
+                                        productId: FeaturedProduct.featured7d.rawValue,
+                                        popular: true,
+                                        features: ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"],
+                                        store: store,
+                                        onPurchaseSuccess: {
+                                            showSuccess = true
+                                            onPurchaseComplete?()
+                                        }
+                                    )
+
+                                    TestProductCard(
+                                        duration: "30 Days",
+                                        price: "$59.99",
+                                        productId: FeaturedProduct.featured30d.rawValue,
+                                        features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"],
+                                        store: store,
+                                        onPurchaseSuccess: {
+                                            showSuccess = true
+                                            onPurchaseComplete?()
+                                        }
+                                    )
+
+                                    Text("🧪 Test Mode - Products not configured in App Store Connect")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange)
+                                        .padding(.top, 8)
+                                }
+                                #else
+                                // Show loading state
+                                ProgressView("Loading plans...")
+                                    .padding()
+                                #endif
+                            }
+                        } else {
+                            ForEach(store.products, id: \.id) { product in
+                                PricingCard(
+                                    product: product,
+                                    popular: product.id.contains("7d"),
+                                    store: store,
+                                    onPurchaseSuccess: {
+                                        showSuccess = true
+                                        onPurchaseComplete?()
+                                    }
+                                )
+                            }
+                        }
                     }
                     
                     Text("Payment processed securely via Apple Pay")
@@ -673,6 +792,24 @@ struct GetFeaturedSheet: View {
                         dismiss()
                     }
                 }
+            }
+            .task {
+                await store.loadProducts()
+            }
+            .alert("Success!", isPresented: $showSuccess) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("You're now featured! Your profile will appear prominently in the FEATUREd tab.")
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(store.purchaseError ?? "Purchase failed. Please try again.")
+            }
+            .onChange(of: store.purchaseError) { newValue in
+                showError = newValue != nil
             }
         }
     }
@@ -704,24 +841,46 @@ struct BenefitRow: View {
 }
 
 struct PricingCard: View {
-    let duration: String
-    let price: String
+    let product: Product
     var popular: Bool = false
-    let features: [String]
-    
+    @ObservedObject var store: StoreKitManager
+    let onPurchaseSuccess: () -> Void
+
+    private var duration: String {
+        if product.id.contains("24h") {
+            return "24 Hours"
+        } else if product.id.contains("7d") {
+            return "7 Days"
+        } else if product.id.contains("30d") {
+            return "30 Days"
+        } else {
+            return "Featured"
+        }
+    }
+
+    private var features: [String] {
+        if product.id.contains("24h") {
+            return ["24-hour spotlight", "Featured badge", "Priority support"]
+        } else if product.id.contains("7d") {
+            return ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"]
+        } else {
+            return ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"]
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(duration)
                         .font(.headline)
-                    Text(price)
+                    Text(product.displayPrice)
                         .font(.title.bold())
                         .foregroundStyle(AppTheme.accent)
                 }
-                
+
                 Spacer()
-                
+
                 if popular {
                     Text("POPULAR")
                         .font(.caption2.weight(.bold))
@@ -731,9 +890,9 @@ struct PricingCard: View {
                         .background(AppTheme.accent, in: Capsule())
                 }
             }
-            
+
             Divider()
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(features, id: \.self) { feature in
                     HStack(spacing: 8) {
@@ -745,18 +904,32 @@ struct PricingCard: View {
                     }
                 }
             }
-            
+
             Button {
-                // Handle purchase
-                Haptics.impact(.medium)
+                Task {
+                    do {
+                        try await store.purchase(product)
+                        onPurchaseSuccess()
+                    } catch {
+                        // Error handled by store
+                    }
+                }
             } label: {
-                Text("Select Plan")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+                if store.isPurchasing {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                } else {
+                    Text("Select Plan")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
             }
+            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+            .disabled(store.isPurchasing)
         }
         .padding()
         .background(
@@ -769,6 +942,111 @@ struct PricingCard: View {
         )
     }
 }
+
+// MARK: - Test Product Card (for DEBUG mode)
+
+#if DEBUG
+struct TestProductCard: View {
+    let duration: String
+    let price: String
+    let productId: String
+    var popular: Bool = false
+    let features: [String]
+    @ObservedObject var store: StoreKitManager
+    let onPurchaseSuccess: () -> Void
+
+    @State private var isPurchasing = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(duration)
+                        .font(.headline)
+                    Text(price)
+                        .font(.title.bold())
+                        .foregroundStyle(AppTheme.accent)
+                }
+
+                Spacer()
+
+                if popular {
+                    Text("POPULAR")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppTheme.accent, in: Capsule())
+                }
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(features, id: \.self) { feature in
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                        Text(feature)
+                            .font(.caption)
+                    }
+                }
+            }
+
+            Button {
+                Task {
+                    await simulatePurchase()
+                }
+            } label: {
+                if isPurchasing {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                } else {
+                    Text("Select Plan (Test)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+            }
+            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+            .disabled(isPurchasing)
+        }
+        .padding()
+        .background(
+            popular ? AppTheme.accent.opacity(0.1) : AppTheme.card,
+            in: RoundedRectangle(cornerRadius: 16)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(popular ? AppTheme.accent : Color.clear, lineWidth: 2)
+        )
+    }
+
+    private func simulatePurchase() async {
+        isPurchasing = true
+        Haptics.impact(.medium)
+
+        // Simulate network delay
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+        // Simulate granting featured placement
+        do {
+            try await store.simulateTestPurchase(productId: productId)
+            Haptics.notify(.success)
+            onPurchaseSuccess()
+        } catch {
+            Haptics.notify(.error)
+            print("❌ Test purchase failed: \(error)")
+        }
+
+        isPurchasing = false
+    }
+}
+#endif
 
 // MARK: - Featured Category
 
@@ -820,25 +1098,49 @@ final class FeaturedViewModel: ObservableObject {
     
     func loadFeatured(forceRefresh: Bool = false) async {
         guard !isLoading else { return }
-        
+
         isLoading = true
         errorMessage = nil
-        
+
         do {
+            // Fetch real featured creators from Firebase
             featuredCreators = try await service.fetchFeaturedCreators()
             filteredCreators = featuredCreators
+
+            // Track analytics
+            for creator in featuredCreators {
+                if let userId = creator.profile?.uid {
+                    AnalyticsManager.shared.trackFeaturedCreatorView(userId: userId)
+                }
+            }
+
             isLoading = false
+            print("✅ Loaded \(featuredCreators.count) featured creators")
+
         } catch {
             isLoading = false
-            errorMessage = "Unable to load featured creators"
+
+            // Provide specific error messages based on error type
+            if let nsError = error as NSError? {
+                if nsError.domain == NSURLErrorDomain {
+                    errorMessage = "No internet connection"
+                } else {
+                    errorMessage = "Failed to load featured creators"
+                }
+            } else {
+                errorMessage = "Failed to load featured creators"
+            }
+
             print("❌ Error loading featured: \(error)")
-            
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            errorMessage = nil
+
+            // Clear error after delay (not for network errors)
+            if errorMessage != "No internet connection" {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                errorMessage = nil
+            }
         }
     }
 
-    
     func filterByCategory(_ category: FeaturedCategory) {
         switch category {
         case .all:

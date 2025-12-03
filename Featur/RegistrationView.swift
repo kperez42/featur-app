@@ -77,24 +77,24 @@ struct RegistrationView: View {
             //1. Create Firebase Auth user
             let result = try await Auth.auth().createUser(withEmail: email, password: password)
             let uid = result.user.uid
-            //2. Save name + email into Firestore
-            
+            let now = Timestamp(date: Date())
+
             let db = Firestore.firestore()
-            
+            // Create a proper UserProfile document with all required fields
             try await db.collection("users").document(uid).setData([
-                        "name": name,
-                        "email": email,
-                        "createdAt": Timestamp()
-                    ])
-            //3. Send email verification
+                "uid": uid,
+                "displayName": name,
+                "email": email,
+                "contentStyles": [],  // Required field - user will set this in profile setup
+                "createdAt": now,
+                "updatedAt": now
+            ])
+
             try await result.user.sendEmailVerification()
             print("Verification email sent to \(email)")
-            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
 
-            //4. Navigate to verify email view
             await MainActor.run {
-                navigationPath = NavigationPath()
-
+                navigationPath.append("VerifyEmailView")
             }
         } catch {
             print("Registration failed: \(error.localizedDescription)")

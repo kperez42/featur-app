@@ -1,9 +1,11 @@
 // ContentView.swift - REPLACE ENTIRE FILE
 import SwiftUI
+import FirebaseAuth
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppStateManager
-    
+    @State private var presenceUpdateTimer: Timer?
+
     var body: some View {
         TabView(selection: $appState.selectedTab) {
             NavigationStack { EnhancedHomeView() }
@@ -27,5 +29,37 @@ struct ContentView: View {
                 .tag(AppStateManager.Tab.profile)
         }
         .tint(AppTheme.accent)
+        .onAppear {
+            startPresenceUpdates()
+        }
+        .onDisappear {
+            stopPresenceUpdates()
+        }
+    }
+
+    // MARK: - Presence Updates
+
+    /// Start background presence updates to keep user marked as "online"
+    private func startPresenceUpdates() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+
+        // Update presence immediately
+        Task {
+            await PresenceManager.shared.updatePresence(userId: userId)
+        }
+
+        // Schedule periodic updates every 3 minutes (to stay within 5 minute window)
+        presenceUpdateTimer = Timer.scheduledTimer(withTimeInterval: 180, repeats: true) { _ in
+            Task {
+                await PresenceManager.shared.updatePresence(userId: userId)
+                print("🟢 Updated presence - keeping user online")
+            }
+        }
+    }
+
+    /// Stop presence updates when app goes to background
+    private func stopPresenceUpdates() {
+        presenceUpdateTimer?.invalidate()
+        presenceUpdateTimer = nil
     }
 }

@@ -21,12 +21,30 @@ final class FirebaseService: ObservableObject {
         }
 
         do {
-            let profile = try await db.collection("users")
-                .document(uid)
-                .getDocument(as: UserProfile.self)
+            let document = try await db.collection("users").document(uid).getDocument()
 
-            print("✅ Fetched profile for uid \(uid): \(profile.displayName)")
-            return profile
+            guard document.exists else {
+                print("⚠️ No profile found for uid \(uid)")
+                return nil
+            }
+
+            // Try standard decoding first
+            do {
+                var profile = try document.data(as: UserProfile.self)
+                // Ensure uid is set (use document ID as fallback)
+                if profile.uid.isEmpty {
+                    profile.uid = document.documentID
+                }
+                print("✅ Fetched profile for uid \(uid): \(profile.displayName)")
+                return profile
+            } catch {
+                // Fallback: manually decode with document ID as uid
+                if let profile = decodeProfileFromDocument(doc: document, fallbackUid: uid) {
+                    print("✅ Fetched profile (fallback) for uid \(uid): \(profile.displayName)")
+                    return profile
+                }
+                throw error
+            }
 
         } catch {
             print("❌ Error fetching profile for uid \(uid): \(error)")
@@ -44,6 +62,55 @@ final class FirebaseService: ObservableObject {
         }
     }
 
+    /// Helper to decode a profile from a single document snapshot (for fetchProfile)
+    private func decodeProfileFromDocument(doc: DocumentSnapshot, fallbackUid: String) -> UserProfile? {
+        guard let data = doc.data() else { return nil }
+
+        let uid = (data["uid"] as? String) ?? fallbackUid
+        let displayName = (data["displayName"] as? String) ?? "Unknown"
+
+        var contentStyles: [UserProfile.ContentStyle] = []
+        if let stylesArray = data["contentStyles"] as? [String] {
+            contentStyles = stylesArray.compactMap { UserProfile.ContentStyle(rawValue: $0) }
+        }
+
+        let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+        let updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue() ?? Date()
+
+        var profile = UserProfile(
+            uid: uid,
+            displayName: displayName,
+            contentStyles: contentStyles,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+
+        profile.age = data["age"] as? Int
+        profile.bio = data["bio"] as? String
+        profile.interests = data["interests"] as? [String]
+        profile.mediaURLs = data["mediaURLs"] as? [String]
+        profile.profileImageURL = data["profileImageURL"] as? String
+        profile.isVerified = data["isVerified"] as? Bool
+        profile.followerCount = data["followerCount"] as? Int
+        profile.email = data["email"] as? String
+        profile.isEmailVerified = data["isEmailVerified"] as? Bool
+        profile.phoneNumber = data["phoneNumber"] as? String
+        profile.isPhoneVerified = data["isPhoneVerified"] as? Bool
+
+        if let locationData = data["location"] as? [String: Any] {
+            var location = UserProfile.Location()
+            location.city = locationData["city"] as? String
+            location.state = locationData["state"] as? String
+            location.country = locationData["country"] as? String
+            if let geoPoint = locationData["coordinates"] as? GeoPoint {
+                location.coordinates = geoPoint
+            }
+            profile.location = location
+        }
+
+        return profile
+    }
+
     
     func updateProfile(_ profile: UserProfile) async throws {
         // Use uid, not id
@@ -57,27 +124,51 @@ final class FirebaseService: ObservableObject {
 
     
     // MARK: - Discovery & Matching
-    
-    //  Convert PrefixSequence to Array
+
+    // Improved swipe exclusion to handle more than 10 users
     func fetchDiscoverProfiles(for user: UserProfile, limit: Int = 20, excludeUserIds: [String] = []) async throws -> [UserProfile] {
-        var query: Query = db.collection("users").limit(to: limit)
-        
-        // Exclude already swiped users
+        // Fetch more profiles than needed to account for client-side filtering
+        // This allows us to exclude more than 10 users (Firestore notIn limit)
+        let fetchLimit = excludeUserIds.count > 10 ? limit * 3 : limit
+        var query: Query = db.collection("users").limit(to: fetchLimit)
+
+        // Use Firestore notIn for first 10 excluded users (Firestore limit)
         if !excludeUserIds.isEmpty {
-            // Convert PrefixSequence to Array
             let limitedIds = Array(excludeUserIds.prefix(10))
             query = query.whereField(FieldPath.documentID(), notIn: limitedIds)
         }
-        
+
         let snapshot = try await query.getDocuments()
-        var profiles = try snapshot.documents.compactMap{ try $0.data(as: UserProfile.self)}
-        //remove current user
-        profiles.removeAll {$0.uid == user.uid}
-        
-        //sort by location
-        profiles.sort { distance (from: user, to: $0) < distance(from: user, to: $1)}
-        
-        return profiles
+        var profiles = snapshot.documents.compactMap { doc -> UserProfile? in
+            do {
+                var profile = try doc.data(as: UserProfile.self)
+                // Ensure uid is set (use document ID as fallback)
+                if profile.uid.isEmpty {
+                    profile.uid = doc.documentID
+                }
+                return profile
+            } catch {
+                // Try to decode with document ID as uid fallback
+                if let profile = self.decodeProfileWithFallback(doc: doc) {
+                    return profile
+                }
+                print("⚠️ Skipping invalid profile document \(doc.documentID): \(error.localizedDescription)")
+                return nil
+            }
+        }
+
+        // Remove current user
+        profiles.removeAll { $0.uid == user.uid }
+
+        // Client-side filtering for ALL excluded users (beyond the first 10)
+        let excludedSet = Set(excludeUserIds)
+        profiles.removeAll { excludedSet.contains($0.uid) }
+
+        // Sort by similarity
+        profiles.sort { similarityScore(current: user, other: $0) > similarityScore(current: user, other: $1) }
+
+        // Return only the requested limit
+        return Array(profiles.prefix(limit))
     }
     
     func recordSwipe(_ action: SwipeAction) async throws {
@@ -90,25 +181,109 @@ final class FirebaseService: ObservableObject {
         print(" recordSwipe: \(action.userId) → \(action.targetUserId), action=\(action.action)")
 
         try db.collection("swipes").addDocument(from: action)
-        
+
+        // Track analytics
+        await AnalyticsManager.shared.trackSwipe(action: action.action.rawValue, targetUserId: action.targetUserId)
+
         // Check for mutual match
         if action.action == .like {
             try await checkAndCreateMatch(userId: action.userId, targetUserId: action.targetUserId)
         }
-        
+
     }
-    // this function reads from swipes collection from firestore and returns every targetuserId that the user has ever swiped on
-    func fetchSwipedUserIds(for userId: String) async throws -> [String] {
+
+    /// Delete a swipe action (for undo functionality)
+    func deleteSwipe(userId: String, targetUserId: String) async throws {
+        guard !userId.isEmpty, !targetUserId.isEmpty else {
+            print("⚠️ deleteSwipe: Missing userId or targetUserId.")
+            return
+        }
+
+        // Find and delete the swipe document
+        let snapshot = try await db.collection("swipes")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("targetUserId", isEqualTo: targetUserId)
+            .getDocuments()
+
+        for document in snapshot.documents {
+            try await document.reference.delete()
+        }
+
+        print("✅ Deleted swipe: \(userId) → \(targetUserId)")
+    }
+
+    // Fetch all user IDs that the current user has swiped on
+    func fetchSwipedUserIds(forUser userId: String) async throws -> [String] {
         let snapshot = try await db.collection("swipes")
             .whereField("userId", isEqualTo: userId)
             .getDocuments()
 
-        return snapshot.documents.compactMap {
-            try? $0.data(as: SwipeAction.self).targetUserId
-        }
+        return snapshot.documents.compactMap { doc in
+            try? doc.data(as: SwipeAction.self)
+        }.map { $0.targetUserId }
     }
 
-    
+    // Check if current user has liked a specific profile
+    func checkLikeStatus(userId: String, targetUserId: String) async throws -> Bool {
+        guard !userId.isEmpty, !targetUserId.isEmpty else {
+            print("⚠️ checkLikeStatus: Missing user IDs.")
+            return false
+        }
+
+        let snapshot = try await db.collection("swipes")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("targetUserId", isEqualTo: targetUserId)
+            .whereField("action", isEqualTo: SwipeAction.Action.like.rawValue)
+            .getDocuments()
+
+        return !snapshot.isEmpty
+    }
+
+    // Save a like from profile detail page (same as swipe right)
+    func saveLike(userId: String, targetUserId: String) async throws -> Bool {
+        guard !userId.isEmpty, !targetUserId.isEmpty else {
+            print("⚠️ saveLike: Missing user IDs.")
+            return false
+        }
+
+        let swipe = SwipeAction(
+            userId: userId,
+            targetUserId: targetUserId,
+            action: .like,
+            timestamp: Date()
+        )
+
+        try await recordSwipe(swipe)
+        print("✅ Like saved: \(userId) → \(targetUserId)")
+
+        // Return true if this created a match
+        let matches = try await fetchMatches(forUser: userId)
+        return matches.contains(where: {
+            $0.userId1 == targetUserId || $0.userId2 == targetUserId
+        })
+    }
+
+    // Remove a like (unlike)
+    func removeLike(userId: String, targetUserId: String) async throws {
+        guard !userId.isEmpty, !targetUserId.isEmpty else {
+            print("⚠️ removeLike: Missing user IDs.")
+            return
+        }
+
+        let snapshot = try await db.collection("swipes")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("targetUserId", isEqualTo: targetUserId)
+            .whereField("action", isEqualTo: SwipeAction.Action.like.rawValue)
+            .getDocuments()
+
+        for doc in snapshot.documents {
+            try await doc.reference.delete()
+        }
+
+        print("✅ Like removed: \(userId) → \(targetUserId)")
+    }
+
+
     private func checkAndCreateMatch(userId: String, targetUserId: String) async throws {
         guard !userId.isEmpty, !targetUserId.isEmpty else {
                 print("⚠️ checkAndCreateMatch: Missing user IDs. Skipping match check.")
@@ -125,17 +300,47 @@ final class FirebaseService: ObservableObject {
             .getDocuments()
         
         if !reciprocalSwipe.isEmpty {
-            // Create match
-            let match = Match(
-                userId1: userId,
-                userId2: targetUserId,
-                matchedAt: Date(),
-                hasMessaged: false,
-                isActive: true
-            )
-            try db.collection("matches").addDocument(from: match)
-            // Debug statment confirm match
-            print("✅ Match created between \(userId) and \(targetUserId)")
+            // Check if match already exists to avoid duplicates
+            let existingMatches = try await db.collection("matches")
+                .whereField("userId1", isEqualTo: userId)
+                .whereField("userId2", isEqualTo: targetUserId)
+                .whereField("isActive", isEqualTo: true)
+                .getDocuments()
+
+            let existingMatchesReverse = try await db.collection("matches")
+                .whereField("userId1", isEqualTo: targetUserId)
+                .whereField("userId2", isEqualTo: userId)
+                .whereField("isActive", isEqualTo: true)
+                .getDocuments()
+
+            if existingMatches.isEmpty && existingMatchesReverse.isEmpty {
+                // Create match
+                let match = Match(
+                    userId1: userId,
+                    userId2: targetUserId,
+                    matchedAt: Date(),
+                    hasMessaged: false,
+                    isActive: true
+                )
+                try db.collection("matches").addDocument(from: match)
+                print("✅ Match created between \(userId) and \(targetUserId)")
+
+                // Track analytics
+                await AnalyticsManager.shared.trackMatch(matchedUserId: targetUserId)
+
+                // IMPORTANT: Automatically create a conversation for the match
+                try await createConversationForMatch(userId1: userId, userId2: targetUserId)
+            } else {
+                print("ℹ️ Match already exists between \(userId) and \(targetUserId)")
+            }
+
+            // Create conversation for the match
+            do {
+                let conversation = try await getOrCreateConversation(between: userId, and: targetUserId)
+                print("✅ Conversation created for match: \(conversation.id ?? "unknown")")
+            } catch {
+                print("⚠️ Failed to create conversation for match: \(error)")
+            }
 
         }else{
             // Debug statement no match created
@@ -143,7 +348,17 @@ final class FirebaseService: ObservableObject {
 
         }
     }
-    
+
+    /// Automatically create a conversation when a match happens
+    private func createConversationForMatch(userId1: String, userId2: String) async throws {
+        // Use existing getOrCreateConversation to create the conversation
+        let conversation = try await getOrCreateConversation(between: userId1, and: userId2)
+        print("✅ Conversation created for match: \(conversation.id ?? "unknown")")
+
+        // Track analytics
+        await AnalyticsManager.shared.trackConversationStarted(withUserId: userId2)
+    }
+
     func fetchMatches(forUser userId: String) async throws -> [Match] {
         guard !userId.isEmpty else {
                 print("⚠️ fetchMatches: Empty userId. Returning no matches.")
@@ -254,13 +469,19 @@ final class FirebaseService: ObservableObject {
     
     func sendMessage(_ message: Message) async throws {
         try db.collection("messages").addDocument(from: message)
-        
+
         // Update conversation
         try await db.collection("conversations").document(message.conversationId).updateData([
             "lastMessage": message.content,
             "lastMessageAt": message.sentAt,
             "unreadCount.\(message.recipientId)": FieldValue.increment(Int64(1))
         ])
+
+        // Track analytics
+        await AnalyticsManager.shared.trackMessageSent(
+            conversationId: message.conversationId,
+            hasMedia: message.mediaURL != nil
+        )
     }
     
     func fetchMessages(conversationId: String, limit: Int = 50) async throws -> [Message] {
@@ -305,61 +526,412 @@ final class FirebaseService: ObservableObject {
     
     // MARK: - Fetch Featured Creators (Manual Firestore-Based)
     func fetchFeaturedCreators() async throws -> [FeaturedCreator] {
-        // Step 1: Load featured creator documents from Firestore
+        print("🔍 Fetching featured creators from Firestore...")
+
+        // Fetch all featured documents (no complex query to avoid index requirements)
         let snapshot = try await db.collection("featured")
-            .order(by: "priority", descending: true)
             .getDocuments()
-        
-        var results: [FeaturedCreator] = []
-        
-        // Step 2: Decode each FeaturedCreator and fetch profile
-        for document in snapshot.documents {
-            if var featured = try? document.data(as: FeaturedCreator.self) {
-                
-                // Fetch the full UserProfile for this featured user
-                featured.profile = try await fetchProfile(uid: featured.userId)
-                
-                // Append to result array
-                results.append(featured)
+
+        print("📊 Found \(snapshot.documents.count) total featured documents")
+
+        var featured = try snapshot.documents.compactMap { doc -> FeaturedCreator? in
+            do {
+                let creator = try doc.data(as: FeaturedCreator.self)
+                print("  - User: \(creator.userId), Expires: \(creator.expiresAt), Priority: \(creator.priority)")
+                return creator
+            } catch {
+                print("  ❌ Failed to decode document \(doc.documentID): \(error)")
+                return nil
             }
         }
-        
-        return results
+
+        // Filter out expired ones in code
+        let now = Date()
+        let beforeFilter = featured.count
+        featured = featured.filter { $0.expiresAt > now }
+        print("📅 Filtered: \(beforeFilter) → \(featured.count) (removed \(beforeFilter - featured.count) expired)")
+
+        // Sort by priority (highest first)
+        featured.sort { $0.priority > $1.priority }
+
+        // Fetch profiles
+        print("👤 Fetching user profiles...")
+        for i in featured.indices {
+            if let profile = try? await fetchProfile(uid: featured[i].userId) {
+                featured[i].profile = profile
+                print("  ✅ Loaded profile for \(profile.displayName)")
+            } else {
+                print("  ⚠️ Could not load profile for user: \(featured[i].userId)")
+            }
+        }
+
+        print("✅ Returning \(featured.count) featured creators")
+        return featured
     }
 
     
     // MARK: - Search & Discovery
-    
+
+    /// Enhanced search with multi-field matching and relevance scoring
     func searchProfiles(query: String, filters: [String]? = nil) async throws -> [UserProfile] {
+        // Return empty if query is too short
+        guard query.count >= 2 else {
+            return []
+        }
+
         var firestoreQuery: Query = db.collection("users")
-        
+
+        // Apply content style filters
         if let filters = filters, !filters.isEmpty {
             firestoreQuery = firestoreQuery.whereField("contentStyles", arrayContainsAny: filters)
         }
-        
-        let snapshot = try await firestoreQuery.limit(to: 50).getDocuments()
-        let profiles = try snapshot.documents.compactMap { try $0.data(as: UserProfile.self) }
-        
-        // Filter by name if query is provided
-        if !query.isEmpty {
-            return profiles.filter { $0.displayName.localizedCaseInsensitiveContains(query) }
+
+        let snapshot = try await firestoreQuery.limit(to: 100).getDocuments()
+        let profiles = snapshot.documents.compactMap { doc -> UserProfile? in
+            do {
+                var profile = try doc.data(as: UserProfile.self)
+                if profile.uid.isEmpty {
+                    profile.uid = doc.documentID
+                }
+                return profile
+            } catch {
+                if let profile = self.decodeProfileWithFallback(doc: doc) {
+                    return profile
+                }
+                print("⚠️ Skipping invalid profile in search \(doc.documentID): \(error.localizedDescription)")
+                return nil
+            }
         }
-        
-        return profiles
+
+        // Return all if query is empty
+        if query.isEmpty {
+            return profiles
+        }
+
+        // Enhanced multi-field search with relevance scoring
+        let searchTerm = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        struct ScoredProfile {
+            let profile: UserProfile
+            let score: Int
+        }
+
+        let scoredProfiles = profiles.compactMap { profile -> ScoredProfile? in
+            var score = 0
+
+            // Display name match (highest priority)
+            let displayName = profile.displayName.lowercased()
+            if displayName == searchTerm {
+                score += 100 // Exact match
+            } else if displayName.hasPrefix(searchTerm) {
+                score += 50 // Starts with query
+            } else if displayName.contains(searchTerm) {
+                score += 25 // Contains query
+            } else if displayName.contains(where: { searchTerm.contains($0) }) {
+                score += 5 // Partial character match
+            }
+
+            // Bio match
+            if let bio = profile.bio?.lowercased() {
+                if bio.contains(searchTerm) {
+                    score += 15
+                }
+            }
+
+            // Interests match
+            if let interests = profile.interests {
+                for interest in interests {
+                    if interest.lowercased().contains(searchTerm) {
+                        score += 10
+                    }
+                }
+            }
+
+            // Content styles match
+            for style in profile.contentStyles {
+                if style.rawValue.lowercased().contains(searchTerm) {
+                    score += 8
+                }
+            }
+
+            // Location match
+            if let location = profile.location {
+                if let city = location.city, city.lowercased().contains(searchTerm) {
+                    score += 12
+                }
+                if let state = location.state, state.lowercased().contains(searchTerm) {
+                    score += 10
+                }
+            }
+
+            // Boost verified profiles slightly
+            if profile.isVerified == true {
+                score += 3
+            }
+
+            // Only return profiles with some relevance
+            return score > 0 ? ScoredProfile(profile: profile, score: score) : nil
+        }
+
+        // Sort by relevance score (descending)
+        let sortedProfiles = scoredProfiles
+            .sorted { $0.score > $1.score }
+            .map { $0.profile }
+
+        return sortedProfiles
     }
     
     // MARK: - Media Upload
     
     func uploadMedia(data: Data, path: String) async throws -> String {
         let ref = storage.reference().child(path)
-        let _ = try await ref.putDataAsync(data)
-        return try await ref.downloadURL().absoluteString
+
+        // Retry logic for network errors
+        var lastError: Error?
+        let maxRetries = 3
+
+        for attempt in 0..<maxRetries {
+            do {
+                print("⬆️ Upload attempt \(attempt + 1)/\(maxRetries) to: \(path)")
+                print("   Data size: \(data.count / 1024)KB")
+
+                // Use simple putDataAsync without metadata (simpler, less prone to errors)
+                let metadata = StorageMetadata()
+                metadata.contentType = "image/jpeg"
+
+                let _ = try await ref.putDataAsync(data, metadata: metadata)
+                let url = try await ref.downloadURL().absoluteString
+                print("✅ Upload successful: \(url)")
+                return url
+            } catch let error as NSError {
+                lastError = error
+                print("⚠️ Upload attempt \(attempt + 1) failed: \(error.localizedDescription)")
+                print("   Error code: \(error.code), domain: \(error.domain)")
+
+                // Check if it's a retryable network error
+                // Firebase Storage wraps network errors in FIRStorageErrorDomain (-13000)
+                // Need to check both the outer error AND underlying error
+                var isNetworkError = false
+
+                // Direct NSURLError
+                if error.domain == NSURLErrorDomain &&
+                    (error.code == -1200 || // NSURLErrorSecureConnectionFailed
+                     error.code == NSURLErrorTimedOut ||
+                     error.code == NSURLErrorCannotConnectToHost ||
+                     error.code == NSURLErrorNetworkConnectionLost ||
+                     error.code == NSURLErrorNotConnectedToInternet) {
+                    isNetworkError = true
+                }
+
+                // Firebase Storage error wrapping NSURLError
+                if error.domain == "FIRStorageErrorDomain" && error.code == -13000 {
+                    if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+                        print("   Underlying error: code \(underlying.code), domain: \(underlying.domain)")
+                        if underlying.domain == NSURLErrorDomain &&
+                            (underlying.code == -1200 ||
+                             underlying.code == NSURLErrorTimedOut ||
+                             underlying.code == NSURLErrorCannotConnectToHost ||
+                             underlying.code == NSURLErrorNetworkConnectionLost ||
+                             underlying.code == NSURLErrorNotConnectedToInternet) {
+                            isNetworkError = true
+                        }
+                    }
+                }
+
+                if isNetworkError && attempt < maxRetries - 1 {
+                    let delay = pow(2.0, Double(attempt)) // Exponential backoff: 1s, 2s, 4s
+                    print("   Network error detected - retrying in \(delay)s...")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } else if !isNetworkError {
+                    // Not a network error, don't retry
+                    print("   Non-retryable error, failing immediately")
+                    throw error
+                } else {
+                    // Last attempt exhausted
+                    print("   All \(maxRetries) retry attempts exhausted")
+                    throw error
+                }
+            }
+        }
+
+        throw lastError ?? NSError(domain: "FirebaseService", code: -1,
+                                   userInfo: [NSLocalizedDescriptionKey: "Upload failed after \(maxRetries) attempts"])
     }
     
     func uploadProfilePhoto(userId: String, imageData: Data) async throws -> String {
         let path = "profile_photos/\(userId)/\(UUID().uuidString).jpg"
         return try await uploadMedia(data: imageData, path: path)
     }
-  
+
+    func uploadProfilePhoto(userId: String, image: UIImage) async throws -> String {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw NSError(domain: "FirebaseService", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
+        }
+        return try await uploadProfilePhoto(userId: userId, imageData: imageData)
+    }
+
+    /// Delete media from Firebase Storage using its download URL
+    func deleteMedia(url: String) async throws {
+        guard !url.isEmpty else {
+            print("⚠️ deleteMedia: Empty URL")
+            return
+        }
+
+        do {
+            let storageRef = storage.reference(forURL: url)
+            try await storageRef.delete()
+            print("✅ Deleted media from Storage: \(url)")
+        } catch {
+            print("❌ Error deleting media from Storage: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// Calculates how similar two user profiles are based on shared traits.
+    ///
+    /// - Parameters:
+    ///   - current: The logged-in user's profile.
+    ///   - other: Another user's profile to compare against.
+    /// - Returns: An integer score representing compatibility.
+    ///
+    /// The score is calculated by:
+    /// 1. Counting how many content styles they share, weighted ×2.
+    /// 2. Counting how many interests they share, weighted ×1.
+    ///
+    /// Example: If both users share 2 content styles and 1 interest,
+    /// the score is (2 * 2) + 1 = 5.
+    private func similarityScore(current: UserProfile, other: UserProfile) -> Int {
+        let sharedStyles = Set(current.contentStyles).intersection(other.contentStyles).count
+        let sharedInterests = Set(current.interests ?? []).intersection(other.interests ?? []).count
+        return sharedStyles * 2 + sharedInterests // weight content styles higher
+    }
+
+    /// Helper to decode a profile from Firestore document when standard decoding fails
+    /// This handles documents that may be missing the 'uid' field by using document ID
+    private func decodeProfileWithFallback(doc: QueryDocumentSnapshot) -> UserProfile? {
+        let data = doc.data()
+
+        // Get required fields with fallbacks
+        let uid = (data["uid"] as? String) ?? doc.documentID
+        let displayName = (data["displayName"] as? String) ?? "Unknown"
+
+        // Parse content styles
+        var contentStyles: [UserProfile.ContentStyle] = []
+        if let stylesArray = data["contentStyles"] as? [String] {
+            contentStyles = stylesArray.compactMap { UserProfile.ContentStyle(rawValue: $0) }
+        }
+
+        // Parse dates
+        let createdAt: Date
+        if let timestamp = data["createdAt"] as? Timestamp {
+            createdAt = timestamp.dateValue()
+        } else {
+            createdAt = Date()
+        }
+
+        let updatedAt: Date
+        if let timestamp = data["updatedAt"] as? Timestamp {
+            updatedAt = timestamp.dateValue()
+        } else {
+            updatedAt = Date()
+        }
+
+        // Create profile with minimal required fields
+        var profile = UserProfile(
+            uid: uid,
+            displayName: displayName,
+            contentStyles: contentStyles,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+
+        // Set optional fields
+        profile.age = data["age"] as? Int
+        profile.bio = data["bio"] as? String
+        profile.interests = data["interests"] as? [String]
+        profile.mediaURLs = data["mediaURLs"] as? [String]
+        profile.profileImageURL = data["profileImageURL"] as? String
+        profile.isVerified = data["isVerified"] as? Bool
+        profile.followerCount = data["followerCount"] as? Int
+        profile.email = data["email"] as? String
+        profile.isEmailVerified = data["isEmailVerified"] as? Bool
+        profile.phoneNumber = data["phoneNumber"] as? String
+        profile.isPhoneVerified = data["isPhoneVerified"] as? Bool
+
+        // Parse location if present
+        if let locationData = data["location"] as? [String: Any] {
+            var location = UserProfile.Location()
+            location.city = locationData["city"] as? String
+            location.state = locationData["state"] as? String
+            location.country = locationData["country"] as? String
+            if let geoPoint = locationData["coordinates"] as? GeoPoint {
+                location.coordinates = geoPoint
+            }
+            profile.location = location
+        }
+
+        print("✅ Decoded profile with fallback: \(displayName) (uid: \(uid))")
+        return profile
+    }
+
+    // MARK: - Presence & Online Status
+
+    /// Update user's last active timestamp
+    func updatePresence(userId: String) async throws {
+        guard !userId.isEmpty else {
+            print("⚠️ updatePresence: Empty userId")
+            return
+        }
+
+        try await db.collection("presence").document(userId).setData([
+            "lastActive": FieldValue.serverTimestamp(),
+            "status": "online"
+        ], merge: true)
+
+        print("✅ Updated presence for user: \(userId)")
+    }
+
+    /// Get user's last active timestamp
+    func getLastActive(userId: String) async throws -> Date? {
+        guard !userId.isEmpty else {
+            print("⚠️ getLastActive: Empty userId")
+            return nil
+        }
+
+        let doc = try await db.collection("presence").document(userId).getDocument()
+
+        guard let data = doc.data(),
+              let timestamp = data["lastActive"] as? Timestamp else {
+            return nil
+        }
+
+        return timestamp.dateValue()
+    }
+
+    /// Check if user is currently online (active within last 5 minutes)
+    func isUserOnline(userId: String) async throws -> Bool {
+        guard let lastActive = try await getLastActive(userId: userId) else {
+            return false
+        }
+
+        let fiveMinutesAgo = Date().addingTimeInterval(-5 * 60)
+        return lastActive > fiveMinutesAgo
+    }
+
+    /// Set user status to offline
+    func setOffline(userId: String) async throws {
+        guard !userId.isEmpty else {
+            print("⚠️ setOffline: Empty userId")
+            return
+        }
+
+        try await db.collection("presence").document(userId).setData([
+            "status": "offline",
+            "lastActive": FieldValue.serverTimestamp()
+        ], merge: true)
+
+        print("✅ Set offline for user: \(userId)")
+    }
 
 }

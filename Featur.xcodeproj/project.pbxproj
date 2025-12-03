@@ -13,6 +13,7 @@
 		BA10A0BC2E984F7F00E0196E /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = BA10A0BB2E984F7F00E0196E /* FirebaseFirestore */; };
 		BA10A0BE2E984F7F00E0196E /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = BA10A0BD2E984F7F00E0196E /* FirebaseRemoteConfig */; };
 		BA10A0C02E984F7F00E0196E /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = BA10A0BF2E984F7F00E0196E /* FirebaseStorage */; };
+		BA9620E42ED3082C00AC7398 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = BA9620E32ED3082C00AC7398 /* FirebaseFunctions */; };
 		BAD98B652E984FFF00C0D174 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = BAD98B642E984FFF00C0D174 /* GoogleSignIn */; };
 		BAD98B962E98782D00C0D174 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = BAD98B952E98782D00C0D174 /* GoogleMobileAds */; };
 /* End PBXBuildFile section */
@@ -80,6 +81,7 @@
 				BA10A0BE2E984F7F00E0196E /* FirebaseRemoteConfig in Frameworks */,
 				BA10A0C02E984F7F00E0196E /* FirebaseStorage in Frameworks */,
 				BA10A0B22E984F7F00E0196E /* FirebaseAnalytics in Frameworks */,
+				BA9620E42ED3082C00AC7398 /* FirebaseFunctions in Frameworks */,
 				BA10A0BA2E984F7F00E0196E /* FirebaseCrashlytics in Frameworks */,
 				BAD98B962E98782D00C0D174 /* GoogleMobileAds in Frameworks */,
 				BA10A0B42E984F7F00E0196E /* FirebaseAuth in Frameworks */,
@@ -153,6 +155,7 @@
 				BA10A0BF2E984F7F00E0196E /* FirebaseStorage */,
 				BAD98B642E984FFF00C0D174 /* GoogleSignIn */,
 				BAD98B952E98782D00C0D174 /* GoogleMobileAds */,
+				BA9620E32ED3082C00AC7398 /* FirebaseFunctions */,
 			);
 			productName = Featur;
 			productReference = BA109D562E946C3800E0196E /* Featur.app */;
@@ -445,7 +448,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Featur/Preview Content\"";
-				DEVELOPMENT_TEAM = W4UWGH7JM4;
+				DEVELOPMENT_TEAM = Z86968747M;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Featur/Info.plist;
@@ -461,7 +464,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lorenzo.featurdev;
+				PRODUCT_BUNDLE_IDENTIFIER = "featur-app.Featur";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -478,7 +481,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Featur/Preview Content\"";
-				DEVELOPMENT_TEAM = W4UWGH7JM4;
+				DEVELOPMENT_TEAM = Z86968747M;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Featur/Info.plist;
@@ -494,7 +497,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lorenzo.featurdev;
+				PRODUCT_BUNDLE_IDENTIFIER = "featur-app.Featur";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -672,6 +675,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BA10A0B02E984F7F00E0196E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseStorage;
+		};
+		BA9620E32ED3082C00AC7398 /* FirebaseFunctions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BA10A0B02E984F7F00E0196E /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFunctions;
 		};
 		BAD98B642E984FFF00C0D174 /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;

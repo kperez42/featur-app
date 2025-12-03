@@ -24,37 +24,56 @@ struct UserProfile: Identifiable, Codable {
     var collaborationPreferences: CollaborationPreferences?
     var createdAt: Date
     var updatedAt: Date
+
+    // Verification fields
+    var email: String?
+    var isEmailVerified: Bool?
+    var phoneNumber: String?
+    var isPhoneVerified: Bool?
+
+    // MARK: - Initializer for fallback decoding
     init(
+        id: String? = nil,
         uid: String,
         displayName: String,
-        age: Int?,
-        location: Location?,
-        contentStyles: [ContentStyle],
-        mediaURLs: [String] = [],
+        age: Int? = nil,
+        bio: String? = nil,
+        location: Location? = nil,
+        interests: [String]? = nil,
+        contentStyles: [ContentStyle] = [],
         socialLinks: SocialLinks? = nil,
-        profileImageURL: String? = nil
+        mediaURLs: [String]? = nil,
+        profileImageURL: String? = nil,
+        isVerified: Bool? = nil,
+        followerCount: Int? = nil,
+        collaborationPreferences: CollaborationPreferences? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        email: String? = nil,
+        isEmailVerified: Bool? = nil,
+        phoneNumber: String? = nil,
+        isPhoneVerified: Bool? = nil
     ) {
         self.uid = uid
         self.displayName = displayName
         self.age = age
-        self.bio = nil
+        self.bio = bio
         self.location = location
-        self.interests = []
+        self.interests = interests
         self.contentStyles = contentStyles
         self.socialLinks = socialLinks
         self.mediaURLs = mediaURLs
         self.profileImageURL = profileImageURL
-        self.isVerified = false
-        self.followerCount = 0
-        self.collaborationPreferences = .init(
-            lookingFor: [],
-            availability: [],
-            responseTime: .moderate
-        )
-        self.createdAt = Date()
-        self.updatedAt = Date()
+        self.isVerified = isVerified
+        self.followerCount = followerCount
+        self.collaborationPreferences = collaborationPreferences
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.email = email
+        self.isEmailVerified = isEmailVerified
+        self.phoneNumber = phoneNumber
+        self.isPhoneVerified = isPhoneVerified
     }
-
 
     struct Location: Codable {
         var city: String?
@@ -62,6 +81,13 @@ struct UserProfile: Identifiable, Codable {
         var country: String?
         var coordinates: GeoPoint?
         var isNearby: Bool { coordinates != nil }
+
+        init(city: String? = nil, state: String? = nil, country: String? = nil, coordinates: GeoPoint? = nil) {
+            self.city = city
+            self.state = state
+            self.country = country
+            self.coordinates = coordinates
+        }
     }
     
     struct SocialLinks: Codable {
@@ -223,4 +249,63 @@ struct FeaturedCreator: Identifiable, Codable {
     var category: String
     var highlightText: String?
     var priority: Int
+}
+
+// MARK: - Testimonial Model
+struct Testimonial: Identifiable, Codable {
+    @DocumentID var id: String?
+    var profileUserId: String // User who receives the testimonial
+    var authorUserId: String // User who writes the testimonial
+    var authorName: String
+    var authorImageURL: String?
+    var authorRole: String? // e.g., "Content Creator", "Video Editor"
+    var rating: Int // 1-5 stars
+    var text: String
+    var createdAt: Date
+    var isVerified: Bool // True if they actually collaborated
+}
+
+// MARK: - Collaboration Model
+struct Collaboration: Identifiable, Codable {
+    @DocumentID var id: String?
+    var user1Id: String // First user in collaboration
+    var user2Id: String // Second user in collaboration
+    var projectName: String
+    var projectDescription: String?
+    var status: CollabStatus
+    var startedAt: Date
+    var completedAt: Date?
+    var createdAt: Date
+
+    enum CollabStatus: String, Codable {
+        case active = "Active"
+        case completed = "Completed"
+        case pending = "Pending"
+
+        var color: String {
+            switch self {
+            case .active: return "green"
+            case .completed: return "blue"
+            case .pending: return "orange"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .active: return "checkmark.circle.fill"
+            case .completed: return "checkmark.seal.fill"
+            case .pending: return "clock.fill"
+            }
+        }
+    }
+
+    // Helper to get the other user's ID
+    func getPartnerUserId(currentUserId: String) -> String? {
+        if user1Id == currentUserId {
+            return user2Id
+        } else if user2Id == currentUserId {
+            return user1Id
+        }
+        return nil
+    }
 }

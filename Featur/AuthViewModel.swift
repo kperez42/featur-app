@@ -1,23 +1,25 @@
 import Foundation
 import AuthenticationServices
 import CryptoKit
-import FirebaseCore     
+import FirebaseCore
 import FirebaseAuth
 import os.log
 
 @MainActor
 final class AuthViewModel: NSObject, ObservableObject {
     @Published var user: User?
+    @Published var userProfile: UserProfile? // Firestore profile
     @Published var errorMessage: String?
     @Published var needsProfileSetup: Bool = false
     @Published var isEmailVerified: Bool = false
+    @Published var isLoadingProfile = false
 
     private var currentNonce: String?
     private var authHandle: AuthStateDidChangeListenerHandle?
 
-
+    private let service = FirebaseService()
     private let log = Logger(subsystem: "featur-app.Featur", category: "Auth")
-    
+
     override init() {
         super.init()
 
@@ -28,7 +30,19 @@ final class AuthViewModel: NSObject, ObservableObject {
 
         // Now safe to use Auth
         Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            Task { @MainActor in self?.user = user }
+            Task { @MainActor in
+                self?.user = user
+
+                // Load user profile from Firestore when signed in
+                if let userId = user?.uid {
+                    await self?.loadUserProfile(userId: userId)
+                    await PresenceManager.shared.updatePresence(userId: userId)
+                    print("✅ User signed in - presence updated: \(userId)")
+                } else {
+                    // Clear profile when signed out
+                    self?.userProfile = nil
+                }
+            }
         }
 
         self.dumpEnvironmentOnce()
@@ -102,6 +116,10 @@ final class AuthViewModel: NSObject, ObservableObject {
                 self.user = result.user
                 self.errorMessage = nil
                 log.debug("✅ Firebase sign-in success. uid=\(result.user.uid, privacy: .private)")
+
+                // Track analytics
+                AnalyticsManager.shared.setUserId(result.user.uid)
+                AnalyticsManager.shared.trackLogin(method: "apple")
             } catch {
                 let ns = error as NSError
                 self.errorMessage = "Firebase sign-in failed: \(ns.domain) code=\(ns.code) \(ns.localizedDescription)"
@@ -112,14 +130,71 @@ final class AuthViewModel: NSObject, ObservableObject {
 
     func signOut() async {
         do {
+            // Set user offline before signing out
+            if let userId = user?.uid {
+                await PresenceManager.shared.setOffline(userId: userId)
+                print("✅ User set offline before sign out: \(userId)")
+            }
+
+            // Clear analytics data
+            AnalyticsManager.shared.clearUserData()
+
             try Auth.auth().signOut()
             self.user = nil
+            self.userProfile = nil
             self.errorMessage = nil
             self.currentNonce = nil
+            self.needsProfileSetup = false
+            self.isEmailVerified = false
         } catch {
             self.errorMessage = "Sign out failed"
         }
     }
+
+    // MARK: - Profile Loading
+
+    /// Load user profile from Firestore
+    private func loadUserProfile(userId: String) async {
+        isLoadingProfile = true
+        defer { isLoadingProfile = false }
+
+        do {
+            // Fetch the user's profile from Firestore
+            if let profile = try await service.fetchProfile(uid: userId) {
+                self.userProfile = profile
+                print("✅ User profile loaded: \(profile.displayName)")
+
+                // Set user properties for analytics
+                if !profile.contentStyles.isEmpty {
+                    let stylesString = profile.contentStyles.map { $0.rawValue }.joined(separator: ",")
+                    AnalyticsManager.shared.setUserProperty(name: "content_styles", value: stylesString)
+                }
+
+                // Check if profile setup is complete
+                await checkProfileSetupStatus(profile: profile)
+            } else {
+                print("⚠️ No profile found for user \(userId)")
+                self.needsProfileSetup = true
+            }
+
+        } catch {
+            print("⚠️ Failed to load user profile: \(error.localizedDescription)")
+            // Profile might not exist for new users - this is expected
+            // We'll handle profile creation in the UI flow
+        }
+    }
+
+    // Helper to check if profile setup is complete
+    private func checkProfileSetupStatus(profile: UserProfile) async {
+        if profile.age == nil ||
+           (profile.mediaURLs?.isEmpty ?? true) ||
+           profile.contentStyles.isEmpty {
+            self.needsProfileSetup = true
+        } else {
+            self.needsProfileSetup = false
+        }
+    }
+
     // function that checks firestore logic
     func refreshUserState() async {
         guard let firebaseUser = Auth.auth().currentUser else {
@@ -135,8 +210,8 @@ final class AuthViewModel: NSObject, ObservableObject {
         }
         self.isEmailVerified = firebaseUser.isEmailVerified
 
-        let service = FirebaseService()
         let profile = try? await service.fetchProfile(uid: firebaseUser.uid)
+        self.userProfile = profile
 
         if profile == nil ||
            profile?.age == nil ||

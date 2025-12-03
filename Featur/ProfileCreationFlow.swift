@@ -95,7 +95,7 @@ struct ProfileCreationFlow: View {
                             styles: contentStyles,
                             ig: instagram,
                             tt: tiktok,
-                            media: mediaURLs,
+                            media: mediaURLs
                             
                         )
                     }
