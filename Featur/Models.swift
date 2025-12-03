@@ -26,12 +26,64 @@ struct UserProfile: Identifiable, Codable {
     var phoneNumber: String?
     var isPhoneVerified: Bool?
 
+    // MARK: - Initializer for fallback decoding
+    init(
+        id: String? = nil,
+        uid: String,
+        displayName: String,
+        age: Int? = nil,
+        bio: String? = nil,
+        location: Location? = nil,
+        interests: [String]? = nil,
+        contentStyles: [ContentStyle] = [],
+        socialLinks: SocialLinks? = nil,
+        mediaURLs: [String]? = nil,
+        profileImageURL: String? = nil,
+        isVerified: Bool? = nil,
+        followerCount: Int? = nil,
+        collaborationPreferences: CollaborationPreferences? = nil,
+        createdAt: Date,
+        updatedAt: Date,
+        email: String? = nil,
+        isEmailVerified: Bool? = nil,
+        phoneNumber: String? = nil,
+        isPhoneVerified: Bool? = nil
+    ) {
+        self.id = id
+        self.uid = uid
+        self.displayName = displayName
+        self.age = age
+        self.bio = bio
+        self.location = location
+        self.interests = interests
+        self.contentStyles = contentStyles
+        self.socialLinks = socialLinks
+        self.mediaURLs = mediaURLs
+        self.profileImageURL = profileImageURL
+        self.isVerified = isVerified
+        self.followerCount = followerCount
+        self.collaborationPreferences = collaborationPreferences
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.email = email
+        self.isEmailVerified = isEmailVerified
+        self.phoneNumber = phoneNumber
+        self.isPhoneVerified = isPhoneVerified
+    }
+
     struct Location: Codable {
         var city: String?
         var state: String?
         var country: String?
         var coordinates: GeoPoint?
         var isNearby: Bool { coordinates != nil }
+
+        init(city: String? = nil, state: String? = nil, country: String? = nil, coordinates: GeoPoint? = nil) {
+            self.city = city
+            self.state = state
+            self.country = country
+            self.coordinates = coordinates
+        }
     }
     
     struct SocialLinks: Codable {
