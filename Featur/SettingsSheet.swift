@@ -331,10 +331,10 @@ struct SettingsSheet: View {
                 Text("This action cannot be undone. All your data will be permanently deleted.")
             }
             .sheet(isPresented: $showPrivacyPolicy) {
-                WebViewSheet(url: "https://featur.app/privacy", title: "Privacy Policy")
+                PrivacyPolicyView()
             }
             .sheet(isPresented: $showTerms) {
-                WebViewSheet(url: "https://featur.app/terms", title: "Terms of Service")
+                TermsOfServiceView()
             }
             .sheet(isPresented: $showFeaturedSheet) {
                 GetFeaturedSheet()
