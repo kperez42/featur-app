@@ -21,17 +21,84 @@ final class FirebaseService: ObservableObject {
         }
 
         do {
-            let profile = try await db.collection("users")
-                .document(uid)
-                .getDocument(as: UserProfile.self)
+            let document = try await db.collection("users").document(uid).getDocument()
 
-            print("✅ Fetched profile for uid \(uid): \(profile.displayName)")
-            return profile
+            guard document.exists else {
+                print("⚠️ No profile found for uid \(uid)")
+                return nil
+            }
+
+            // Try standard decoding first
+            do {
+                var profile = try document.data(as: UserProfile.self)
+                // Ensure uid is set (use document ID as fallback)
+                if profile.uid.isEmpty {
+                    profile.uid = document.documentID
+                }
+                print("✅ Fetched profile for uid \(uid): \(profile.displayName)")
+                return profile
+            } catch {
+                // Fallback: manually decode with document ID as uid
+                if let profile = decodeProfileFromDocument(doc: document, fallbackUid: uid) {
+                    print("✅ Fetched profile (fallback) for uid \(uid): \(profile.displayName)")
+                    return profile
+                }
+                throw error
+            }
 
         } catch {
             print("❌ Error fetching profile for uid \(uid): \(error)")
             throw error
         }
+    }
+
+    /// Helper to decode a profile from a single document snapshot (for fetchProfile)
+    private func decodeProfileFromDocument(doc: DocumentSnapshot, fallbackUid: String) -> UserProfile? {
+        guard let data = doc.data() else { return nil }
+
+        let uid = (data["uid"] as? String) ?? fallbackUid
+        let displayName = (data["displayName"] as? String) ?? "Unknown"
+
+        var contentStyles: [UserProfile.ContentStyle] = []
+        if let stylesArray = data["contentStyles"] as? [String] {
+            contentStyles = stylesArray.compactMap { UserProfile.ContentStyle(rawValue: $0) }
+        }
+
+        let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+        let updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue() ?? Date()
+
+        var profile = UserProfile(
+            uid: uid,
+            displayName: displayName,
+            contentStyles: contentStyles,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+
+        profile.age = data["age"] as? Int
+        profile.bio = data["bio"] as? String
+        profile.interests = data["interests"] as? [String]
+        profile.mediaURLs = data["mediaURLs"] as? [String]
+        profile.profileImageURL = data["profileImageURL"] as? String
+        profile.isVerified = data["isVerified"] as? Bool
+        profile.followerCount = data["followerCount"] as? Int
+        profile.email = data["email"] as? String
+        profile.isEmailVerified = data["isEmailVerified"] as? Bool
+        profile.phoneNumber = data["phoneNumber"] as? String
+        profile.isPhoneVerified = data["isPhoneVerified"] as? Bool
+
+        if let locationData = data["location"] as? [String: Any] {
+            var location = UserProfile.Location()
+            location.city = locationData["city"] as? String
+            location.state = locationData["state"] as? String
+            location.country = locationData["country"] as? String
+            if let geoPoint = locationData["coordinates"] as? GeoPoint {
+                location.coordinates = geoPoint
+            }
+            profile.location = location
+        }
+
+        return profile
     }
 
     
@@ -62,7 +129,23 @@ final class FirebaseService: ObservableObject {
         }
 
         let snapshot = try await query.getDocuments()
-        var profiles = try snapshot.documents.compactMap{ try $0.data(as: UserProfile.self)}
+        var profiles = snapshot.documents.compactMap { doc -> UserProfile? in
+            do {
+                var profile = try doc.data(as: UserProfile.self)
+                // Ensure uid is set (use document ID as fallback)
+                if profile.uid.isEmpty {
+                    profile.uid = doc.documentID
+                }
+                return profile
+            } catch {
+                // Try to decode with document ID as uid fallback
+                if let profile = self.decodeProfileWithFallback(doc: doc) {
+                    return profile
+                }
+                print("⚠️ Skipping invalid profile document \(doc.documentID): \(error.localizedDescription)")
+                return nil
+            }
+        }
 
         // Remove current user
         profiles.removeAll { $0.uid == user.uid }
@@ -466,7 +549,21 @@ final class FirebaseService: ObservableObject {
         }
 
         let snapshot = try await firestoreQuery.limit(to: 100).getDocuments()
-        let profiles = try snapshot.documents.compactMap { try $0.data(as: UserProfile.self) }
+        let profiles = snapshot.documents.compactMap { doc -> UserProfile? in
+            do {
+                var profile = try doc.data(as: UserProfile.self)
+                if profile.uid.isEmpty {
+                    profile.uid = doc.documentID
+                }
+                return profile
+            } catch {
+                if let profile = self.decodeProfileWithFallback(doc: doc) {
+                    return profile
+                }
+                print("⚠️ Skipping invalid profile in search \(doc.documentID): \(error.localizedDescription)")
+                return nil
+            }
+        }
 
         // Return all if query is empty
         if query.isEmpty {
@@ -670,6 +767,74 @@ final class FirebaseService: ObservableObject {
         let sharedStyles = Set(current.contentStyles).intersection(other.contentStyles).count
         let sharedInterests = Set(current.interests ?? []).intersection(other.interests ?? []).count
         return sharedStyles * 2 + sharedInterests // weight content styles higher
+    }
+
+    /// Helper to decode a profile from Firestore document when standard decoding fails
+    /// This handles documents that may be missing the 'uid' field by using document ID
+    private func decodeProfileWithFallback(doc: QueryDocumentSnapshot) -> UserProfile? {
+        let data = doc.data()
+
+        // Get required fields with fallbacks
+        let uid = (data["uid"] as? String) ?? doc.documentID
+        let displayName = (data["displayName"] as? String) ?? "Unknown"
+
+        // Parse content styles
+        var contentStyles: [UserProfile.ContentStyle] = []
+        if let stylesArray = data["contentStyles"] as? [String] {
+            contentStyles = stylesArray.compactMap { UserProfile.ContentStyle(rawValue: $0) }
+        }
+
+        // Parse dates
+        let createdAt: Date
+        if let timestamp = data["createdAt"] as? Timestamp {
+            createdAt = timestamp.dateValue()
+        } else {
+            createdAt = Date()
+        }
+
+        let updatedAt: Date
+        if let timestamp = data["updatedAt"] as? Timestamp {
+            updatedAt = timestamp.dateValue()
+        } else {
+            updatedAt = Date()
+        }
+
+        // Create profile with minimal required fields
+        var profile = UserProfile(
+            uid: uid,
+            displayName: displayName,
+            contentStyles: contentStyles,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+
+        // Set optional fields
+        profile.age = data["age"] as? Int
+        profile.bio = data["bio"] as? String
+        profile.interests = data["interests"] as? [String]
+        profile.mediaURLs = data["mediaURLs"] as? [String]
+        profile.profileImageURL = data["profileImageURL"] as? String
+        profile.isVerified = data["isVerified"] as? Bool
+        profile.followerCount = data["followerCount"] as? Int
+        profile.email = data["email"] as? String
+        profile.isEmailVerified = data["isEmailVerified"] as? Bool
+        profile.phoneNumber = data["phoneNumber"] as? String
+        profile.isPhoneVerified = data["isPhoneVerified"] as? Bool
+
+        // Parse location if present
+        if let locationData = data["location"] as? [String: Any] {
+            var location = UserProfile.Location()
+            location.city = locationData["city"] as? String
+            location.state = locationData["state"] as? String
+            location.country = locationData["country"] as? String
+            if let geoPoint = locationData["coordinates"] as? GeoPoint {
+                location.coordinates = geoPoint
+            }
+            profile.location = location
+        }
+
+        print("✅ Decoded profile with fallback: \(displayName) (uid: \(uid))")
+        return profile
     }
 
     // MARK: - Presence & Online Status

@@ -39,7 +39,21 @@ final class ProfileViewModel: ObservableObject {
             let document = try await db.collection("users").document(uid).getDocument()
 
             if document.exists {
-                self.profile = try document.data(as: UserProfile.self)
+                do {
+                    var profile = try document.data(as: UserProfile.self)
+                    // Ensure uid is set (use document ID as fallback)
+                    if profile.uid.isEmpty {
+                        profile.uid = document.documentID
+                    }
+                    self.profile = profile
+                } catch {
+                    // Fallback: manually decode with document ID as uid
+                    if let profile = decodeProfileWithFallback(document: document, uid: uid) {
+                        self.profile = profile
+                    } else {
+                        throw error
+                    }
+                }
                 self.needsSetup = false
                 // Update cache
                 self.cachedUID = uid
@@ -297,9 +311,9 @@ final class ProfileViewModel: ObservableObject {
     
     func uploadPhotos(_ items: [PhotosUI.PhotosPickerItem]) async {
         guard let uid = profile?.uid else { return }
-        
+
         var urls: [String] = profile?.mediaURLs ?? []
-        
+
         for item in items {
             if let data = try? await item.loadTransferable(type: Data.self) {
                 if let url = try? await uploadImageToStorage(userId: uid, data: data) {
@@ -307,10 +321,79 @@ final class ProfileViewModel: ObservableObject {
                 }
             }
         }
-        
+
         if var updatedProfile = profile {
             updatedProfile.mediaURLs = urls
             await updateProfile(updatedProfile)
         }
+    }
+
+    // MARK: - Fallback Decoding
+
+    /// Helper to decode a profile when standard Codable decoding fails (e.g., missing uid field)
+    private func decodeProfileWithFallback(document: DocumentSnapshot, uid: String) -> UserProfile? {
+        guard let data = document.data() else { return nil }
+
+        // Use document ID or provided uid
+        let profileUid = (data["uid"] as? String) ?? uid
+        let displayName = (data["displayName"] as? String) ?? "Unknown"
+
+        // Parse content styles
+        var contentStyles: [UserProfile.ContentStyle] = []
+        if let stylesArray = data["contentStyles"] as? [String] {
+            contentStyles = stylesArray.compactMap { UserProfile.ContentStyle(rawValue: $0) }
+        }
+
+        // Parse dates
+        let createdAt: Date
+        if let timestamp = data["createdAt"] as? Timestamp {
+            createdAt = timestamp.dateValue()
+        } else {
+            createdAt = Date()
+        }
+
+        let updatedAt: Date
+        if let timestamp = data["updatedAt"] as? Timestamp {
+            updatedAt = timestamp.dateValue()
+        } else {
+            updatedAt = Date()
+        }
+
+        // Create profile with required fields
+        var profile = UserProfile(
+            uid: profileUid,
+            displayName: displayName,
+            contentStyles: contentStyles,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+
+        // Set optional fields
+        profile.age = data["age"] as? Int
+        profile.bio = data["bio"] as? String
+        profile.interests = data["interests"] as? [String]
+        profile.mediaURLs = data["mediaURLs"] as? [String]
+        profile.profileImageURL = data["profileImageURL"] as? String
+        profile.isVerified = data["isVerified"] as? Bool
+        profile.followerCount = data["followerCount"] as? Int
+        profile.email = data["email"] as? String
+        profile.isEmailVerified = data["isEmailVerified"] as? Bool
+        profile.phoneNumber = data["phoneNumber"] as? String
+        profile.isPhoneVerified = data["isPhoneVerified"] as? Bool
+
+        // Parse location if present
+        if let locationData = data["location"] as? [String: Any] {
+            var location = UserProfile.Location()
+            location.city = locationData["city"] as? String
+            location.state = locationData["state"] as? String
+            location.country = locationData["country"] as? String
+            if let geoPoint = locationData["coordinates"] as? GeoPoint {
+                location.coordinates = geoPoint
+            }
+            profile.location = location
+        }
+
+        print("✅ Decoded profile with fallback: \(displayName) (uid: \(profileUid))")
+        return profile
     }
 }

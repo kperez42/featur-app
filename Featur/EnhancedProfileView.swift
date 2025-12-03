@@ -5895,7 +5895,58 @@ final class CollaborationHistoryViewModel: ObservableObject {
     private func fetchProfile(userId: String) async throws -> UserProfile? {
         let db = FirebaseFirestore.Firestore.firestore()
         let doc = try await db.collection("users").document(userId).getDocument()
-        return try? doc.data(as: UserProfile.self)
+
+        // Try standard decoding first
+        if var profile = try? doc.data(as: UserProfile.self) {
+            // Ensure uid is set (use document ID as fallback)
+            if profile.uid.isEmpty {
+                profile.uid = doc.documentID
+            }
+            return profile
+        }
+
+        // Fallback: manually decode with document ID as uid
+        guard let data = doc.data() else { return nil }
+
+        let uid = (data["uid"] as? String) ?? userId
+        let displayName = (data["displayName"] as? String) ?? "Unknown"
+
+        var contentStyles: [UserProfile.ContentStyle] = []
+        if let stylesArray = data["contentStyles"] as? [String] {
+            contentStyles = stylesArray.compactMap { UserProfile.ContentStyle(rawValue: $0) }
+        }
+
+        let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+        let updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue() ?? Date()
+
+        var profile = UserProfile(
+            uid: uid,
+            displayName: displayName,
+            contentStyles: contentStyles,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+
+        profile.age = data["age"] as? Int
+        profile.bio = data["bio"] as? String
+        profile.interests = data["interests"] as? [String]
+        profile.mediaURLs = data["mediaURLs"] as? [String]
+        profile.profileImageURL = data["profileImageURL"] as? String
+        profile.isVerified = data["isVerified"] as? Bool
+        profile.followerCount = data["followerCount"] as? Int
+
+        if let locationData = data["location"] as? [String: Any] {
+            var location = UserProfile.Location()
+            location.city = locationData["city"] as? String
+            location.state = locationData["state"] as? String
+            location.country = locationData["country"] as? String
+            if let geoPoint = locationData["coordinates"] as? GeoPoint {
+                location.coordinates = geoPoint
+            }
+            profile.location = location
+        }
+
+        return profile
     }
 }
 
