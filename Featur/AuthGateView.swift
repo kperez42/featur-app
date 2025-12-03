@@ -1,5 +1,6 @@
 import SwiftUI
 import AuthenticationServices
+import FirebaseAuth
 
 struct AuthGateView: View {
     @EnvironmentObject var auth: AuthViewModel
@@ -8,7 +9,8 @@ struct AuthGateView: View {
 
     var body: some View {
         Group {
-            if let user = auth.user, user.isEmailVerified {
+            // Allow Apple Sign-In users (they are inherently verified) or verified email users
+            if let user = auth.user, (user.isEmailVerified || isAppleSignIn(user: user)) {
                 // Check if user has completed profile setup
                 if auth.isLoadingProfile {
                     // Show loading while checking for profile
@@ -64,6 +66,11 @@ struct AuthGateView: View {
                 }
             }
         }
+    }
+
+    /// Check if user signed in with Apple (they are inherently verified)
+    private func isAppleSignIn(user: FirebaseAuth.User) -> Bool {
+        return user.providerData.contains { $0.providerID == "apple.com" }
     }
 }
 
