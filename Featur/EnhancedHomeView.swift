@@ -436,6 +436,8 @@ struct ProfileCardView: View {
                             image
                                 .resizable()
                                 .scaledToFill()
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
                                 .overlay(
                                     // Add slight fade so gradient gently merges into image
                                     AppTheme.gradient.opacity(0.15)
@@ -455,6 +457,7 @@ struct ProfileCardView: View {
                             .transition(.opacity)
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
                         .id(currentImageIndex) // Force reload when index changes
                     }
                 } else {

@@ -216,17 +216,20 @@ struct ProfileDetailPlaceholder: View {
                             case .success(let image):
                                 image
                                     .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(maxWidth: .infinity, maxHeight: 400)
+                                    .scaledToFill()
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 400)
                                     .clipped()
                             default:
                                 AppTheme.gradient
-                                    .frame(maxWidth: .infinity, maxHeight: 400)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 400)
                             }
                         }
                     } else {
                         AppTheme.gradient
-                            .frame(maxWidth: .infinity, maxHeight: 400)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 400)
                     }
                     
                     VStack(alignment: .leading, spacing: 16) {

@@ -439,8 +439,7 @@ struct DiscoverProfileCard: View {
                     CachedAsyncImage(url: URL(string: currentURL)) { image in
                         image
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .scaledToFill()
                     } placeholder: {
                         ZStack {
                             AppTheme.gradient
@@ -448,9 +447,12 @@ struct DiscoverProfileCard: View {
                                 .tint(.white)
                         }
                     }
+                    .frame(width: UIScreen.main.bounds.width / 2 - 24, height: 200)
+                    .clipped()
                     .id(currentImageIndex) // Force reload when index changes
                 } else {
                     AppTheme.gradient
+                        .frame(height: 200)
                 }
 
                 // Image Indicators (dots)

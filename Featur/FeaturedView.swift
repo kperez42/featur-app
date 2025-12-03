@@ -480,7 +480,7 @@ struct FeaturedCreatorCard: View {
                     CachedAsyncImage(url: URL(string: firstMedia)) { image in
                         image
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
+                            .scaledToFill()
                     } placeholder: {
                         ZStack {
                             AppTheme.gradient
@@ -491,7 +491,7 @@ struct FeaturedCreatorCard: View {
                 } else {
                     AppTheme.gradient
                 }
-                
+
                 // Featured Badge
                 VStack {
                     HStack {
@@ -506,6 +506,7 @@ struct FeaturedCreatorCard: View {
                 }
             }
             .frame(width: 100, height: 100)
+            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 16))
             
             // Creator Info

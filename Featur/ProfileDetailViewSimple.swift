@@ -29,19 +29,22 @@ struct ProfileDetailViewSimple: View {
                                 image
                                     .resizable()
                                     .scaledToFill()
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 420)
+                                    .clipped()
 
                             case .empty:
                                 ZStack {
                                     Color.black.opacity(0.1)
                                     ProgressView()
                                 }
+                                .frame(height: 420)
 
                             default:
                                 Color.gray.opacity(0.25)
+                                    .frame(height: 420)
                             }
                         }
-                        .frame(height: 420)
-                        .clipped()
                         .cornerRadius(12)
                         .padding(.horizontal)
                     }
