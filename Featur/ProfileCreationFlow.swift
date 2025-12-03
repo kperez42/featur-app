@@ -17,6 +17,8 @@ struct ProfileCreationFlow: View {
     @State private var mediaURLs: [String] = []
     @State private var profileImageURL: String?
     @StateObject private var locationManager = LocationManager()
+    @EnvironmentObject var auth: AuthViewModel
+
     // Custom view for step progress bar
         private var stepProgressBar: some View {
             GeometryReader { geometry in
@@ -40,10 +42,12 @@ struct ProfileCreationFlow: View {
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
+                
                 // --- Step Progress Bar ---
                 stepProgressBar
                 // --- Step Header ---
                 HStack {
+                     
                     if step != .gender {
                         Button(action: onBack) {
                             Image(systemName: "chevron.left")
@@ -177,30 +181,23 @@ struct ProfileCreationFlow: View {
             uid: uid,
             displayName: nameFromRegistration,
             age: age,
-            bio: nil,
             location: UserProfile.Location(
                 city: locationManager.city,
                 state: locationManager.state,
                 country: locationManager.country,
                 coordinates: locationManager.coordinates
             ),
-            interests: [],
             contentStyles: contentStyles,
-            socialLinks: links,
             mediaURLs: mediaURLs,
-            profileImageURL: profileImageURL,
-            isVerified: false,
-            followerCount: 0,
-            collaborationPreferences: .init(
-                lookingFor: [],
-                availability: [],
-                responseTime: .moderate
-            ),
-            createdAt: Date(),
-            updatedAt: Date()
+            socialLinks: links,
+            profileImageURL: profileImageURL
         )
 
+
+
         await viewModel.updateProfile(newProfile)
-        viewModel.needsSetup = false
+        //refresh user auth state 
+        await auth.refreshUserState()
+
     }
 }

@@ -3,8 +3,9 @@ import FirebaseFirestore
 
 // MARK: - User Profile Model
 struct UserProfile: Identifiable, Codable {
-    @DocumentID var id: String?
+    @DocumentID var firestoreID: String?
     var uid: String
+    var id: String {uid}
     var displayName: String
     var age: Int?
     var bio: String?
@@ -12,14 +13,49 @@ struct UserProfile: Identifiable, Codable {
     var interests: [String]?
     var contentStyles: [ContentStyle]
     var socialLinks: SocialLinks?
-    var mediaURLs: [String]?
+    var mediaURLs: [String]? {
+        didSet {
+            mediaURLs = mediaURLs?.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        }
+    }
     var profileImageURL: String?
     var isVerified: Bool?
     var followerCount: Int?
     var collaborationPreferences: CollaborationPreferences?
     var createdAt: Date
     var updatedAt: Date
-    
+    init(
+        uid: String,
+        displayName: String,
+        age: Int?,
+        location: Location?,
+        contentStyles: [ContentStyle],
+        mediaURLs: [String] = [],
+        socialLinks: SocialLinks? = nil,
+        profileImageURL: String? = nil
+    ) {
+        self.uid = uid
+        self.displayName = displayName
+        self.age = age
+        self.bio = nil
+        self.location = location
+        self.interests = []
+        self.contentStyles = contentStyles
+        self.socialLinks = socialLinks
+        self.mediaURLs = mediaURLs
+        self.profileImageURL = profileImageURL
+        self.isVerified = false
+        self.followerCount = 0
+        self.collaborationPreferences = .init(
+            lookingFor: [],
+            availability: [],
+            responseTime: .moderate
+        )
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+
     struct Location: Codable {
         var city: String?
         var state: String?
@@ -48,6 +84,8 @@ struct UserProfile: Identifiable, Codable {
         var availability: [Availability]
         var responseTime: ResponseTime
         
+        
+        
         enum CollabType: String, Codable, CaseIterable {
             case twitchStream = "Twitch Streamers"
             case musicCollab = "Music Collabs"
@@ -66,6 +104,7 @@ struct UserProfile: Identifiable, Codable {
             case moderate = "Usually responds within a day"
             case slow = "Usually responds within a week"
         }
+        
     }
     
     enum ContentStyle: String, Codable, CaseIterable {
@@ -83,6 +122,44 @@ struct UserProfile: Identifiable, Codable {
         case tech = "Tech"
         case art = "Art"
         case sports = "Sports"
+    }
+    //custom initializer that replaces any missing/null fields with safe defaults to prevent crashing when fetching
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        firestoreID = try? container.decode(String?.self, forKey: .firestoreID)
+        uid = (try? container.decode(String.self, forKey: .uid)) ?? "unknown"
+        displayName = (try? container.decode(String.self, forKey: .displayName)) ?? "Unknown"
+
+        age = try? container.decode(Int?.self, forKey: .age)
+        bio = try? container.decode(String?.self, forKey: .bio)
+        location = try? container.decode(Location.self, forKey: .location)
+        interests = try? container.decode([String].self, forKey: .interests)
+
+        // Default to []
+        contentStyles = (try? container.decode([ContentStyle].self, forKey: .contentStyles)) ?? []
+
+        socialLinks = try? container.decode(SocialLinks.self, forKey: .socialLinks)
+        mediaURLs = try? container.decode([String].self, forKey: .mediaURLs)
+        profileImageURL = try? container.decode(String?.self, forKey: .profileImageURL)
+        isVerified = try? container.decode(Bool.self, forKey: .isVerified)
+        followerCount = try? container.decode(Int.self, forKey: .followerCount)
+        collaborationPreferences = try? container.decode(CollaborationPreferences.self, forKey: .collaborationPreferences)
+
+        createdAt = (try? container.decode(Date.self, forKey: .createdAt)) ?? Date()
+        updatedAt = (try? container.decode(Date.self, forKey: .updatedAt)) ?? Date()
+    }
+
+}
+// MARK: - Safe decode for CollaborationPreferences
+extension UserProfile.CollaborationPreferences {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+
+        // If any field is missing in Firestore, we provide a safe default instead of crashing
+        lookingFor = (try? c.decode([UserProfile.CollaborationPreferences.CollabType].self, forKey: .lookingFor)) ?? []
+        availability = (try? c.decode([UserProfile.CollaborationPreferences.Availability].self, forKey: .availability)) ?? []
+        responseTime = (try? c.decode(UserProfile.CollaborationPreferences.ResponseTime.self, forKey: .responseTime)) ?? .moderate
     }
 }
 

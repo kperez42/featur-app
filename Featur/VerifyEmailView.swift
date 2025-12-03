@@ -3,7 +3,7 @@ import SwiftUI
 struct VerifyEmailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var auth: AuthViewModel // Add AuthViewModel to handle sign-out
-    var email: String
+    @Binding var navigationPath: NavigationPath
     
     var body: some View {
         ZStack {
@@ -26,7 +26,7 @@ struct VerifyEmailView: View {
                         .font(.headline)
                         .foregroundStyle(.white.opacity(0.8))
                     
-                    Text(email)
+                    Text(auth.user?.email ?? "Email unavailable")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal)
@@ -41,8 +41,7 @@ struct VerifyEmailView: View {
                     Task {
                         await auth.signOut() // Sign out, triggering AuthGateView to show LoginView
                             
-                        dismiss()
-                       
+                        navigationPath = NavigationPath()
                 }
                     // navigate back to login or trigger state change
                 } label: {

@@ -2,161 +2,6 @@
 import SwiftUI
 import FirebaseAuth
 
-// ============================================================================
-// MARK: - 🧪 TEST DATA - REMOVE BEFORE PRODUCTION
-// ============================================================================
-#if DEBUG
-extension HomeViewModel {
-    func loadTestProfiles() {
-        self.profiles = [
-            UserProfile(
-                id: "test1",
-                uid: "test1",
-                displayName: "Sarah Johnson",
-                age: 24,
-                bio: "Content creator specializing in fitness & wellness. Looking to collab on workout videos! 💪",
-                location: UserProfile.Location(city: "Los Angeles", state: "CA", country: "USA", coordinates: nil),
-                interests: ["Fitness", "Wellness", "Yoga"],
-                contentStyles: [.fitness, .dance],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@sarahfit", followerCount: 125000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@sarahfitness", followerCount: 85000, isVerified: true),
-                    youtube: nil,
-                    twitch: nil,
-                    spotify: nil,
-                    snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 125000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.twitchStream, .contentSeries],
-                    availability: [.weekdays, .flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "test2",
-                uid: "test2",
-                displayName: "Marcus Chen",
-                age: 28,
-                bio: "Gaming streamer & editor. Let's create something epic! 🎮",
-                location: UserProfile.Location(city: "San Francisco", state: "CA", country: "USA", coordinates: nil),
-                interests: ["Gaming", "Editing", "Tech"],
-                contentStyles: [.gaming, .editing],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: nil,
-                    instagram: nil,
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@marcusgaming", followerCount: 250000, isVerified: true),
-                    twitch: UserProfile.SocialLinks.SocialAccount(username: "marcusplays", followerCount: 180000, isVerified: true),
-                    spotify: nil,
-                    snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 250000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.twitchStream, .contentSeries],
-                    availability: [.weekends, .flexible],
-                    responseTime: .moderate
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "test3",
-                uid: "test3",
-                displayName: "Zoe Martinez",
-                age: 22,
-                bio: "Beauty & fashion influencer ✨ Always down for creative collabs!",
-                location: UserProfile.Location(city: "Miami", state: "FL", country: "USA", coordinates: nil),
-                interests: ["Beauty", "Fashion", "Lifestyle"],
-                contentStyles: [.beauty, .fashion],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@zoebeauty", followerCount: 500000, isVerified: true),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@zoestyle", followerCount: 320000, isVerified: true),
-                    youtube: nil,
-                    twitch: nil,
-                    spotify: nil,
-                    snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 500000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.brandDeal, .contentSeries, .tiktokLive],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "test4",
-                uid: "test4",
-                displayName: "Alex Thompson",
-                age: 26,
-                bio: "Chef & food content creator 🍳 Let's cook up something amazing!",
-                location: UserProfile.Location(city: "New York", state: "NY", country: "USA", coordinates: nil),
-                interests: ["Cooking", "Food", "Recipes"],
-                contentStyles: [.cooking, .mukbang],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@chefalex", followerCount: 175000, isVerified: false),
-                    instagram: UserProfile.SocialLinks.SocialAccount(username: "@alexcooks", followerCount: 95000, isVerified: false),
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@AlexKitchen", followerCount: 145000, isVerified: true),
-                    twitch: nil,
-                    spotify: nil,
-                    snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: false,
-                followerCount: 175000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.contentSeries, .brandDeal],
-                    availability: [.weekdays],
-                    responseTime: .moderate
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            ),
-            UserProfile(
-                id: "test5",
-                uid: "test5",
-                displayName: "Riley Peterson",
-                age: 25,
-                bio: "Musician & producer 🎵 Looking for creative collaborations in music & podcasts",
-                location: UserProfile.Location(city: "Nashville", state: "TN", country: "USA", coordinates: nil),
-                interests: ["Music", "Production", "Podcasting"],
-                contentStyles: [.music, .art],
-                socialLinks: UserProfile.SocialLinks(
-                    tiktok: UserProfile.SocialLinks.SocialAccount(username: "@rileymusic", followerCount: 89000, isVerified: false),
-                    instagram: nil,
-                    youtube: UserProfile.SocialLinks.SocialAccount(username: "@RileyBeats", followerCount: 210000, isVerified: true),
-                    twitch: nil,
-                    spotify: "Riley Peterson",
-                    snapchat: nil
-                ),
-                mediaURLs: [],
-                isVerified: true,
-                followerCount: 210000,
-                collaborationPreferences: UserProfile.CollaborationPreferences(
-                    lookingFor: [.musicCollab, .podcastGuest, .contentSeries],
-                    availability: [.flexible],
-                    responseTime: .fast
-                ),
-                createdAt: Date(),
-                updatedAt: Date()
-            )
-        ]
-        self.isLoading = false
-    }
-}
-#endif
-// ============================================================================
-// END TEST DATA
-// ============================================================================
 
 struct EnhancedHomeView: View {
     @StateObject private var viewModel = HomeViewModel()
@@ -165,7 +10,6 @@ struct EnhancedHomeView: View {
     @State private var swipeCount = 0
     @State private var showFilters = false
     @State private var selectedProfile: UserProfile? = nil
-    @State private var showProfileDetail = false
     
     var body: some View {
         ZStack {
@@ -178,7 +22,7 @@ struct EnhancedHomeView: View {
                 // Main Swipe Card Stack
                 if viewModel.isLoading && viewModel.profiles.isEmpty {
                     loadingView
-                } else if viewModel.profiles.isEmpty {
+                } else if viewModel.filteredProfiles.isEmpty {
                     emptyState
                 } else {
                     swipeCardStack
@@ -201,7 +45,7 @@ struct EnhancedHomeView: View {
                 .animation(.spring(), value: viewModel.errorMessage)
             }
         }
-        .navigationTitle("Discover")
+        .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -234,11 +78,10 @@ struct EnhancedHomeView: View {
         .sheet(isPresented: $showFilters) {
             HomeFiltersSheet(viewModel: viewModel)
         }
-        .sheet(isPresented: $showProfileDetail) {
-            if let profile = selectedProfile {
-                ProfileDetailPlaceholder(profile: profile)
-            }
+        .sheet(item: $selectedProfile) { profile in
+            ProfileDetailViewSimple(profile: profile)
         }
+
         .task {
            // fetch the latest profiles using current user id, if nil default to an empty string
             await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
@@ -266,7 +109,7 @@ struct EnhancedHomeView: View {
         HStack(spacing: 16) {
             StatBadge(
                 icon: "person.3.fill",
-                value: "\(viewModel.profiles.count)",
+                value: "\(viewModel.filteredProfiles.count)",
                 label: "Available",
                 color: .blue
             )
@@ -295,7 +138,7 @@ struct EnhancedHomeView: View {
     
     private var swipeCardStack: some View {
         ZStack {
-            ForEach(Array(viewModel.profiles.prefix(3).enumerated()), id: \.element.id) { index, profile in
+            ForEach(Array(viewModel.filteredProfiles.prefix(3).enumerated()), id: \.element.id) { index, profile in
                 if index == 0 {
                     TinderSwipeCard(
                         profile: profile,
@@ -314,8 +157,7 @@ struct EnhancedHomeView: View {
                         },
                         onTap: {
                             selectedProfile = profile
-                            showProfileDetail = true
-                            Haptics.impact(.light)
+                            
                         }
                     )
                     .zIndex(Double(3 - index))
@@ -576,9 +418,13 @@ struct ProfileCardView: View {
                                 .animation(.easeInOut(duration: 0.4), value: UUID()) // harmless trigger
 
                         case .failure:
-                            AppTheme.gradient
+                            Image("placeholder")
+                                .resizable()
+                                .scaledToFill()
                         @unknown default:
-                            AppTheme.gradient
+                            Image("placeholder")
+                                .resizable()
+                                .scaledToFill()
                         }
                     }
                     
@@ -779,15 +625,43 @@ struct HomeFiltersSheet: View {
                             VStack(alignment: .leading) {
                                 Text("Min: \(Int(viewModel.minAge))")
                                     .font(.caption)
-                                Slider(value: $viewModel.minAge, in: 18...viewModel.maxAge, step: 1)
-                                    .tint(AppTheme.accent)
+                                let safeMaxForMin = max( (viewModel.maxAge - 1), 18 )
+
+                                Slider(
+                                    value: Binding(
+                                        get: { viewModel.minAge },
+                                        set: { newValue in
+                                            viewModel.minAge = newValue
+                                        }
+                                    ),
+                                    in: 18...safeMaxForMin,
+                                    step: 1
+                                )
+                                .tint(AppTheme.accent)
+
+
                             }
                             
                             VStack(alignment: .leading) {
                                 Text("Max: \(Int(viewModel.maxAge))")
                                     .font(.caption)
-                                Slider(value: $viewModel.maxAge, in: viewModel.minAge...100, step: 1)
-                                    .tint(AppTheme.accent)
+
+                                let safeMinForMax = min( (viewModel.minAge + 1), 68 )
+
+                                Slider(
+                                    value: Binding(
+                                        get: { viewModel.maxAge },
+                                        set: { newValue in
+                                            viewModel.maxAge = newValue
+                                        }
+                                    ),
+                                    in: safeMinForMax...69,
+                                    step: 1
+                                )
+
+
+                                .tint(AppTheme.accent)
+
                             }
                         }
                     }
@@ -829,6 +703,7 @@ struct HomeFiltersSheet: View {
 @MainActor
 final class HomeViewModel: ObservableObject {
     @Published var profiles: [UserProfile] = []
+    
     @Published var isLoading = false
     @Published var showMatchAlert = false
     @Published var lastMatch: UserProfile?
@@ -841,17 +716,62 @@ final class HomeViewModel: ObservableObject {
     
     // Filters
     @Published var selectedContentStyles: Set<UserProfile.ContentStyle> = []
-    @Published var minAge: Double = 18
-    @Published var maxAge: Double = 100
+    @Published var minAge: Double = 18 {
+        didSet {
+            if minAge >= maxAge {
+                maxAge = minAge + 1
+            }
+        }
+    }
+
+    @Published var maxAge: Double = 100 {
+        didSet {
+            if maxAge <= minAge {
+                minAge = maxAge - 1
+            }
+        }
+    }
+
     @Published var verifiedOnly = false
     
     private let service = FirebaseService()
     private var swipedUserIds: Set<String> = []
-    
+    var filteredProfiles: [UserProfile] {
+        profiles.filter { profile in
+            
+            // --- Age Filter ---
+            if let age = profile.age {
+                if age < Int(minAge) || age > Int(maxAge) {
+                    return false
+                }
+            } else {
+                return false
+            }
+            
+            // --- Verified Filter ---
+            if verifiedOnly {
+                if profile.isVerified != true {
+                    return false
+                }
+            }
+            
+            // --- Content Styles Filter ---
+            if !selectedContentStyles.isEmpty {
+                let profileStyles = Set(profile.contentStyles)
+                if profileStyles.isDisjoint(with: selectedContentStyles) {
+                    return false
+                }
+            }
+            
+            return true
+        }
+    }
+
     var currentProfile: UserProfile? {
         profiles.first
     }
-    
+    // this function loads discoverable profiles while excluding all the profiles each user has ever
+    // previously swiped on
     func loadProfiles(currentUserId: String) async {
         isLoading = true
         errorMessage = nil
@@ -860,6 +780,10 @@ final class HomeViewModel: ObservableObject {
             guard let currentUser = try await service.fetchProfile(uid: currentUserId) else {
                 throw NSError(domain: "Missing current user profile", code: 0)
             }
+            let previouslySwiped = try await service.fetchSwipedUserIds(for: currentUserId)
+            swipedUserIds.formUnion(previouslySwiped)
+
+            // 2. Load profiles excluding all of them
             let fetched = try await service.fetchDiscoverProfiles(
                 for: currentUser,
                 limit: 20,
@@ -882,21 +806,7 @@ final class HomeViewModel: ObservableObject {
     }
     
     func handleSwipe(profile: UserProfile, action: SwipeAction.Action) async {
-        /*
-        // 🧪 TEST: Skip Firebase calls in debug mode
-        #if DEBUG
-        // Just remove from local array for testing
-        swipeHistory.append(SwipeRecord(profile: profile, action: action))
-        if swipeHistory.count > 10 {
-            swipeHistory.removeFirst()
-        }
         
-        withAnimation(.spring(response: 0.3)) {
-            profiles.removeAll { $0.id == profile.id }
-        }
-        return
-        #endif
-        */
         guard let currentUserId = Auth.auth().currentUser?.uid else { return }
         
         swipedUserIds.insert(profile.uid)
@@ -931,9 +841,13 @@ final class HomeViewModel: ObservableObject {
                 }
             }
             
-            withAnimation(.spring(response: 0.3)) {
-                profiles.removeAll { $0.id == profile.id }
+            // REMOVE WITH SMALL DELAY to let next card render
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.spring(response: 0.3)) {
+                    self.profiles.removeAll { $0.uid == profile.uid }
+                }
             }
+
             
             if profiles.count < 3 {
                 await loadProfiles(currentUserId: currentUserId)
@@ -958,18 +872,11 @@ final class HomeViewModel: ObservableObject {
     func refresh(currentUserId: String) async {
         swipedUserIds.removeAll()
         swipeHistory.removeAll()
-        
-        // 🧪 TEST: Reload test data in debug mode
-        #if DEBUG
-        loadTestProfiles()
-        #else
         await loadProfiles(currentUserId: currentUserId)
-        #endif
     }
-    
+
     func applyFilters() async {
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-        await loadProfiles(currentUserId: currentUserId)
+        
     }
 }
 

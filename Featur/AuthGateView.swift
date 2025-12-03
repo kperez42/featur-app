@@ -3,49 +3,46 @@ import AuthenticationServices
 
 struct AuthGateView: View {
     @EnvironmentObject var auth: AuthViewModel
-    @State private var showAppleSheet = false
     @State private var navigationPath = NavigationPath()
 
     var body: some View {
+
         Group {
-            if let user = auth.user, user.isEmailVerified {
-                ContentView()
-            } else {
+            if auth.user == nil {
+
                 NavigationStack(path: $navigationPath) {
-                    LoginView(navigationPath: $navigationPath) // Pass navigationPath
+                    LoginView(navigationPath: $navigationPath)
                         .navigationDestination(for: String.self) { destination in
-                            if destination == "RegistrationView" {
-                                RegistrationView(navigationPath: $navigationPath) // Pass navigationPath
-                            } else if destination == "LoginView" {
-                                LoginView(navigationPath: $navigationPath) // Pass navigationPath
-                            } else if destination == "VerifyEmailView" {
-                                VerifyEmailView(email: "") // Update to pass email if needed
+                            switch destination {
+                            case "RegistrationView":
+                                RegistrationView(navigationPath: $navigationPath)
+                            default:
+                                EmptyView()
                             }
                         }
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarTrailing) {
-                                Button {
-                                    showAppleSheet = true
-                                } label: {
-                                    Image(systemName: "applelogo")
-                                        .foregroundColor(.white)
-                                }
-                            }
-                        }
-                        .sheet(isPresented: $showAppleSheet) {
-                            AppleSignInSheet(auth: auth)
-                        }
                 }
-                .onChange(of: auth.user) { _, newUser in
-                    if newUser == nil {
-                        navigationPath = NavigationPath() // Reset to LoginView
-                        navigationPath.append("LoginView")
-                    }
-                }
+
+            } else if !auth.isEmailVerified {
+
+                VerifyEmailView(navigationPath: $navigationPath)
+
+            } else if auth.needsProfileSetup {
+
+                ProfileCreationFlow(viewModel: ProfileViewModel())
+
+            } else {
+
+                ContentView()
             }
+        }
+        .onChange(of: auth.user) { 
+            Task { await auth.refreshUserState() }
         }
     }
 }
+
+
+
 
 /// Small wrapper for Apple Sign-In
 struct AppleSignInSheet: View {

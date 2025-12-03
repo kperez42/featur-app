@@ -3,7 +3,7 @@ import CoreLocation
 import FirebaseFirestore
 // This class updates the latest location and fills in city state country coordinates 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
-    private let manager = CLLocationManager()
+     let manager = CLLocationManager()
 
     @Published var city: String?
     @Published var state: String?
@@ -20,16 +20,21 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         authorizationStatus = manager.authorizationStatus   // ✅ initialize it here
+        print("🟡 [DEBUG] LocationManager init — initial status:", authorizationStatus.rawValue)
+
     }
 
     func requestLocationAccess() {
         manager.requestWhenInUseAuthorization()
-        manager.startUpdatingLocation()
+        print("🔵 [DEBUG] requestLocationAccess() called")
+
     }
 
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         DispatchQueue.main.async {
             self.authorizationStatus = status               // ✅ update published value when changed
+            print("🟢 [DEBUG] didChangeAuthorization fired with status:", status.rawValue)
+
         }
 
         if status == .authorizedWhenInUse || status == .authorizedAlways {

@@ -33,6 +33,16 @@ final class FirebaseService: ObservableObject {
             throw error
         }
     }
+    // MARK: - Fetch All User Profiles
+    func fetchAllProfiles(limit: Int = 50) async throws -> [UserProfile] {
+        let snapshot = try await db.collection("profiles")
+            .limit(to: limit)
+            .getDocuments()
+
+        return snapshot.documents.compactMap { doc in
+            try? doc.data(as: UserProfile.self)
+        }
+    }
 
     
     func updateProfile(_ profile: UserProfile) async throws {
@@ -48,7 +58,7 @@ final class FirebaseService: ObservableObject {
     
     // MARK: - Discovery & Matching
     
-    // ✅ FIXED: Convert PrefixSequence to Array
+    //  Convert PrefixSequence to Array
     func fetchDiscoverProfiles(for user: UserProfile, limit: Int = 20, excludeUserIds: [String] = []) async throws -> [UserProfile] {
         var query: Query = db.collection("users").limit(to: limit)
         
@@ -64,8 +74,8 @@ final class FirebaseService: ObservableObject {
         //remove current user
         profiles.removeAll {$0.uid == user.uid}
         
-        //sort by similarity
-        profiles.sort { similarityScore(current: user, other: $0) > similarityScore(current: user, other: $1)}
+        //sort by location
+        profiles.sort { distance (from: user, to: $0) < distance(from: user, to: $1)}
         
         return profiles
     }
@@ -87,7 +97,17 @@ final class FirebaseService: ObservableObject {
         }
         
     }
-    
+    // this function reads from swipes collection from firestore and returns every targetuserId that the user has ever swiped on
+    func fetchSwipedUserIds(for userId: String) async throws -> [String] {
+        let snapshot = try await db.collection("swipes")
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
+
+        return snapshot.documents.compactMap {
+            try? $0.data(as: SwipeAction.self).targetUserId
+        }
+    }
+
     
     private func checkAndCreateMatch(userId: String, targetUserId: String) async throws {
         guard !userId.isEmpty, !targetUserId.isEmpty else {
@@ -142,7 +162,33 @@ final class FirebaseService: ObservableObject {
         let all = matches1.documents + matches2.documents
         return try all.compactMap { try $0.data(as: Match.self) }
     }
-    
+    // distance funtion that calulates how far two users  are from each other
+    private func distance(from a: UserProfile, to b: UserProfile) -> Double {
+
+        guard
+            let c1 = a.location?.coordinates,
+            let c2 = b.location?.coordinates
+        else {
+            return Double.greatestFiniteMagnitude   // unknown location → sort last
+        }
+
+        let lat1 = c1.latitude
+        let lon1 = c1.longitude
+        let lat2 = c2.latitude
+        let lon2 = c2.longitude
+
+        let r = 6371.0 // Earth km
+        let dLat = (lat2 - lat1) * .pi / 180
+        let dLon = (lon2 - lon1) * .pi / 180
+
+        let hav = sin(dLat/2) * sin(dLat/2)
+            + cos(lat1 * .pi / 180) * cos(lat2 * .pi / 180)
+            * sin(dLon/2) * sin(dLon/2)
+
+        let c = 2 * atan2(sqrt(hav), sqrt(1 - hav))
+        return r * c
+    }
+
     // MARK: - Messaging
     // MARK: - Conversations (create/get)
 
@@ -257,23 +303,30 @@ final class FirebaseService: ObservableObject {
     
     // MARK: - Featured Creators
     
+    // MARK: - Fetch Featured Creators (Manual Firestore-Based)
     func fetchFeaturedCreators() async throws -> [FeaturedCreator] {
+        // Step 1: Load featured creator documents from Firestore
         let snapshot = try await db.collection("featured")
-            .whereField("expiresAt", isGreaterThan: Date())
             .order(by: "priority", descending: true)
             .getDocuments()
         
-        var featured = try snapshot.documents.compactMap { try $0.data(as: FeaturedCreator.self) }
+        var results: [FeaturedCreator] = []
         
-        // Fetch profiles
-        for i in featured.indices {
-            if let profile = try? await fetchProfile(uid: featured[i].userId) {
-                featured[i].profile = profile
+        // Step 2: Decode each FeaturedCreator and fetch profile
+        for document in snapshot.documents {
+            if var featured = try? document.data(as: FeaturedCreator.self) {
+                
+                // Fetch the full UserProfile for this featured user
+                featured.profile = try await fetchProfile(uid: featured.userId)
+                
+                // Append to result array
+                results.append(featured)
             }
         }
         
-        return featured
+        return results
     }
+
     
     // MARK: - Search & Discovery
     
@@ -307,24 +360,6 @@ final class FirebaseService: ObservableObject {
         let path = "profile_photos/\(userId)/\(UUID().uuidString).jpg"
         return try await uploadMedia(data: imageData, path: path)
     }
-    /// Calculates how similar two user profiles are based on shared traits.
-    ///
-    /// - Parameters:
-    ///   - current: The logged-in user's profile.
-    ///   - other: Another user's profile to compare against.
-    /// - Returns: An integer score representing compatibility.
-    ///
-    /// The score is calculated by:
-    /// 1. Counting how many content styles they share, weighted ×2.
-    /// 2. Counting how many interests they share, weighted ×1.
-    ///
-    /// Example: If both users share 2 content styles and 1 interest,
-    /// the score is (2 * 2) + 1 = 5.
-
-    private func similarityScore(current: UserProfile, other: UserProfile) -> Int {
-        let sharedStyles = Set(current.contentStyles).intersection(other.contentStyles).count
-        let sharedInterests = Set(current.interests ?? []).intersection(other.interests ?? []).count
-        return sharedStyles * 2 + sharedInterests // weight content styles higher
-    }
+  
 
 }

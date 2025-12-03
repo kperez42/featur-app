@@ -1,5 +1,5 @@
 import SwiftUI
-
+import FirebaseAuth
 @main
 struct FeaturApp: App {
     
@@ -14,6 +14,7 @@ struct FeaturApp: App {
         WindowGroup {
             ZStack {
                 
+                
                 // your main app content
                 AuthGateView()
                     .environmentObject(auth)
@@ -24,9 +25,12 @@ struct FeaturApp: App {
                 if showLaunch {
                     LaunchView()
                         .transition(.opacity)
+                    
                 }
             }
             .onAppear {
+                
+
                 //  hide the splash after a short delay
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     withAnimation(.easeOut(duration: 0.5)) {
