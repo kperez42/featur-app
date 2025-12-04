@@ -951,6 +951,7 @@ final class HomeViewModel: ObservableObject {
 
     /// Apply client-side filters to profile list
     private func applyClientFilters(to profiles: [UserProfile]) -> [UserProfile] {
+        
         var filtered = profiles
         print("🏠 FILTER: Starting with \(filtered.count) profiles")
 
