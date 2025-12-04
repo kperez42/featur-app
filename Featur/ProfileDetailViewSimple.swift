@@ -29,9 +29,10 @@ struct ProfileDetailViewSimple: View {
                                 image
                                     .resizable()
                                     .scaledToFill()
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 420)
+                                    .frame(width: UIScreen.main.bounds.width - 32, height: 420)
                                     .clipped()
+                                    .cornerRadius(12)
+
 
                             case .empty:
                                 ZStack {
