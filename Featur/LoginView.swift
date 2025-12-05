@@ -22,6 +22,7 @@ struct LoginView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 140, height: 140)
+                    .padding(.top, 40)
 
                 Text("")
                     .foregroundStyle(.white.opacity(0.7))
@@ -87,6 +88,10 @@ struct LoginView: View {
                 Spacer()
             }
             .padding(.vertical)
+        }
+        .ignoresSafeArea(.keyboard)
+        .onTapGesture {
+            focused = nil
         }
     }
 

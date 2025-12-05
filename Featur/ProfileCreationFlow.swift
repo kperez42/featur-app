@@ -175,6 +175,7 @@ struct ProfileCreationFlow: View {
 
         let db = Firestore.firestore()
         let doc = try? await db.collection("users").document(uid).getDocument()
+        
         let nameFromRegistration = doc?.get("name") as? String ?? user?.displayName ?? "New Creator"
 
         let newProfile = UserProfile(
@@ -188,15 +189,19 @@ struct ProfileCreationFlow: View {
                 coordinates: locationManager.coordinates
             ),
             contentStyles: contentStyles,
-            mediaURLs: mediaURLs,
             socialLinks: links,
+            mediaURLs: mediaURLs,
             profileImageURL: profileImageURL
         )
 
 
 
         await viewModel.updateProfile(newProfile)
-        //refresh user auth state 
+        try? await db.collection("users").document(uid).setData(
+                ["isCompleteProfile": true],
+                merge: true
+            )
+        //refresh user auth state
         await auth.refreshUserState()
 
     }

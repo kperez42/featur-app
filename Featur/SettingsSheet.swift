@@ -113,11 +113,11 @@ struct SettingsSheet: View {
                         SettingRow(icon: "lock.shield", title: "Change Password", color: .green)
                     }
                     
-                    NavigationLink {
-                        BlockedUsersView()
+                    /*NavigationLink {
+                       BlockedUsersView()
                     } label: {
                         SettingRow(icon: "hand.raised.fill", title: "Blocked Users", color: .red)
-                    }
+                    } */
                 } header: {
                     Text("Account")
                 } footer: {
@@ -125,49 +125,40 @@ struct SettingsSheet: View {
                         Text("Signed in as \(email)")
                     }
                 }
-                
-                // Privacy Section
-                Section("Privacy") {
-                    NavigationLink {
-                        PrivacySettingsView()
-                    } label: {
-                        SettingRow(icon: "eye.slash", title: "Privacy Settings", color: .purple)
-                    }
-                    
-                    Toggle(isOn: $viewModel.profileVisible) {
-                        SettingRow(icon: "person.fill.viewfinder", title: "Profile Visible", color: .orange)
-                    }
-                    
-                    Toggle(isOn: $viewModel.showOnlineStatus) {
-                        SettingRow(icon: "circle.fill", title: "Show Online Status", color: .green)
-                    }
-                    
-                    Toggle(isOn: $viewModel.allowMessagesFromAnyone) {
-                        SettingRow(icon: "message.fill", title: "Messages from Anyone", color: .blue)
+                if false {
+                    // Privacy Section
+                    Section("Privacy") {
+                        NavigationLink {
+                            PrivacySettingsView()
+                        } label: {
+                            SettingRow(icon: "eye.slash", title: "Privacy Settings", color: .purple)
+                        }
+                        
+                        Toggle(isOn: $viewModel.profileVisible) {
+                            SettingRow(icon: "person.fill.viewfinder", title: "Profile Visible", color: .orange)
+                        }
+                        
+                        Toggle(isOn: $viewModel.showOnlineStatus) {
+                            SettingRow(icon: "circle.fill", title: "Show Online Status", color: .green)
+                        }
+                        
+                        Toggle(isOn: $viewModel.allowMessagesFromAnyone) {
+                            SettingRow(icon: "message.fill", title: "Messages from Anyone", color: .blue)
+                        }
                     }
                 }
                 
                 // Notifications Section
                 Section("Notifications") {
-                    NavigationLink {
-                        NotificationSettingsView()
-                    } label: {
-                        SettingRow(icon: "bell.badge", title: "Notification Preferences", color: .red)
-                    }
-                    
                     Toggle(isOn: $viewModel.pushNotifications) {
                         SettingRow(icon: "bell.fill", title: "Push Notifications", color: .orange)
                     }
                     .onChange(of: viewModel.pushNotifications) { _, newValue in
                         viewModel.updateNotificationPermissions(enabled: newValue)
                     }
-                    
-                    Toggle(isOn: $viewModel.emailNotifications) {
-                        SettingRow(icon: "envelope.fill", title: "Email Notifications", color: .blue)
-                    }
                 }
-                
-                // Discovery Section
+
+                /* Discovery Section(Coming soon)
                 Section("Discovery") {
                     Toggle(isOn: $viewModel.appearsInDiscovery) {
                         SettingRow(icon: "magnifyingglass", title: "Appear in Discovery", color: .purple)
@@ -180,7 +171,7 @@ struct SettingsSheet: View {
                     }
                 }
                 
-                // Content Section
+                // Content Section(Coming soon)
                 Section("Content") {
                     NavigationLink {
                         ContentPreferencesView()
@@ -195,7 +186,7 @@ struct SettingsSheet: View {
                     Toggle(isOn: $viewModel.highQualityUploads) {
                         SettingRow(icon: "photo", title: "High Quality Uploads", color: .green)
                     }
-                }
+                }*/
                 
                 // App Settings Section
                 Section("App") {
@@ -523,19 +514,19 @@ final class SettingsViewModel: ObservableObject {
     }
     
     func openHelpCenter() {
-        if let url = URL(string: "https://featur.app/help") {
+        if let url = URL(string: "https://featurapp.carrd.co") {
             UIApplication.shared.open(url)
         }
     }
     
     func contactSupport() {
-        if let url = URL(string: "mailto:support@featur.app") {
+        if let url = URL(string: "mailto:featurapp@gmail.com") {
             UIApplication.shared.open(url)
         }
     }
     
     func reportProblem() {
-        if let url = URL(string: "https://featur.app/report") {
+        if let url = URL(string: "https://featurapp.carrd.co") {
             UIApplication.shared.open(url)
         }
     }
@@ -1837,47 +1828,76 @@ struct ContentPreferencesView: View {
 }
 
 struct AppearanceSettingsView: View {
-    @State private var appearance = 0
-    
     var body: some View {
-        List {
-            Picker("Theme", selection: $appearance) {
-                Text("Automatic").tag(0)
-                Text("Light").tag(1)
-                Text("Dark").tag(2)
-            }
+        VStack(spacing: 16) {
+            Image(systemName: "paintbrush")
+                .font(.system(size: 50))
+                .foregroundColor(.gray)
+                .padding(.top, 40)
+
+            Text("Appearance")
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            Text("Theme options are coming soon!")
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("Appearance")
     }
 }
 
+
 struct LanguageSettingsView: View {
     var body: some View {
-        Text("Language Settings")
-            .navigationTitle("Language")
+        VStack(spacing: 16) {
+            Image(systemName: "globe")
+                .font(.system(size: 50))
+                .foregroundColor(.gray)
+                .padding(.top, 40)
+
+            Text("Language")
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            Text("Language support will be available in a future update!")
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Language")
     }
 }
 
+
 struct DataUsageView: View {
     var body: some View {
-        List {
-            Section {
-                HStack {
-                    Text("Data used this month")
-                    Spacer()
-                    Text("125 MB")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            
-            Section {
-                Toggle("Download over cellular", isOn: .constant(false))
-                Toggle("Auto-download media", isOn: .constant(true))
-            }
+        VStack(spacing: 16) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.system(size: 50))
+                .foregroundColor(.gray)
+                .padding(.top, 40)
+
+            Text("Data Usage")
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            Text("This feature is coming soon!")
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("Data Usage")
     }
 }
+
 
 struct WebViewSheet: View {
     let url: String

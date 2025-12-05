@@ -87,7 +87,9 @@ struct RegistrationView: View {
                 "email": email,
                 "contentStyles": [],  // Required field - user will set this in profile setup
                 "createdAt": now,
-                "updatedAt": now
+                "updatedAt": now,
+                "isCompleteProfile": false
+
             ])
 
             try await result.user.sendEmailVerification()

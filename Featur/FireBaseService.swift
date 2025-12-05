@@ -130,7 +130,10 @@ final class FirebaseService: ObservableObject {
         // Fetch more profiles than needed to account for client-side filtering
         // This allows us to exclude more than 10 users (Firestore notIn limit)
         let fetchLimit = excludeUserIds.count > 10 ? limit * 3 : limit
-        var query: Query = db.collection("users").limit(to: fetchLimit)
+        var query: Query = db.collection("users")
+            .whereField("isCompleteProfile", isEqualTo: true)
+
+            .limit(to: fetchLimit)
 
         // Use Firestore notIn for first 10 excluded users (Firestore limit)
         if !excludeUserIds.isEmpty {
