@@ -492,6 +492,14 @@ struct ChatView: View {
                 }
             }
         }
+        .alert("Message Error", isPresented: Binding(
+            get: { viewModel.sendError != nil },
+            set: { if !$0 { viewModel.sendError = nil } }
+        )) {
+            Button("OK") { viewModel.sendError = nil }
+        } message: {
+            Text(viewModel.sendError ?? "")
+        }
     }
     
     private func sendMessage() {
@@ -658,6 +666,8 @@ final class MessagesViewModel: ObservableObject {
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
+    @Published var sendError: String?
+    @Published var isSending = false
 
     private let service = FirebaseService()
     private var listener: ListenerRegistration?
@@ -708,7 +718,10 @@ final class ChatViewModel: ObservableObject {
             sentAt: Date(),
             readAt: nil
         )
-        
+
+        isSending = true
+        sendError = nil
+
         do {
             try await service.sendMessage(message)
             // print confirmation a message was sent
@@ -717,8 +730,10 @@ final class ChatViewModel: ObservableObject {
             messages.append(message)
         } catch {
             print("Error sending message: \(error)")
+            sendError = "Failed to send message. Please try again."
         }
-        
+
+        isSending = false
     }
     
     func markAsRead(conversationId: String) async {

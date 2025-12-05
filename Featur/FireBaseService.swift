@@ -53,7 +53,7 @@ final class FirebaseService: ObservableObject {
     }
     // MARK: - Fetch All User Profiles
     func fetchAllProfiles(limit: Int = 50) async throws -> [UserProfile] {
-        let snapshot = try await db.collection("profiles")
+        let snapshot = try await db.collection("users")
             .limit(to: limit)
             .getDocuments()
 
@@ -411,21 +411,20 @@ final class FirebaseService: ObservableObject {
     // MARK: - Conversations (create/get)
 
     func getOrCreateConversation(between userA: String, and userB: String) async throws -> Conversation {
-        // 1) Try to find an existing conversation with both participants
-        let snapshot = try await db.collection("conversations")
-            .whereField("participantIds", arrayContains: userA)
-            .getDocuments()
-        
-        if let existing = snapshot.documents
-            .compactMap({ try? $0.data(as: Conversation.self) })
-            .first(where: { Set($0.participantIds) == Set([userA, userB]) }) {
+        // Use deterministic ID to prevent race condition duplicates
+        let sortedIds = [userA, userB].sorted()
+        let conversationId = "\(sortedIds[0])_\(sortedIds[1])"
+        let docRef = db.collection("conversations").document(conversationId)
+
+        // Check if conversation already exists
+        let doc = try await docRef.getDocument()
+        if doc.exists, let existing = try? doc.data(as: Conversation.self) {
             return existing
         }
-        
-        // 2) Create a new conversation
-        let newRef = db.collection("conversations").document()
+
+        // Create new conversation with deterministic ID
         let conv = Conversation(
-            id: newRef.documentID,
+            id: conversationId,
             participantIds: [userA, userB],
             lastMessage: nil,
             lastMessageAt: Date(),
@@ -433,7 +432,8 @@ final class FirebaseService: ObservableObject {
             isGroupChat: false,
             createdAt: Date()
         )
-        try newRef.setData(from: conv)
+        // Use merge to handle race condition - if another client creates it first, we just merge
+        try docRef.setData(from: conv, merge: true)
         return conv
     }
 

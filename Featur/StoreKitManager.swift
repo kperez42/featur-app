@@ -30,6 +30,39 @@ enum FeaturedProduct: String, CaseIterable {
     }
 }
 
+// MARK: - User-Friendly Error Messages
+
+private func userFriendlyPurchaseError(_ error: Error) -> String {
+    if let storeKitError = error as? StoreKitError {
+        switch storeKitError {
+        case .networkError:
+            return "Network connection failed. Please check your internet and try again."
+        case .systemError:
+            return "A system error occurred. Please restart the app and try again."
+        case .notAvailableInStorefront:
+            return "This purchase is not available in your region."
+        case .userCancelled:
+            return "Purchase was cancelled."
+        case .notEntitled:
+            return "You're not eligible for this purchase."
+        default:
+            return "Purchase failed. Please try again later."
+        }
+    }
+
+    // Handle common error patterns
+    let errorDescription = error.localizedDescription.lowercased()
+    if errorDescription.contains("network") || errorDescription.contains("internet") {
+        return "Network connection failed. Please check your internet and try again."
+    } else if errorDescription.contains("payment") {
+        return "Payment could not be processed. Please check your payment method in Settings."
+    } else if errorDescription.contains("cancel") {
+        return "Purchase was cancelled."
+    }
+
+    return "Purchase failed. Please try again or contact support."
+}
+
 // MARK: - Store Manager
 
 @MainActor
@@ -157,7 +190,7 @@ class StoreKitManager: ObservableObject {
             print("⚠️ User cancelled purchase")
         } catch {
             print("❌ Purchase failed: \(error)")
-            purchaseError = error.localizedDescription
+            purchaseError = userFriendlyPurchaseError(error)
             AnalyticsManager.shared.trackError(error: "purchase_failed", context: product.id)
             Haptics.notify(.error)
             throw error
