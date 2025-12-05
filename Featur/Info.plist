@@ -16,5 +16,7 @@
 	<string>1</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Featur uses your location to help you discover and connect with people and features near you.</string>
 </dict>
 </plist>
