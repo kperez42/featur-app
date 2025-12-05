@@ -553,6 +553,7 @@ struct ChatView: View {
 
         } catch {
             print("❌ Error sending image: \(error.localizedDescription)")
+            viewModel.sendError = "Failed to send image. Please try again."
             Haptics.notify(.error)
         }
     }

@@ -197,10 +197,33 @@ struct ProfileCreationFlow: View {
 
 
         await viewModel.updateProfile(newProfile)
-        try? await db.collection("users").document(uid).setData(
-                ["isCompleteProfile": true],
-                merge: true
-            )
+
+        // CRITICAL: Set isCompleteProfile to make user visible on Discover
+        // Retry up to 3 times if it fails
+        var profileCompleted = false
+        for attempt in 1...3 {
+            do {
+                try await db.collection("users").document(uid).setData(
+                    ["isCompleteProfile": true],
+                    merge: true
+                )
+                profileCompleted = true
+                print("✅ Profile marked as complete (attempt \(attempt))")
+                break
+            } catch {
+                print("⚠️ Failed to mark profile complete (attempt \(attempt)): \(error)")
+                if attempt < 3 {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+                }
+            }
+        }
+
+        if !profileCompleted {
+            print("❌ CRITICAL: Could not mark profile as complete after 3 attempts")
+            // Profile will still be saved, but user won't appear in Discover
+            // This is logged so it can be debugged
+        }
+
         //refresh user auth state
         await auth.refreshUserState()
 
