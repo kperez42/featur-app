@@ -3,6 +3,45 @@ import FirebaseFirestore
 import FirebaseAuth
 import FirebaseStorage
 
+// MARK: - Profile Cache for Fast Loading
+
+final class ProfileCache {
+    static let shared = ProfileCache()
+    private var cache: [String: (profile: UserProfile, timestamp: Date)] = [:]
+    private let cacheValidityDuration: TimeInterval = 300 // 5 minutes
+    private let queue = DispatchQueue(label: "com.featur.profilecache", attributes: .concurrent)
+
+    private init() {}
+
+    func get(_ uid: String) -> UserProfile? {
+        queue.sync {
+            guard let cached = cache[uid],
+                  Date().timeIntervalSince(cached.timestamp) < cacheValidityDuration else {
+                return nil
+            }
+            return cached.profile
+        }
+    }
+
+    func set(_ profile: UserProfile) {
+        queue.async(flags: .barrier) {
+            self.cache[profile.uid] = (profile, Date())
+        }
+    }
+
+    func invalidate(_ uid: String) {
+        queue.async(flags: .barrier) {
+            self.cache.removeValue(forKey: uid)
+        }
+    }
+
+    func clear() {
+        queue.async(flags: .barrier) {
+            self.cache.removeAll()
+        }
+    }
+}
+
 @MainActor
 final class FirebaseService: ObservableObject {
     private let db = Firestore.firestore()
@@ -14,10 +53,16 @@ final class FirebaseService: ObservableObject {
         try db.collection("users").document(profile.uid).setData(from: profile)
     }
     
-    func fetchProfile(uid: String) async throws -> UserProfile? {
+    func fetchProfile(uid: String, useCache: Bool = true) async throws -> UserProfile? {
         guard !uid.isEmpty else {
             print("⚠️ fetchProfile: UID is empty. Returning nil.")
             return nil
+        }
+
+        // Check cache first for instant loading
+        if useCache, let cachedProfile = ProfileCache.shared.get(uid) {
+            print("⚡ Cache hit for profile: \(cachedProfile.displayName)")
+            return cachedProfile
         }
 
         do {
@@ -35,11 +80,14 @@ final class FirebaseService: ObservableObject {
                 if profile.uid.isEmpty {
                     profile.uid = document.documentID
                 }
+                // Cache the profile for fast future access
+                ProfileCache.shared.set(profile)
                 print("✅ Fetched profile for uid \(uid): \(profile.displayName)")
                 return profile
             } catch {
                 // Fallback: manually decode with document ID as uid
                 if let profile = decodeProfileFromDocument(doc: document, fallbackUid: uid) {
+                    ProfileCache.shared.set(profile)
                     print("✅ Fetched profile (fallback) for uid \(uid): \(profile.displayName)")
                     return profile
                 }
