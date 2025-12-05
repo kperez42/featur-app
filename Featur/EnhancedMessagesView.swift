@@ -749,6 +749,8 @@ struct NewChatView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = NewChatViewModel()
     @State private var searchText = ""
+    @State private var selectedConversation: Conversation?
+    @State private var showChat = false
 
     var filteredMatches: [(match: Match, profile: UserProfile?)] {
         if searchText.isEmpty {
@@ -789,8 +791,12 @@ struct NewChatView: View {
                                 if let profile = filteredMatches[index].profile {
                                     Button {
                                         Task {
-                                            await viewModel.createConversation(with: profile)
-                                            dismiss()
+                                            if let conversation = await viewModel.createConversation(with: profile) {
+                                                selectedConversation = conversation
+                                                // Add profile to conversation for display
+                                                selectedConversation?.participantProfiles = [profile.uid: profile]
+                                                showChat = true
+                                            }
                                         }
                                     } label: {
                                         HStack(spacing: 12) {
@@ -858,6 +864,40 @@ struct NewChatView: View {
             } message: {
                 Text(viewModel.errorMessage)
             }
+            .sheet(isPresented: $showChat) {
+                if let conversation = selectedConversation {
+                    NavigationStack {
+                        ChatView(conversation: conversation)
+                            .toolbar {
+                                ToolbarItem(placement: .topBarLeading) {
+                                    Button("Done") {
+                                        showChat = false
+                                        dismiss()
+                                    }
+                                }
+                            }
+                    }
+                }
+            }
+            .overlay {
+                if viewModel.isCreatingConversation {
+                    ZStack {
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                                .tint(.white)
+                            Text("Starting conversation...")
+                                .font(.subheadline)
+                                .foregroundStyle(.white)
+                        }
+                        .padding(24)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                }
+            }
+            .allowsHitTesting(!viewModel.isCreatingConversation)
         }
     }
 }
@@ -868,6 +908,7 @@ struct NewChatView: View {
 final class NewChatViewModel: ObservableObject {
     @Published var matches: [(match: Match, profile: UserProfile?)] = []
     @Published var isLoading = false
+    @Published var isCreatingConversation = false
     @Published var showError = false
     @Published var errorMessage = ""
 
@@ -905,8 +946,15 @@ final class NewChatViewModel: ObservableObject {
         }
     }
 
-    func createConversation(with profile: UserProfile) async {
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+    func createConversation(with profile: UserProfile) async -> Conversation? {
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            errorMessage = "Please sign in to continue"
+            showError = true
+            return nil
+        }
+
+        isCreatingConversation = true
+        defer { isCreatingConversation = false }
 
         do {
             let conversation = try await service.getOrCreateConversation(
@@ -919,10 +967,15 @@ final class NewChatViewModel: ObservableObject {
             // Track analytics
             AnalyticsManager.shared.trackConversationStarted(withUserId: profile.uid)
 
+            Haptics.notify(.success)
+            return conversation
+
         } catch {
-            errorMessage = "Failed to create conversation: \(error.localizedDescription)"
+            errorMessage = "Failed to start conversation. Please try again."
             showError = true
+            Haptics.notify(.error)
             print("❌ Error creating conversation: \(error)")
+            return nil
         }
     }
 }
