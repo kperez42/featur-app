@@ -9,23 +9,39 @@ import FirebaseFirestore
 // MARK: - Product IDs
 
 enum FeaturedProduct: String, CaseIterable {
-    case featured24h = "com.featur.featured.24h"
-    case featured7d = "com.featur.featured.7d"
-    case featured30d = "com.featur.featured.30d"
+    case featured1Week = "com.featur.featured.1week"
+    case featured1Month = "com.featur.featured.1month"
+    case featured3Months = "com.featur.featured.3months"
 
     var displayName: String {
         switch self {
-        case .featured24h: return "24 Hours"
-        case .featured7d: return "7 Days"
-        case .featured30d: return "30 Days"
+        case .featured1Week: return "1 Week"
+        case .featured1Month: return "1 Month"
+        case .featured3Months: return "3 Months"
         }
     }
 
     var duration: Int {
         switch self {
-        case .featured24h: return 1
-        case .featured7d: return 7
-        case .featured30d: return 30
+        case .featured1Week: return 7
+        case .featured1Month: return 30
+        case .featured3Months: return 90
+        }
+    }
+
+    var price: String {
+        switch self {
+        case .featured1Week: return "$2.99"
+        case .featured1Month: return "$4.99"
+        case .featured3Months: return "$9.99"
+        }
+    }
+
+    var pricePerDay: String {
+        switch self {
+        case .featured1Week: return "$0.43/day"
+        case .featured1Month: return "$0.17/day"
+        case .featured3Months: return "$0.11/day"
         }
     }
 }
