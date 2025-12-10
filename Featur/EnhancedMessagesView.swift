@@ -391,31 +391,72 @@ struct ConversationRow: View {
 
 struct NewMatchCard: View {
     let profile: UserProfile
+    @State private var isPressed = false
+
+    private var isOnline: Bool {
+        PresenceManager.shared.isOnline(userId: profile.uid)
+    }
 
     var body: some View {
         VStack(spacing: 8) {
-            CachedAsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 80, height: 80)
-                    .clipped()
-            } placeholder: {
-                Circle()
-                    .fill(AppTheme.accent.opacity(0.2))
-                    .frame(width: 80, height: 80)
+            ZStack(alignment: .bottomTrailing) {
+                CachedAsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 80, height: 80)
+                        .clipped()
+                } placeholder: {
+                    Circle()
+                        .fill(AppTheme.accent.opacity(0.2))
+                        .frame(width: 80, height: 80)
+                        .overlay {
+                            Text(profile.displayName.prefix(1))
+                                .font(.title.bold())
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                }
+                .frame(width: 80, height: 80)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [AppTheme.accent, AppTheme.accent.opacity(0.6)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 3
+                        )
+                )
+
+                // Online indicator
+                if isOnline {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 16, height: 16)
+                        .overlay(
+                            Circle()
+                                .stroke(AppTheme.bg, lineWidth: 2)
+                        )
+                        .offset(x: 2, y: 2)
+                }
             }
-            .frame(width: 80, height: 80)
-            .clipShape(Circle())
-            .overlay(
-                Circle()
-                    .stroke(AppTheme.accent, lineWidth: 3)
-            )
+            .scaleEffect(isPressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
 
             Text(profile.displayName)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
                 .frame(width: 80)
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .task {
+            await PresenceManager.shared.fetchOnlineStatus(userId: profile.uid)
         }
     }
 }
