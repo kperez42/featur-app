@@ -634,27 +634,32 @@ private struct MainProfileContent: View {
                 Haptics.impact(.light)
                 action()
             }) {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Image(systemName: icon)
-                        .font(.title2)
+                        .font(.title3)
                         .foregroundStyle(color)
+                        .frame(width: 28, height: 28)
 
                     Text(title)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
-                .padding(20)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 14)
                 .frame(maxWidth: .infinity)
-                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                .frame(height: 52)
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(color.opacity(0.2), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(color.opacity(0.15), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -4378,14 +4383,47 @@ private struct MainProfileContent: View {
         let animate: Bool
 
         var body: some View {
-            LinearGradient(
-                colors: [
-                    Color(red: animate ? 0.4 : 0.5, green: 0.3, blue: animate ? 0.8 : 0.7),
-                    Color(red: animate ? 0.6 : 0.5, green: 0.4, blue: animate ? 0.9 : 1.0)
-                ],
-                startPoint: animate ? .topLeading : .bottomLeading,
-                endPoint: animate ? .bottomTrailing : .topTrailing
-            )
+            ZStack {
+                // Base gradient
+                LinearGradient(
+                    colors: [
+                        Color(red: animate ? 0.4 : 0.5, green: 0.3, blue: animate ? 0.8 : 0.7),
+                        Color(red: animate ? 0.6 : 0.5, green: 0.4, blue: animate ? 0.9 : 1.0)
+                    ],
+                    startPoint: animate ? .topLeading : .bottomLeading,
+                    endPoint: animate ? .bottomTrailing : .topTrailing
+                )
+
+                // Decorative circles - lightweight, no animation
+                GeometryReader { geo in
+                    Circle()
+                        .fill(.white.opacity(0.08))
+                        .frame(width: 200, height: 200)
+                        .blur(radius: 40)
+                        .offset(x: -60, y: -40)
+
+                    Circle()
+                        .fill(.white.opacity(0.06))
+                        .frame(width: 150, height: 150)
+                        .blur(radius: 30)
+                        .offset(x: geo.size.width - 80, y: 60)
+
+                    Circle()
+                        .fill(.white.opacity(0.05))
+                        .frame(width: 100, height: 100)
+                        .blur(radius: 25)
+                        .offset(x: geo.size.width / 2 - 50, y: geo.size.height - 80)
+
+                    // Subtle diagonal lines
+                    Path { path in
+                        for i in stride(from: -100, to: Int(geo.size.width) + 100, by: 40) {
+                            path.move(to: CGPoint(x: CGFloat(i), y: 0))
+                            path.addLine(to: CGPoint(x: CGFloat(i) + 150, y: geo.size.height))
+                        }
+                    }
+                    .stroke(.white.opacity(0.03), lineWidth: 1)
+                }
+            }
         }
     }
 
