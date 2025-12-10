@@ -737,7 +737,9 @@ final class ProfileDetailViewModel: ObservableObject {
         Haptics.impact(.light)
 
         // Create shareable content
-        let profileURL = URL(string: "https://featur.app/profile/\(profile.uid)")!
+        guard let profileURL = URL(string: "https://featur.app/profile/\(profile.uid)") else {
+            return
+        }
         let shareText = "Check out \(profile.displayName) on Featur! 🎬"
 
         // Present iOS share sheet
