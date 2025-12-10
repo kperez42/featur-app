@@ -345,15 +345,29 @@ struct FilterChip: View {
     let text: String
     let isSelected: Bool
     let action: () -> Void
-    
+
+    @State private var isPressed = false
+
     var body: some View {
-        Button(action: action) {
+        Button {
+            Haptics.selection()
+            action()
+        } label: {
             Text(text)
                 .font(.caption)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(isSelected ? AppTheme.accent : Color.gray.opacity(0.2), in: Capsule())
                 .foregroundStyle(isSelected ? .white : .primary)
+                .scaleEffect(isPressed ? 0.95 : 1.0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
         }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .animation(.easeInOut(duration: 0.15), value: isSelected)
     }
 }

@@ -711,9 +711,14 @@ struct CategoryCard: View {
     let icon: String
     let count: Int
     let action: () -> Void
-    
+
+    @State private var isPressed = false
+
     var body: some View {
-        Button(action: action) {
+        Button {
+            Haptics.impact(.light)
+            action()
+        } label: {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Image(systemName: icon)
@@ -724,7 +729,7 @@ struct CategoryCard: View {
                         .font(.caption.bold())
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Text(category)
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
@@ -735,20 +740,31 @@ struct CategoryCard: View {
             .frame(height: 100)
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+            .scaleEffect(isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPressed)
         }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 
 struct FilterTag: View {
     let text: String
     let onRemove: () -> Void
-    
+
     var body: some View {
         HStack(spacing: 6) {
             Text(text)
                 .font(.caption.weight(.semibold))
-            
-            Button(action: onRemove) {
+
+            Button {
+                Haptics.impact(.light)
+                onRemove()
+            } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
             }
@@ -797,23 +813,26 @@ struct ImprovedFilterSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Maximum Distance")
                             .font(.headline)
-                        
+
                         HStack {
                             Text("\(Int(viewModel.activeFilters.maxDistance)) miles")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            
+
                             Spacer()
-                            
+
                             if viewModel.activeFilters.maxDistance < 1000 {
-                                Button("Any Distance") {
+                                Button {
+                                    Haptics.impact(.light)
                                     viewModel.activeFilters.maxDistance = 1000
+                                } label: {
+                                    Text("Any Distance")
+                                        .font(.caption)
+                                        .foregroundStyle(AppTheme.accent)
                                 }
-                                .font(.caption)
-                                .foregroundStyle(AppTheme.accent)
                             }
                         }
-                        
+
                         Slider(value: $viewModel.activeFilters.maxDistance, in: 1...1000, step: 5)
                             .tint(AppTheme.accent)
                     }
@@ -824,12 +843,18 @@ struct ImprovedFilterSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Quick Filters")
                             .font(.headline)
-                        
+
                         Toggle("Verified Creators Only", isOn: $viewModel.activeFilters.verifiedOnly)
-                        
+                            .onChange(of: viewModel.activeFilters.verifiedOnly) { _, _ in
+                                Haptics.selection()
+                            }
+
                         Divider()
-                        
+
                         Toggle("Currently Online", isOn: $viewModel.activeFilters.onlineOnly)
+                            .onChange(of: viewModel.activeFilters.onlineOnly) { _, _ in
+                                Haptics.selection()
+                            }
                     }
                     .padding()
                     .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))

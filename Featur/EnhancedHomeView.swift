@@ -814,6 +814,9 @@ struct HomeFiltersSheet: View {
                     Toggle("Verified Creators Only", isOn: $viewModel.verifiedOnly)
                         .padding()
                         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                        .onChange(of: viewModel.verifiedOnly) { _, _ in
+                            Haptics.selection()
+                        }
                 }
                 .padding()
             }
