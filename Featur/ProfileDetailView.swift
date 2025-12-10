@@ -120,7 +120,7 @@ private struct ImageGalleryHeader: View {
     let mediaURLs: [String]
     @Binding var selectedIndex: Int
     let onTapImage: () -> Void
-    
+
     var body: some View {
         ZStack(alignment: .bottom) {
             TabView(selection: $selectedIndex) {
@@ -140,12 +140,18 @@ private struct ImageGalleryHeader: View {
                         .frame(height: 500)
                     }
                     .tag(index)
-                    .onTapGesture(perform: onTapImage)
+                    .onTapGesture {
+                        Haptics.impact(.light)
+                        onTapImage()
+                    }
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: 500)
-            
+            .onChange(of: selectedIndex) { _, _ in
+                Haptics.selection()
+            }
+
             // Custom Page Indicator
             if mediaURLs.count > 1 {
                 HStack(spacing: 6) {
@@ -1067,11 +1073,13 @@ struct ImageViewerSheet: View {
     let mediaURLs: [String]
     @Binding var selectedIndex: Int
     @Environment(\.dismiss) var dismiss
-    
+    @State private var dragOffset: CGSize = .zero
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
+                .opacity(1.0 - min(abs(dragOffset.height) / 300, 0.5))
+
             TabView(selection: $selectedIndex) {
                 ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
                     CachedAsyncImage(url: URL(string: url)) { image in
@@ -1087,16 +1095,47 @@ struct ImageViewerSheet: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
-            
+            .offset(y: dragOffset.height)
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        dragOffset = value.translation
+                    }
+                    .onEnded { value in
+                        if abs(value.translation.height) > 100 {
+                            Haptics.impact(.light)
+                            dismiss()
+                        } else {
+                            withAnimation(.spring(response: 0.3)) {
+                                dragOffset = .zero
+                            }
+                        }
+                    }
+            )
+            .onChange(of: selectedIndex) { _, _ in
+                Haptics.selection()
+            }
+
             VStack {
                 HStack {
+                    // Image counter
+                    Text("\(selectedIndex + 1) / \(mediaURLs.count)")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.black.opacity(0.5), in: Capsule())
+                        .padding()
+
                     Spacer()
+
                     Button {
+                        Haptics.impact(.light)
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.title)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.white.opacity(0.8))
                             .padding()
                     }
                 }

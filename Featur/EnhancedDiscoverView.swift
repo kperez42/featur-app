@@ -639,29 +639,45 @@ struct AnimatedHeroHeader: View {
 struct EnhancedSearchBar: View {
     @Binding var text: String
     @FocusState private var isFocused: Bool
-    
+
     var body: some View {
         HStack(spacing: 12) {
             HStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                
+                    .foregroundStyle(isFocused ? AppTheme.accent : .secondary)
+                    .animation(.easeInOut(duration: 0.2), value: isFocused)
+
                 TextField("Search creators...", text: $text)
                     .focused($isFocused)
-                
+                    .submitLabel(.search)
+
                 if !text.isEmpty {
                     Button {
-                        text = ""
+                        Haptics.impact(.light)
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            text = ""
+                        }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
                     }
+                    .transition(.scale.combined(with: .opacity))
                 }
             }
             .padding(12)
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isFocused ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 2)
+            )
+            .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
         .padding(.horizontal)
+        .onChange(of: isFocused) { _, focused in
+            if focused {
+                Haptics.selection()
+            }
+        }
     }
 }
 
