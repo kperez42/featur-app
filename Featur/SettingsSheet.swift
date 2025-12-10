@@ -790,6 +790,7 @@ struct EditAccountView: View {
                                     .resizable()
                                     .scaledToFill()
                                     .frame(width: 120, height: 120)
+                                    .clipped()
                                     .clipShape(Circle())
                                     .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 2))
                             } else if let photoURL = auth.userProfile?.profileImageURL,
