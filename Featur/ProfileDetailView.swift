@@ -395,7 +395,6 @@ private struct SocialLinksGrid: View {
                         SocialLinkCard(
                             platform: link.platform,
                             username: account.username,
-                            followers: account.followerCount,
                             verified: account.isVerified,
                             icon: link.icon,
                             color: link.color
@@ -410,7 +409,6 @@ private struct SocialLinksGrid: View {
 private struct SocialLinkCard: View {
     let platform: String
     let username: String
-    let followers: Int?
     let verified: Bool
     let icon: String
     let color: Color
@@ -435,12 +433,6 @@ private struct SocialLinkCard: View {
             Text("@\(username)")
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
-
-            if let followers = followers {
-                Text(formatNumber(followers))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
         .padding()
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))

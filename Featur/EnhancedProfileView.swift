@@ -556,19 +556,19 @@ private struct MainProfileContent: View {
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
                     AnimatedStatCard(
-                        title: "Followers",
-                        value: profile.followerCount ?? 0,
-                        icon: "person.3.fill",
-                        color: .purple,
+                        title: "Likes Given",
+                        value: analytics.likesGivenCount,
+                        icon: "heart.fill",
+                        color: .pink,
                         animate: animateNumbers,
-                        trendData: generateRealisticTrendData(currentValue: profile.followerCount ?? 0)
+                        trendData: generateRealisticTrendData(currentValue: analytics.likesGivenCount)
                     )
 
                     AnimatedStatCard(
                         title: "Matches",
                         value: analytics.matchCount,
-                        icon: "heart.fill",
-                        color: .pink,
+                        icon: "heart.circle.fill",
+                        color: .purple,
                         animate: animateNumbers,
                         trendData: generateRealisticTrendData(currentValue: analytics.matchCount)
                     )
@@ -576,21 +576,21 @@ private struct MainProfileContent: View {
 
                 HStack(spacing: 12) {
                     AnimatedStatCard(
-                        title: "Profile Views",
+                        title: "Favorites",
+                        value: analytics.favoritesGivenCount,
+                        icon: "star.fill",
+                        color: .yellow,
+                        animate: animateNumbers,
+                        trendData: generateRealisticTrendData(currentValue: analytics.favoritesGivenCount)
+                    )
+
+                    AnimatedStatCard(
+                        title: "Viewed",
                         value: analytics.profileViewCount,
                         icon: "eye.fill",
                         color: .blue,
                         animate: animateNumbers,
                         trendData: generateRealisticTrendData(currentValue: analytics.profileViewCount)
-                    )
-
-                    AnimatedStatCard(
-                        title: "Collabs",
-                        value: analytics.collabCount,
-                        icon: "star.fill",
-                        color: .orange,
-                        animate: animateNumbers,
-                        trendData: generateRealisticTrendData(currentValue: analytics.collabCount)
                     )
                 }
             }
@@ -908,15 +908,15 @@ private struct MainProfileContent: View {
                     title: "First Match",
                     description: "Got your first match!",
                     color: .pink,
-                    requirement: { ($0.followerCount ?? 0) > 0 }
+                    requirement: { _ in true } // Will be checked via matches count
                 ),
                 Achievement(
-                    id: "popular",
+                    id: "active_creator",
                     icon: "star.fill",
-                    title: "Popular Creator",
-                    description: "Reached 1K followers",
+                    title: "Active Creator",
+                    description: "Has multiple content styles",
                     color: .orange,
-                    requirement: { ($0.followerCount ?? 1000) >= 1000 }
+                    requirement: { $0.contentStyles.count >= 3 }
                 ),
                 Achievement(
                     id: "verified",
@@ -1450,46 +1450,39 @@ private struct MainProfileContent: View {
     private struct SocialLinkRow: View {
         let platform: String
         let username: String
-        let followers: Int?
         let isVerified: Bool
         let icon: String
         let color: Color
-        
+
         var body: some View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.title3)
                     .foregroundStyle(color)
                     .frame(width: 32)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
                         Text(platform)
                             .font(.subheadline.weight(.semibold))
-                        
+
                         if isVerified {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.caption)
                                 .foregroundStyle(.blue)
                         }
                     }
-                    
+
                     Text("@\(username)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Spacer()
-                
-                if let followers = followers {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(formatNumber(followers))
-                            .font(.caption.bold())
-                        Text("followers")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
             .padding()
             .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
@@ -1665,7 +1658,7 @@ private struct MainProfileContent: View {
                                 .foregroundStyle(.white.opacity(0.8))
                             
                             HStack(spacing: 12) {
-                                CardStat(icon: "heart.fill", value: "\(formatNumber(profile.followerCount ?? 0))")
+                                CardStat(icon: "photo.fill", value: "\((profile.mediaURLs ?? []).count)")
                                 CardStat(icon: "star.fill", value: "\(profile.contentStyles.count)")
                             }
                         }
@@ -2728,10 +2721,10 @@ private struct MainProfileContent: View {
                                         isPositive: analyticsVM.profileViewsChangePositive
                                     )
                                     DetailedStatRow(
-                                        label: "New Followers",
-                                        value: "+\(analyticsVM.newFollowers)",
-                                        change: analyticsVM.followersChange,
-                                        isPositive: analyticsVM.followersChangePositive
+                                        label: "Likes Given",
+                                        value: "\(analyticsVM.likesGiven)",
+                                        change: analyticsVM.likesGivenChange,
+                                        isPositive: analyticsVM.likesGivenChangePositive
                                     )
                                     DetailedStatRow(
                                         label: "Likes Received",
@@ -3955,7 +3948,7 @@ private struct MainProfileContent: View {
         var networkingScore: Int {
             var score = 50
             if profile.isVerified ?? false { score += 20 }
-            if (profile.followerCount ?? 0) > 1000 { score += 15 }
+            if (profile.mediaURLs ?? []).count >= 3 { score += 15 }
             if !profile.contentStyles.isEmpty { score += 10 }
             if profile.socialLinks?.instagram != nil { score += 5 }
             return min(score, 100)
@@ -4007,7 +4000,7 @@ private struct MainProfileContent: View {
                     // Score Breakdown
                     VStack(alignment: .leading, spacing: 12) {
                         ScoreFactorRow(icon: "checkmark.seal.fill", label: "Verified", value: (profile.isVerified ?? false) ? 20 : 0, maxValue: 20)
-                        ScoreFactorRow(icon: "person.3.fill", label: "Followers", value: (profile.followerCount ?? 0) > 1000 ? 15 : 5, maxValue: 15)
+                        ScoreFactorRow(icon: "photo.on.rectangle", label: "Photos", value: (profile.mediaURLs ?? []).count >= 3 ? 15 : 5, maxValue: 15)
                         ScoreFactorRow(icon: "photo.fill", label: "Content", value: 10, maxValue: 10)
                         ScoreFactorRow(icon: "link", label: "Socials", value: 5, maxValue: 5)
                     }
@@ -4068,7 +4061,7 @@ private struct MainProfileContent: View {
         let profile: UserProfile
         
         let milestones = [
-            Milestone(icon: "star.fill", title: "Reached 1K Followers", date: "2 weeks ago", color: .yellow, isAchieved: true),
+            Milestone(icon: "star.fill", title: "Profile Complete", date: "2 weeks ago", color: .yellow, isAchieved: true),
             Milestone(icon: "heart.fill", title: "100 Matches", date: "1 month ago", color: .pink, isAchieved: true),
             Milestone(icon: "photo.fill", title: "Upload 50 Photos", date: "Next milestone", color: .blue, isAchieved: false),
             Milestone(icon: "flame.fill", title: "30 Day Streak", date: "Coming soon", color: .orange, isAchieved: false)
@@ -5140,6 +5133,8 @@ final class ProfileAnalyticsViewModel: ObservableObject {
     @Published var matchCount: Int = 0
     @Published var profileViewCount: Int = 0
     @Published var collabCount: Int = 0
+    @Published var likesGivenCount: Int = 0
+    @Published var favoritesGivenCount: Int = 0
     @Published var isLoading: Bool = false
 
     private let service = FirebaseService()
@@ -5150,15 +5145,47 @@ final class ProfileAnalyticsViewModel: ObservableObject {
         async let matchesTask = fetchMatchCount(userId: userId)
         async let viewsTask = fetchProfileViewCount(userId: userId)
         async let collabsTask = fetchCollabCount(userId: userId)
+        async let likesTask = fetchLikesGivenCount(userId: userId)
+        async let favoritesTask = fetchFavoritesGivenCount(userId: userId)
 
-        let (matches, views, collabs) = await (matchesTask, viewsTask, collabsTask)
+        let (matches, views, collabs, likes, favorites) = await (matchesTask, viewsTask, collabsTask, likesTask, favoritesTask)
 
         matchCount = matches
         profileViewCount = views
         collabCount = collabs
+        likesGivenCount = likes
+        favoritesGivenCount = favorites
         isLoading = false
 
-        print("✅ Analytics loaded - Matches: \(matches), Views: \(views), Collabs: \(collabs)")
+        print("✅ Analytics loaded - Matches: \(matches), Views: \(views), Likes: \(likes), Favorites: \(favorites)")
+    }
+
+    private func fetchLikesGivenCount(userId: String) async -> Int {
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let snapshot = try await db.collection("swipes")
+                .whereField("userId", isEqualTo: userId)
+                .whereField("action", isEqualTo: "like")
+                .getDocuments()
+            return snapshot.documents.count
+        } catch {
+            print("❌ Error fetching likes given count: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchFavoritesGivenCount(userId: String) async -> Int {
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let snapshot = try await db.collection("swipes")
+                .whereField("userId", isEqualTo: userId)
+                .whereField("action", isEqualTo: "superLike")
+                .getDocuments()
+            return snapshot.documents.count
+        } catch {
+            print("❌ Error fetching favorites given count: \(error)")
+            return 0
+        }
     }
 
     private func fetchMatchCount(userId: String) async -> Int {
@@ -5225,9 +5252,9 @@ final class DetailedAnalyticsViewModel: ObservableObject {
     @Published var profileViewsChange: String = "—"
     @Published var profileViewsChangePositive: Bool = true
 
-    @Published var newFollowers: Int = 0
-    @Published var followersChange: String = "—"
-    @Published var followersChangePositive: Bool = true
+    @Published var likesGiven: Int = 0
+    @Published var likesGivenChange: String = "—"
+    @Published var likesGivenChangePositive: Bool = true
 
     @Published var likesReceived: Int = 0
     @Published var likesChange: String = "—"
@@ -5268,7 +5295,7 @@ final class DetailedAnalyticsViewModel: ObservableObject {
 
         // Update current values
         profileViews = current.profileViews
-        newFollowers = current.newFollowers
+        likesGiven = current.likesGiven
         likesReceived = current.likesReceived
         totalMatches = current.totalMatches
         messagesSent = current.messagesSent
@@ -5287,8 +5314,8 @@ final class DetailedAnalyticsViewModel: ObservableObject {
         profileViewsChange = calculateChange(current: current.profileViews, previous: previous.profileViews)
         profileViewsChangePositive = current.profileViews >= previous.profileViews
 
-        followersChange = calculateChange(current: current.newFollowers, previous: previous.newFollowers)
-        followersChangePositive = current.newFollowers >= previous.newFollowers
+        likesGivenChange = calculateChange(current: current.likesGiven, previous: previous.likesGiven)
+        likesGivenChangePositive = current.likesGiven >= previous.likesGiven
 
         likesChange = calculateChange(current: current.likesReceived, previous: previous.likesReceived)
         likesChangePositive = current.likesReceived >= previous.likesReceived
@@ -5330,10 +5357,20 @@ final class DetailedAnalyticsViewModel: ObservableObject {
             endDate: endDate
         )
 
-        async let likesTask = fetchCount(
+        async let likesReceivedTask = fetchCount(
             db: db,
             collection: "swipes",
             field: "targetUserId",
+            userId: userId,
+            startDate: startDate,
+            endDate: endDate,
+            additionalFilter: ("action", "like")
+        )
+
+        async let likesGivenTask = fetchCount(
+            db: db,
+            collection: "swipes",
+            field: "userId",
             userId: userId,
             startDate: startDate,
             endDate: endDate,
@@ -5355,12 +5392,12 @@ final class DetailedAnalyticsViewModel: ObservableObject {
             endDate: endDate
         )
 
-        let (views, likes, matches, messages, collabs, swipes) = await (viewsTask, likesTask, matchesTask, messagesTask, collabsTask, swipesTask)
+        let (views, likesReceived, likesGiven, matches, messages, collabs, swipes) = await (viewsTask, likesReceivedTask, likesGivenTask, matchesTask, messagesTask, collabsTask, swipesTask)
 
         return PeriodStats(
             profileViews: views,
-            newFollowers: 0, // Would need follower tracking system
-            likesReceived: likes,
+            likesGiven: likesGiven,
+            likesReceived: likesReceived,
             totalMatches: matches,
             messagesSent: messages,
             activeCollabs: collabs,
@@ -5510,7 +5547,7 @@ final class DetailedAnalyticsViewModel: ObservableObject {
 
     struct PeriodStats {
         let profileViews: Int
-        let newFollowers: Int
+        let likesGiven: Int
         let likesReceived: Int
         let totalMatches: Int
         let messagesSent: Int
