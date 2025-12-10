@@ -74,10 +74,15 @@ struct EnhancedMessagesView: View {
     private func handlePendingMatch(currentUserId: String, matchedUserId: String) async {
         do {
             // Create or get existing conversation
-            let conversation = try await viewModel.service.getOrCreateConversation(
+            var conversation = try await viewModel.service.getOrCreateConversation(
                 between: currentUserId,
                 and: matchedUserId
             )
+
+            // Fetch the matched user's profile for display
+            if let profile = try? await viewModel.service.fetchProfile(uid: matchedUserId) {
+                conversation.participantProfiles = [matchedUserId: profile]
+            }
 
             // Navigate to the conversation
             navigateToConversation = conversation
@@ -142,10 +147,13 @@ struct EnhancedMessagesView: View {
                                             ? match.userId2
                                             : match.userId1
 
-                                        let conversation = try await viewModel.service.getOrCreateConversation(
+                                        var conversation = try await viewModel.service.getOrCreateConversation(
                                             between: currentUserId,
                                             and: otherId
                                         )
+
+                                        // Attach the profile for display in ChatView
+                                        conversation.participantProfiles = [otherId: profile]
 
                                         await viewModel.service.markMatchAsMessaged(
                                             userA: currentUserId,
