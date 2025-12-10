@@ -788,11 +788,16 @@ struct MessageSheet: View {
                 VStack(spacing: 12) {
                     if let imageURL = recipientProfile.profileImageURL, let url = URL(string: imageURL) {
                         CachedAsyncImage(url: url) { image in
-                            image.resizable().scaledToFill()
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 80, height: 80)
+                                .clipped()
                         } placeholder: {
                             Circle()
                                 .fill(Color.gray.opacity(0.3))
-                                .overlay(ProgressView())
+                                .frame(width: 80, height: 80)
+                                .overlay(ProgressView().tint(AppTheme.accent))
                         }
                         .frame(width: 80, height: 80)
                         .clipShape(Circle())

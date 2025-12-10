@@ -798,10 +798,13 @@ struct EditAccountView: View {
                                     image
                                         .resizable()
                                         .scaledToFill()
+                                        .frame(width: 120, height: 120)
+                                        .clipped()
                                 } placeholder: {
                                     Image(systemName: "person.circle.fill")
                                         .resizable()
                                         .foregroundStyle(.gray)
+                                        .frame(width: 120, height: 120)
                                 }
                                 .frame(width: 120, height: 120)
                                 .clipShape(Circle())
@@ -1043,9 +1046,12 @@ struct EditAccountView: View {
                                         image
                                             .resizable()
                                             .scaledToFill()
+                                            .frame(width: 100, height: 100)
+                                            .clipped()
                                     case .failure(_):
                                         Rectangle()
                                             .fill(.red.opacity(0.2))
+                                            .frame(width: 100, height: 100)
                                             .overlay(
                                                 Image(systemName: "exclamationmark.triangle")
                                                     .foregroundStyle(.red)
@@ -1053,6 +1059,7 @@ struct EditAccountView: View {
                                     case .empty:
                                         Rectangle()
                                             .fill(.gray.opacity(0.2))
+                                            .frame(width: 100, height: 100)
                                             .overlay(
                                                 ProgressView()
                                                     .tint(AppTheme.accent)
@@ -1060,6 +1067,7 @@ struct EditAccountView: View {
                                     @unknown default:
                                         Rectangle()
                                             .fill(.gray.opacity(0.2))
+                                            .frame(width: 100, height: 100)
                                     }
                                 }
                                 .frame(width: 100, height: 100)
