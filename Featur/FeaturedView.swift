@@ -266,6 +266,7 @@ struct FeaturedView: View {
                 .multilineTextAlignment(.center)
             
             Button {
+                Haptics.impact(.medium)
                 selectedCategory = .all
                 Task { await viewModel.loadFeatured(forceRefresh: true) }
             } label: {
@@ -280,9 +281,9 @@ struct FeaturedView: View {
         .padding(.vertical, 60)
         .padding(.horizontal)
     }
-    
+
     // MARK: - Error Toast
-    
+
     private func errorToast(_ message: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -295,6 +296,7 @@ struct FeaturedView: View {
             Spacer()
 
             Button {
+                Haptics.impact(.light)
                 Task {
                     await viewModel.loadFeatured(forceRefresh: true)
                 }

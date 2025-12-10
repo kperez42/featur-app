@@ -271,22 +271,23 @@ struct EnhancedHomeView: View {
     }
     
     // MARK: - Empty State
-    
+
     private var emptyState: some View {
         VStack(spacing: 20) {
             Image(systemName: "person.2.slash")
                 .font(.system(size: 64))
                 .foregroundStyle(.secondary)
-            
+
             Text("No More Profiles")
                 .font(.title2.bold())
-            
+
             Text("Check back later or adjust your filters")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            
+
             Button {
+                Haptics.impact(.medium)
                 Task {
                     await viewModel.refresh(currentUserId: auth.user?.uid ?? "")
                 }
@@ -317,6 +318,7 @@ struct EnhancedHomeView: View {
             Spacer()
 
             Button {
+                Haptics.impact(.light)
                 Task {
                     await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
                 }

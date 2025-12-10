@@ -346,16 +346,17 @@ struct EnhancedDiscoverView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 64))
                 .foregroundStyle(.secondary)
-            
+
             Text("No Creators Found")
                 .font(.title2.bold())
-            
+
             Text("Try adjusting your filters or search terms")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            
+
             Button {
+                Haptics.impact(.medium)
                 withAnimation {
                     viewModel.clearAllFilters()
                     selectedCategory = nil
@@ -388,6 +389,7 @@ struct EnhancedDiscoverView: View {
             Spacer()
 
             Button {
+                Haptics.impact(.light)
                 Task {
                     await viewModel.loadProfiles()
                 }
