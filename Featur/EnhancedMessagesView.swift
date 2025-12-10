@@ -464,6 +464,7 @@ struct NewMatchCard: View {
 
 private struct ChatToolbarContent: View {
     let conversation: Conversation
+    @State private var showProfilePreview = false
 
     private var otherUserId: String? {
         guard let currentUserId = Auth.auth().currentUser?.uid else { return nil }
@@ -475,49 +476,75 @@ private struct ChatToolbarContent: View {
         return PresenceManager.shared.isOnline(userId: userId)
     }
 
+    private var otherProfile: UserProfile? {
+        conversation.participantProfiles?.values.first
+    }
+
     var body: some View {
-        HStack(spacing: 10) {
-            // Avatar with online indicator
-            ZStack(alignment: .bottomTrailing) {
-                if let profile = conversation.participantProfiles?.values.first,
-                   let urlString = (profile.mediaURLs ?? []).first,
-                   let url = URL(string: urlString) {
-                    CachedAsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 36, height: 36)
-                            .clipped()
-                    } placeholder: {
+        Button {
+            Haptics.impact(.light)
+            showProfilePreview = true
+        } label: {
+            HStack(spacing: 10) {
+                // Avatar with online indicator
+                ZStack(alignment: .bottomTrailing) {
+                    if let profile = otherProfile,
+                       let urlString = (profile.mediaURLs ?? []).first,
+                       let url = URL(string: urlString) {
+                        CachedAsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 36, height: 36)
+                                .clipped()
+                        } placeholder: {
+                            Circle()
+                                .fill(AppTheme.accent.opacity(0.2))
+                                .frame(width: 36, height: 36)
+                        }
+                        .frame(width: 36, height: 36)
+                        .clipShape(Circle())
+                    } else {
                         Circle()
                             .fill(AppTheme.accent.opacity(0.2))
                             .frame(width: 36, height: 36)
+                            .overlay {
+                                Text(otherProfile?.displayName.prefix(1).uppercased() ?? "?")
+                                    .font(.headline)
+                                    .foregroundStyle(AppTheme.accent)
+                            }
                     }
-                    .frame(width: 36, height: 36)
-                    .clipShape(Circle())
+
+                    if !conversation.isGroupChat && isOtherUserOnline {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 10, height: 10)
+                            .overlay(
+                                Circle()
+                                    .stroke(AppTheme.bg, lineWidth: 2)
+                            )
+                            .offset(x: 2, y: 2)
+                    }
                 }
 
-                if !conversation.isGroupChat && isOtherUserOnline {
-                    Circle()
-                        .fill(.green)
-                        .frame(width: 10, height: 10)
-                        .overlay(
-                            Circle()
-                                .stroke(AppTheme.bg, lineWidth: 2)
-                        )
-                        .offset(x: 2, y: 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(otherProfile?.displayName ?? "Chat")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    if !conversation.isGroupChat {
+                        Text(isOtherUserOnline ? "Online" : "Offline")
+                            .font(.caption2)
+                            .foregroundStyle(isOtherUserOnline ? .green : .secondary)
+                    }
                 }
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(conversation.participantProfiles?.values.first?.displayName ?? "Chat")
-                    .font(.subheadline.weight(.semibold))
-
-                if !conversation.isGroupChat {
-                    Text(isOtherUserOnline ? "Online" : "Offline")
-                        .font(.caption2)
-                        .foregroundStyle(isOtherUserOnline ? .green : .secondary)
-                }
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showProfilePreview) {
+            if let profile = otherProfile {
+                ProfileDetailViewSimple(profile: profile)
+                    .presentationDragIndicator(.visible)
             }
         }
         .task {
@@ -721,29 +748,39 @@ struct ChatView: View {
 struct MessageBubble: View {
     let message: Message
     let isFromCurrentUser: Bool
+    @State private var showFullImage = false
 
     var body: some View {
         HStack {
             if isFromCurrentUser { Spacer(minLength: 60) }
 
             VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                // Show image if mediaURL exists
+                // Show image if mediaURL exists - CLICKABLE
                 if let mediaURL = message.mediaURL, let url = URL(string: mediaURL) {
-                    CachedAsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 200, height: 200)
-                            .clipped()
-                    } placeholder: {
-                        RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
-                            .fill(AppTheme.card)
-                            .frame(width: 200, height: 200)
-                            .overlay(ProgressView().tint(AppTheme.accent))
+                    Button {
+                        Haptics.impact(.light)
+                        showFullImage = true
+                    } label: {
+                        CachedAsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 200, height: 200)
+                                .clipped()
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
+                                .fill(AppTheme.card)
+                                .frame(width: 200, height: 200)
+                                .overlay(ProgressView().tint(AppTheme.accent))
+                        }
+                        .frame(width: 200, height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous))
+                        .shadow(color: AppTheme.shadowLight, radius: 4, x: 0, y: 2)
                     }
-                    .frame(width: 200, height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous))
-                    .shadow(color: AppTheme.shadowLight, radius: 4, x: 0, y: 2)
+                    .buttonStyle(.plain)
+                    .fullScreenCover(isPresented: $showFullImage) {
+                        FullScreenImageView(imageURL: mediaURL)
+                    }
                 }
 
                 // Show text content (always show for context, especially for images)
@@ -790,6 +827,99 @@ struct MessageBubble: View {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return formatter.string(from: message.sentAt)
+    }
+}
+
+// MARK: - Full Screen Image View
+
+struct FullScreenImageView: View {
+    let imageURL: String
+    @Environment(\.dismiss) var dismiss
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            CachedAsyncImage(url: URL(string: imageURL)) { image in
+                image
+                    .resizable()
+                    .scaledToFit()
+                    .scaleEffect(scale)
+                    .offset(offset)
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                scale = lastScale * value
+                            }
+                            .onEnded { value in
+                                lastScale = scale
+                                if scale < 1.0 {
+                                    withAnimation(.spring()) {
+                                        scale = 1.0
+                                        lastScale = 1.0
+                                        offset = .zero
+                                        lastOffset = .zero
+                                    }
+                                }
+                            }
+                    )
+                    .simultaneousGesture(
+                        DragGesture()
+                            .onChanged { value in
+                                if scale > 1.0 {
+                                    offset = CGSize(
+                                        width: lastOffset.width + value.translation.width,
+                                        height: lastOffset.height + value.translation.height
+                                    )
+                                }
+                            }
+                            .onEnded { value in
+                                lastOffset = offset
+                            }
+                    )
+                    .onTapGesture(count: 2) {
+                        withAnimation(.spring()) {
+                            if scale > 1.0 {
+                                scale = 1.0
+                                lastScale = 1.0
+                                offset = .zero
+                                lastOffset = .zero
+                            } else {
+                                scale = 2.5
+                                lastScale = 2.5
+                            }
+                        }
+                    }
+            } placeholder: {
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.5)
+            }
+
+            // Close button
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        Haptics.impact(.light)
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(.white.opacity(0.8))
+                            .padding()
+                    }
+                }
+                Spacer()
+            }
+        }
+        .onTapGesture {
+            dismiss()
+        }
     }
 }
 

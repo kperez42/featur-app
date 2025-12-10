@@ -10,6 +10,7 @@ struct EnhancedHomeView: View {
     @State private var swipeCount = 0
     @State private var showFilters = false
     @State private var selectedProfile: UserProfile? = nil
+    @State private var showNotificationSettings = false
     
     var body: some View {
         ZStack {
@@ -58,12 +59,13 @@ struct EnhancedHomeView: View {
                     }
                     
                     Button {
-                        // Show notifications
+                        Haptics.impact(.light)
+                        showNotificationSettings = true
                     } label: {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "bell.fill")
                                 .foregroundStyle(AppTheme.accent)
-                            
+
                             if viewModel.hasNewMatches {
                                 Circle()
                                     .fill(.red)
@@ -82,7 +84,9 @@ struct EnhancedHomeView: View {
             ProfileDetailViewSimple(profile: profile)
                 .presentationDragIndicator(.visible)
         }
-
+        .sheet(isPresented: $showNotificationSettings) {
+            NotificationSettingsSheet()
+        }
         .task {
             // Track screen view
             AnalyticsManager.shared.trackScreenView(screenName: "Home", screenClass: "EnhancedHomeView")
@@ -1195,4 +1199,159 @@ struct SwipeRecord: Identifiable {
     let action: SwipeAction.Action
     let timestamp = Date()
     let swipeData: SwipeAction? // Store for undo functionality
+}
+
+// MARK: - Notification Settings Sheet
+
+struct NotificationSettingsSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @StateObject private var viewModel = NotificationSettingsSheetViewModel()
+
+    var body: some View {
+        NavigationStack {
+            List {
+                // Status Section
+                Section {
+                    HStack {
+                        Image(systemName: viewModel.notificationsEnabled ? "bell.badge.fill" : "bell.slash.fill")
+                            .font(.title2)
+                            .foregroundStyle(viewModel.notificationsEnabled ? .green : .red)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                (viewModel.notificationsEnabled ? Color.green : Color.red).opacity(0.15),
+                                in: RoundedRectangle(cornerRadius: 10)
+                            )
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(viewModel.notificationsEnabled ? "Notifications Enabled" : "Notifications Disabled")
+                                .font(.headline)
+
+                            Text(viewModel.notificationsEnabled
+                                 ? "You'll receive alerts for matches, messages, and more"
+                                 : "Enable notifications to stay updated")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+
+                // Notification Types
+                Section {
+                    Toggle(isOn: $viewModel.matchNotifications) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(.pink)
+                                .frame(width: 28)
+                            Text("New Matches")
+                        }
+                    }
+
+                    Toggle(isOn: $viewModel.messageNotifications) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "message.fill")
+                                .foregroundStyle(.blue)
+                                .frame(width: 28)
+                            Text("New Messages")
+                        }
+                    }
+
+                    Toggle(isOn: $viewModel.likeNotifications) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "star.fill")
+                                .foregroundStyle(.yellow)
+                                .frame(width: 28)
+                            Text("Someone Liked You")
+                        }
+                    }
+                } header: {
+                    Text("Notification Types")
+                } footer: {
+                    Text("Choose which notifications you want to receive")
+                }
+
+                // Enable/Disable Button
+                Section {
+                    if !viewModel.notificationsEnabled {
+                        Button {
+                            viewModel.requestNotificationPermission()
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Label("Enable Notifications", systemImage: "bell.badge")
+                                    .font(.headline)
+                                Spacer()
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.vertical, 14)
+                            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                    } else {
+                        Button {
+                            viewModel.openSettings()
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Label("Open System Settings", systemImage: "gear")
+                                    .font(.subheadline)
+                                Spacer()
+                            }
+                            .foregroundStyle(AppTheme.accent)
+                        }
+                    }
+                } footer: {
+                    if viewModel.notificationsEnabled {
+                        Text("To disable notifications completely, go to your device Settings")
+                    }
+                }
+            }
+            .navigationTitle("Notifications")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .task {
+                await viewModel.checkNotificationStatus()
+            }
+        }
+    }
+}
+
+@MainActor
+final class NotificationSettingsSheetViewModel: ObservableObject {
+    @Published var notificationsEnabled = false
+    @Published var matchNotifications = true
+    @Published var messageNotifications = true
+    @Published var likeNotifications = true
+
+    func checkNotificationStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        notificationsEnabled = settings.authorizationStatus == .authorized
+    }
+
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            DispatchQueue.main.async {
+                self.notificationsEnabled = granted
+                if granted {
+                    Haptics.notify(.success)
+                    UIApplication.shared.registerForRemoteNotifications()
+                } else {
+                    Haptics.notify(.warning)
+                }
+            }
+        }
+    }
+
+    func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
 }

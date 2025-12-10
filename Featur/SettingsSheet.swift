@@ -21,6 +21,53 @@ struct SettingsSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                // User Profile Header
+                Section {
+                    HStack(spacing: 14) {
+                        // Profile Image
+                        if let photoURL = viewModel.profileImageURL,
+                           let url = URL(string: photoURL) {
+                            AsyncImage(url: url) { image in
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 60, height: 60)
+                                    .clipped()
+                            } placeholder: {
+                                profilePlaceholder
+                            }
+                            .frame(width: 60, height: 60)
+                            .clipShape(Circle())
+                        } else {
+                            profilePlaceholder
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(viewModel.displayName)
+                                .font(.headline)
+
+                            if let email = Auth.auth().currentUser?.email {
+                                Text(email)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if viewModel.isFeatured {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "star.fill")
+                                        .font(.caption2)
+                                    Text("FEATUREd")
+                                        .font(.caption.weight(.semibold))
+                                }
+                                .foregroundStyle(.yellow)
+                            }
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                }
+
                 // FEATUREd Subscription Section (ENHANCED!)
                 Section {
                     if viewModel.isFeatured {
@@ -442,8 +489,20 @@ struct SettingsSheet: View {
             }
             .task {
                 await viewModel.checkFeaturedStatus()
+                viewModel.loadUserInfo()
             }
         }
+    }
+
+    private var profilePlaceholder: some View {
+        Circle()
+            .fill(AppTheme.accent.opacity(0.2))
+            .frame(width: 60, height: 60)
+            .overlay {
+                Text(viewModel.displayName.prefix(1).uppercased())
+                    .font(.title2.bold())
+                    .foregroundStyle(AppTheme.accent)
+            }
     }
 }
 
@@ -478,6 +537,10 @@ final class SettingsViewModel: ObservableObject {
     @Published var autoplayVideos = true
     @Published var highQualityUploads = false
 
+    // User info
+    @Published var displayName = ""
+    @Published var profileImageURL: String?
+
     // Featured status
     @Published var isFeatured = false
     @Published var featuredExpiresAt: Date?
@@ -495,6 +558,22 @@ final class SettingsViewModel: ObservableObject {
 
     var buildNumber: String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
+    func loadUserInfo() {
+        if let user = Auth.auth().currentUser {
+            displayName = user.displayName ?? "User"
+
+            // Try to get profile image from Firestore
+            Task {
+                if let profile = try? await FirebaseService().fetchProfile(uid: user.uid) {
+                    await MainActor.run {
+                        self.displayName = profile.displayName
+                        self.profileImageURL = profile.profileImageURL ?? profile.mediaURLs?.first
+                    }
+                }
+            }
+        }
     }
 
     func checkFeaturedStatus() async {

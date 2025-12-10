@@ -313,83 +313,51 @@ private struct SignedInProfile: View {
     private var activityStatsSection: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                // Favorites (Star/SuperLike)
-                Button {
-                    Haptics.impact(.light)
-                    showFavoriteProfiles = true
-                } label: {
-                    activityBox(
-                        label: "Favorites",
-                        icon: "star.fill",
-                        color: .yellow
-                    )
-                }
-                .buttonStyle(.plain)
-
-                // Likes (Heart)
-                Button {
+                // Liked (Heart)
+                ActivityBoxButton(
+                    label: "Liked",
+                    icon: "heart.fill",
+                    color: .pink
+                ) {
                     Haptics.impact(.light)
                     showLikedProfiles = true
-                } label: {
-                    activityBox(
-                        label: "Liked",
-                        icon: "heart.fill",
-                        color: .pink
-                    )
                 }
-                .buttonStyle(.plain)
+
+                // Matches
+                ActivityBoxButton(
+                    label: "Matches",
+                    icon: "heart.circle.fill",
+                    color: .purple
+                ) {
+                    Haptics.impact(.light)
+                    showMatchedProfiles = true
+                }
             }
 
             HStack(spacing: 12) {
+                // Favorites (Star/SuperLike)
+                ActivityBoxButton(
+                    label: "Favorites",
+                    icon: "star.fill",
+                    color: .yellow
+                ) {
+                    Haptics.impact(.light)
+                    showFavoriteProfiles = true
+                }
+
                 // Profile Views
-                Button {
+                ActivityBoxButton(
+                    label: "Viewed",
+                    icon: "eye.fill",
+                    color: .blue
+                ) {
                     Haptics.impact(.light)
                     showViewedProfiles = true
-                } label: {
-                    activityBox(
-                        label: "Viewed",
-                        icon: "eye.fill",
-                        color: .blue
-                    )
                 }
-                .buttonStyle(.plain)
-
-                // Matches
-                Button {
-                    Haptics.impact(.light)
-                    showMatchedProfiles = true
-                } label: {
-                    activityBox(
-                        label: "Matches",
-                        icon: "heart.circle.fill",
-                        color: .purple
-                    )
-                }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 20)
-    }
-
-    private func activityBox(label: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(color)
-
-            Text(label)
-                .font(.headline)
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .padding()
-        .frame(maxWidth: .infinity)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
     }
     
     // MARK: - Action Buttons
@@ -1037,6 +1005,42 @@ struct MatchedProfilesSheet: View {
             print("Error loading matches: \(error)")
             await MainActor.run { isLoading = false }
         }
+    }
+}
+
+// MARK: - Activity Box Button
+private struct ActivityBoxButton: View {
+    let label: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(color)
+                    .frame(width: 28, height: 28)
+
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
     }
 }
 
