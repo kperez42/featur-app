@@ -998,17 +998,7 @@ struct ReportSheet: View {
         NavigationStack {
             Form {
                 Section("Reason") {
-                    Picker("Select a reason", selection: $selectedReason) {
-                        Text("Select...").tag("")
-                        ForEach(reasons, id: \.self) { reason in
-                            Text(reason).tag(reason)
-                        }
-                    }
-                    .onChange(of: selectedReason) { _, _ in
-                        if !selectedReason.isEmpty {
-                            Haptics.selection()
-                        }
-                    }
+                    reasonPicker
                 }
 
                 Section("Additional Details") {
@@ -1039,6 +1029,20 @@ struct ReportSheet: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage)
+            }
+        }
+    }
+
+    private var reasonPicker: some View {
+        Picker("Select a reason", selection: $selectedReason) {
+            Text("Select...").tag("")
+            ForEach(reasons, id: \.self) { reason in
+                Text(reason).tag(reason)
+            }
+        }
+        .onChange(of: selectedReason) { _, _ in
+            if !selectedReason.isEmpty {
+                Haptics.selection()
             }
         }
     }
