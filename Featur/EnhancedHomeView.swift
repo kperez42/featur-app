@@ -284,6 +284,13 @@ struct EnhancedHomeView: View {
             }
         }
         .padding()
+        .onAppear {
+            // Auto-refresh after a short delay when empty state appears
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+                await viewModel.refresh(currentUserId: auth.user?.uid ?? "")
+            }
+        }
     }
     
     // MARK: - Error Toast

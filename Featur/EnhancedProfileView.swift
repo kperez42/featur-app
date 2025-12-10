@@ -549,107 +549,115 @@ private struct MainProfileContent: View {
         let profile: UserProfile
         let onTapStats: () -> Void
 
-        @State private var animateNumbers = false
-        @StateObject private var analytics = ProfileAnalyticsViewModel()
+        @State private var showLikedProfiles = false
+        @State private var showMatchedProfiles = false
+        @State private var showFavoriteProfiles = false
+        @State private var showViewedProfiles = false
 
         var body: some View {
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
-                    AnimatedStatCard(
-                        title: "Likes Given",
-                        value: analytics.likesGivenCount,
+                    ActivityCardButton(
+                        title: "Liked",
                         icon: "heart.fill",
-                        color: .pink,
-                        animate: animateNumbers,
-                        trendData: generateRealisticTrendData(currentValue: analytics.likesGivenCount)
-                    )
+                        color: .pink
+                    ) {
+                        showLikedProfiles = true
+                    }
 
-                    AnimatedStatCard(
+                    ActivityCardButton(
                         title: "Matches",
-                        value: analytics.matchCount,
                         icon: "heart.circle.fill",
-                        color: .purple,
-                        animate: animateNumbers,
-                        trendData: generateRealisticTrendData(currentValue: analytics.matchCount)
-                    )
+                        color: .purple
+                    ) {
+                        showMatchedProfiles = true
+                    }
                 }
 
                 HStack(spacing: 12) {
-                    AnimatedStatCard(
+                    ActivityCardButton(
                         title: "Favorites",
-                        value: analytics.favoritesGivenCount,
                         icon: "star.fill",
-                        color: .yellow,
-                        animate: animateNumbers,
-                        trendData: generateRealisticTrendData(currentValue: analytics.favoritesGivenCount)
-                    )
+                        color: .yellow
+                    ) {
+                        showFavoriteProfiles = true
+                    }
 
-                    AnimatedStatCard(
+                    ActivityCardButton(
                         title: "Viewed",
-                        value: analytics.profileViewCount,
                         icon: "eye.fill",
-                        color: .blue,
-                        animate: animateNumbers,
-                        trendData: generateRealisticTrendData(currentValue: analytics.profileViewCount)
-                    )
-                }
-            }
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    withAnimation(.spring()) {
-                        animateNumbers = true
+                        color: .blue
+                    ) {
+                        showViewedProfiles = true
                     }
                 }
             }
-            .onTapGesture(perform: onTapStats)
-            .task {
-                await analytics.loadAnalytics(userId: profile.uid)
+            .sheet(isPresented: $showLikedProfiles) {
+                ActivityProfilesSheet(
+                    title: "Liked Profiles",
+                    icon: "heart.fill",
+                    actionType: .like,
+                    userId: profile.uid
+                )
+            }
+            .sheet(isPresented: $showMatchedProfiles) {
+                MatchedProfilesSheet(userId: profile.uid)
+            }
+            .sheet(isPresented: $showFavoriteProfiles) {
+                ActivityProfilesSheet(
+                    title: "Favorite Profiles",
+                    icon: "star.fill",
+                    actionType: .superLike,
+                    userId: profile.uid
+                )
+            }
+            .sheet(isPresented: $showViewedProfiles) {
+                ActivityProfilesSheet(
+                    title: "Viewed Profiles",
+                    icon: "eye.fill",
+                    actionType: nil,
+                    userId: profile.uid
+                )
             }
         }
+    }
 
-        // Generate realistic trend data that shows growth, never negative
-        func generateRealisticTrendData(currentValue: Int) -> [Double] {
-            guard currentValue > 0 else {
-                return Array(repeating: 0.0, count: 7)
+    // Simple activity card button - no data, just clickable
+    private struct ActivityCardButton: View {
+        let title: String
+        let icon: String
+        let color: Color
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: {
+                Haptics.impact(.light)
+                action()
+            }) {
+                HStack(spacing: 12) {
+                    Image(systemName: icon)
+                        .font(.title2)
+                        .foregroundStyle(color)
+
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity)
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(color.opacity(0.2), lineWidth: 1)
+                )
             }
-
-            let doubleValue = Double(currentValue)
-
-            // Generate realistic data with natural fluctuations
-            // Use consistent seed based on current value for reproducibility
-            var generator = SeededRandomGenerator(seed: UInt64(currentValue))
-
-            // Start from a lower base value
-            let startValue = doubleValue * Double.random(in: 0.5...0.7, using: &generator)
-            var data: [Double] = [startValue]
-
-            // Generate 6 more days with realistic ups and downs
-            for i in 1..<7 {
-                let previousValue = data[i - 1]
-                let targetValue = doubleValue // We want to trend toward current value
-
-                // Calculate how far we still need to grow
-                let remainingGrowth = targetValue - previousValue
-                let daysRemaining = Double(7 - i)
-
-                // Base growth per day (to reach target)
-                let baseGrowth = remainingGrowth / daysRemaining
-
-                // Add realistic variation (+/- 30% of base growth)
-                let variation = baseGrowth * Double.random(in: -0.3...0.5, using: &generator)
-                let dailyChange = baseGrowth + variation
-
-                // Calculate next value, ensuring we don't go negative or overshoot too much
-                var nextValue = previousValue + dailyChange
-                nextValue = max(0, min(nextValue, targetValue * 1.1))
-
-                data.append(nextValue)
-            }
-
-            // Ensure last value is exactly the current value
-            data[6] = doubleValue
-
-            return data
+            .buttonStyle(.plain)
         }
     }
 
@@ -1340,7 +1348,6 @@ private struct MainProfileContent: View {
     private struct VerificationSection: View {
         let profile: UserProfile
         @State private var showEmailVerification = false
-        @State private var showPhoneVerification = false
 
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
@@ -1359,27 +1366,12 @@ private struct MainProfileContent: View {
                     ) {
                         showEmailVerification = true
                     }
-
-                    // Phone Verification
-                    VerificationRow(
-                        title: "Phone Number",
-                        subtitle: profile.phoneNumber ?? "Not provided",
-                        isVerified: profile.isPhoneVerified ?? false,
-                        icon: "phone.fill",
-                        color: .green,
-                        showButton: profile.isPhoneVerified != true
-                    ) {
-                        showPhoneVerification = true
-                    }
                 }
             }
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             .sheet(isPresented: $showEmailVerification) {
                 EmailVerificationView(profile: profile)
-            }
-            .sheet(isPresented: $showPhoneVerification) {
-                PhoneVerificationView(profile: profile)
             }
         }
     }
