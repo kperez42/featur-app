@@ -63,6 +63,7 @@ struct SettingsSheet: View {
                     } else {
                         // Inactive - promote getting featured
                         Button {
+                            Haptics.impact(.light)
                             showFeaturedSheet = true
                         } label: {
                             HStack {
@@ -154,6 +155,7 @@ struct SettingsSheet: View {
                         SettingRow(icon: "bell.fill", title: "Push Notifications", color: .orange)
                     }
                     .onChange(of: viewModel.pushNotifications) { _, newValue in
+                        Haptics.selection()
                         viewModel.updateNotificationPermissions(enabled: newValue)
                     }
                 }
@@ -275,12 +277,14 @@ struct SettingsSheet: View {
                 // Danger Zone
                 Section {
                     Button(role: .destructive) {
+                        Haptics.impact(.medium)
                         showLogoutConfirmation = true
                     } label: {
                         SettingRow(icon: "rectangle.portrait.and.arrow.right", title: "Sign Out", color: .red)
                     }
-                    
+
                     Button(role: .destructive) {
+                        Haptics.impact(.heavy)
                         showDeleteConfirmation = true
                     } label: {
                         SettingRow(icon: "trash", title: "Delete Account", color: .red)

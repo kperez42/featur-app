@@ -81,6 +81,7 @@ struct ProfileDetailView: View {
 
                     // Report Button
                     Button {
+                        Haptics.impact(.light)
                         showReportSheet = true
                     } label: {
                         HStack {
@@ -1003,8 +1004,13 @@ struct ReportSheet: View {
                             Text(reason).tag(reason)
                         }
                     }
+                    .onChange(of: selectedReason) { _, _ in
+                        if !selectedReason.isEmpty {
+                            Haptics.selection()
+                        }
+                    }
                 }
-                
+
                 Section("Additional Details") {
                     TextEditor(text: $details)
                         .frame(height: 100)
@@ -1014,10 +1020,14 @@ struct ReportSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        Haptics.impact(.light)
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Submit") {
+                        Haptics.impact(.medium)
                         Task {
                             await submitReport()
                         }
