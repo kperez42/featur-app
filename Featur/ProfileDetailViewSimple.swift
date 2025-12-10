@@ -379,8 +379,8 @@ struct ProfileDetailViewSimple: View {
             do {
                 if !previousState {
                     // Was not liked, now liking
-                    let result = try await service.saveLike(userId: currentUserId, targetUserId: profile.uid)
-                    if result.isMatch {
+                    let isMatch = try await service.saveLike(userId: currentUserId, targetUserId: profile.uid)
+                    if isMatch {
                         await MainActor.run {
                             Haptics.notify(.success)
                         }
