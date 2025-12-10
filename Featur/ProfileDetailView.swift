@@ -459,21 +459,16 @@ private struct StatsRow: View {
         profile.contentStyles.count
     }
 
+    private var interestsCount: Int {
+        profile.interests?.count ?? 0
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-            // Followers
-            StatItem(
-                value: formatNumber(profile.followerCount ?? 0),
-                label: "Followers"
-            )
-
-            Divider()
-                .frame(height: 40)
-
-            // Posts
+            // Photos
             StatItem(
                 value: "\(postsCount)",
-                label: "Posts"
+                label: "Photos"
             )
 
             Divider()
@@ -483,6 +478,15 @@ private struct StatsRow: View {
             StatItem(
                 value: "\(stylesCount)",
                 label: "Styles"
+            )
+
+            Divider()
+                .frame(height: 40)
+
+            // Interests
+            StatItem(
+                value: "\(interestsCount)",
+                label: "Interests"
             )
         }
         .padding(.vertical, 16)
