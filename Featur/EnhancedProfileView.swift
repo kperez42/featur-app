@@ -4488,7 +4488,7 @@ private struct MainProfileContent: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .onChange(of: currentIndex) { _ in
+                .onChange(of: currentIndex) { _, _ in
                     // Reset zoom when swiping to another image
                     withAnimation {
                         scale = 1.0
@@ -4953,7 +4953,7 @@ struct PhoneVerificationView: View {
                             .font(.title2.bold())
                             .padding()
                             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
-                            .onChange(of: verificationCode) { newValue in
+                            .onChange(of: verificationCode) { _, newValue in
                                 // Auto-verify when 6 digits entered
                                 if newValue.count == 6 {
                                     verifyCode()

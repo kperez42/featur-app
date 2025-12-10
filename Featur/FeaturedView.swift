@@ -825,7 +825,7 @@ struct GetFeaturedSheet: View {
             } message: {
                 Text(store.purchaseError ?? "Purchase failed. Please try again.")
             }
-            .onChange(of: store.purchaseError) { newValue in
+            .onChange(of: store.purchaseError) { _, newValue in
                 showError = newValue != nil
             }
         }

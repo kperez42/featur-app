@@ -103,9 +103,9 @@ struct ProfileCreationFlow: View {
                 .animation(.easeInOut, value: step)
                 .transition(.opacity)
                 // Automatically advance once user grants location access
-                .onChange(of: locationManager.authorizationStatus) {
-                    if locationManager.authorizationStatus == .authorizedWhenInUse ||
-                       locationManager.authorizationStatus == .authorizedAlways {
+                .onChange(of: locationManager.authorizationStatus) { _, newStatus in
+                    if newStatus == .authorizedWhenInUse ||
+                       newStatus == .authorizedAlways {
                         withAnimation(.easeInOut) {
                             step = .review
                         }
