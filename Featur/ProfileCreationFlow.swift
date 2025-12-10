@@ -125,9 +125,7 @@ struct ProfileCreationFlow: View {
                 .padding(.bottom, 12)
             }
         }
-                .background(AppTheme.bg.ignoresSafeArea(.all)) // Ensures background covers safe areas
-                .edgesIgnoringSafeArea(.top)
-                .padding(.top, 44) // Offset to clear status bar (adjust based on device, e.g., 20–44 points)
+        .background(AppTheme.bg.ignoresSafeArea())
         .animation(.spring(), value: step)
     }
 
