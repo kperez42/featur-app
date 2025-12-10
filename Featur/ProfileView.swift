@@ -119,15 +119,11 @@ private struct SignedInProfile: View {
     @State private var email: String = ""
     @State private var appleAnon: Bool = false
 
-    // Activity tracking stats
-    @State private var likesGiven: Int = 0
-    @State private var favoritesGiven: Int = 0
-    @State private var profilesViewed: Int = 0
-
     // Sheet states for viewing activity
     @State private var showLikedProfiles = false
     @State private var showFavoriteProfiles = false
     @State private var showViewedProfiles = false
+    @State private var showMatchedProfiles = false
 
     var body: some View {
         ScrollView {
@@ -159,13 +155,9 @@ private struct SignedInProfile: View {
         .background(AppTheme.bg.ignoresSafeArea())
         .refreshable {
             await profileViewModel.refreshProfile()
-            await loadActivityStats()
         }
         .onAppear {
             loadUser()
-        }
-        .task {
-            await loadActivityStats()
         }
         .sheet(isPresented: $showSettings) {
             SettingsSheet()
@@ -195,47 +187,19 @@ private struct SignedInProfile: View {
                 userId: auth.user?.uid ?? ""
             )
         }
+        .sheet(isPresented: $showMatchedProfiles) {
+            MatchedProfilesSheet(userId: auth.user?.uid ?? "")
+        }
         .onChange(of: showSettings) { _, isShowing in
             if !isShowing {
                 // Refresh profile when returning from settings
                 Task {
                     await profileViewModel.refreshProfile()
-                    await loadActivityStats()
                 }
             }
         }
     }
 
-    // MARK: - Load Activity Stats
-    private func loadActivityStats() async {
-        guard let userId = auth.user?.uid else { return }
-        let db = Firestore.firestore()
-
-        do {
-            // Get likes given
-            let likesSnapshot = try await db.collection("swipes")
-                .whereField("userId", isEqualTo: userId)
-                .whereField("action", isEqualTo: "like")
-                .getDocuments()
-            likesGiven = likesSnapshot.documents.count
-
-            // Get favorites (superLikes) given
-            let favoritesSnapshot = try await db.collection("swipes")
-                .whereField("userId", isEqualTo: userId)
-                .whereField("action", isEqualTo: "superLike")
-                .getDocuments()
-            favoritesGiven = favoritesSnapshot.documents.count
-
-            // Get profiles viewed (all swipes except passes count as views)
-            let viewsSnapshot = try await db.collection("swipes")
-                .whereField("userId", isEqualTo: userId)
-                .getDocuments()
-            profilesViewed = viewsSnapshot.documents.count
-        } catch {
-            print("Error loading activity stats: \(error)")
-        }
-    }
-    
     // MARK: - Profile Header
     private var profileHeader: some View {
         VStack(spacing: 16) {
@@ -345,77 +309,87 @@ private struct SignedInProfile: View {
         }
     }
     
-    // MARK: - Activity Stats Section
+    // MARK: - Activity Section
     private var activityStatsSection: some View {
-        HStack(spacing: 0) {
-            // Favorites (Star/SuperLike)
-            Button {
-                Haptics.impact(.light)
-                showFavoriteProfiles = true
-            } label: {
-                activityStatBox(
-                    value: "\(favoritesGiven)",
-                    label: "Favorites",
-                    icon: "star.fill",
-                    color: .yellow
-                )
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                // Favorites (Star/SuperLike)
+                Button {
+                    Haptics.impact(.light)
+                    showFavoriteProfiles = true
+                } label: {
+                    activityBox(
+                        label: "Favorites",
+                        icon: "star.fill",
+                        color: .yellow
+                    )
+                }
+                .buttonStyle(.plain)
+
+                // Likes (Heart)
+                Button {
+                    Haptics.impact(.light)
+                    showLikedProfiles = true
+                } label: {
+                    activityBox(
+                        label: "Liked",
+                        icon: "heart.fill",
+                        color: .pink
+                    )
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
-            Divider()
-                .frame(height: 40)
+            HStack(spacing: 12) {
+                // Profile Views
+                Button {
+                    Haptics.impact(.light)
+                    showViewedProfiles = true
+                } label: {
+                    activityBox(
+                        label: "Viewed",
+                        icon: "eye.fill",
+                        color: .blue
+                    )
+                }
+                .buttonStyle(.plain)
 
-            // Likes (Heart)
-            Button {
-                Haptics.impact(.light)
-                showLikedProfiles = true
-            } label: {
-                activityStatBox(
-                    value: "\(likesGiven)",
-                    label: "Likes",
-                    icon: "heart.fill",
-                    color: .pink
-                )
+                // Matches
+                Button {
+                    Haptics.impact(.light)
+                    showMatchedProfiles = true
+                } label: {
+                    activityBox(
+                        label: "Matches",
+                        icon: "heart.circle.fill",
+                        color: .purple
+                    )
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-
-            Divider()
-                .frame(height: 40)
-
-            // Profile Views
-            Button {
-                Haptics.impact(.light)
-                showViewedProfiles = true
-            } label: {
-                activityStatBox(
-                    value: "\(profilesViewed)",
-                    label: "Viewed",
-                    icon: "eye.fill",
-                    color: AppTheme.accent
-                )
-            }
-            .buttonStyle(.plain)
         }
-        .padding(.vertical, 20)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
         .padding(.horizontal, 16)
         .padding(.bottom, 20)
     }
 
-    private func activityStatBox(value: String, label: String, icon: String, color: Color) -> some View {
-        VStack(spacing: 8) {
+    private func activityBox(label: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.title3)
+                .font(.title2)
                 .foregroundStyle(color)
 
-            Text(value)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-
             Text(label)
+                .font(.headline)
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.tertiary)
         }
+        .padding()
         .frame(maxWidth: .infinity)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
     }
     
     // MARK: - Action Buttons
@@ -969,6 +943,95 @@ private struct ActivityProfileRow: View {
         }
         .padding()
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - Matched Profiles Sheet
+struct MatchedProfilesSheet: View {
+    let userId: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var profiles: [UserProfile] = []
+    @State private var isLoading = true
+
+    private let service = FirebaseService()
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                        Text("Loading...")
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if profiles.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "heart.circle.fill")
+                            .font(.system(size: 50))
+                            .foregroundStyle(.purple.opacity(0.5))
+
+                        Text("No matches yet")
+                            .font(.headline)
+
+                        Text("Keep swiping to find your matches!")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(profiles) { profile in
+                                ActivityProfileRow(profile: profile)
+                            }
+                        }
+                        .padding()
+                    }
+                }
+            }
+            .background(AppTheme.bg.ignoresSafeArea())
+            .navigationTitle("Matches")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .task {
+            await loadMatches()
+        }
+    }
+
+    private func loadMatches() async {
+        do {
+            let matches = try await service.fetchMatches(forUser: userId)
+            let matchedUserIds = matches.compactMap { match -> String? in
+                match.users.first { $0 != userId }
+            }
+
+            let db = Firestore.firestore()
+            var fetchedProfiles: [UserProfile] = []
+
+            for batch in matchedUserIds.chunked(into: 10) {
+                let snapshot = try await db.collection("profiles")
+                    .whereField("uid", in: batch)
+                    .getDocuments()
+                let batchProfiles = snapshot.documents.compactMap { try? $0.data(as: UserProfile.self) }
+                fetchedProfiles.append(contentsOf: batchProfiles)
+            }
+
+            await MainActor.run {
+                profiles = fetchedProfiles
+                isLoading = false
+            }
+        } catch {
+            print("Error loading matches: \(error)")
+            await MainActor.run { isLoading = false }
+        }
     }
 }
 
