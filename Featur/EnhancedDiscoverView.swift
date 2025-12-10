@@ -29,8 +29,8 @@ struct EnhancedDiscoverView: View {
                     
                     // Search Bar
                     EnhancedSearchBar(text: $searchText)
-                        .onChange(of: searchText) { _ in
-                            Task { await viewModel.search(query: searchText) }
+                        .onChange(of: searchText) { _, newValue in
+                            Task { await viewModel.search(query: newValue) }
                         }
                     
                     // Quick Stats
@@ -585,7 +585,7 @@ struct DiscoverProfileCard: View {
                 }
             }
             .padding(12)
-            .frame(width: cardWidth, minHeight: infoMinHeight, alignment: .topLeading)
+            .frame(minHeight: infoMinHeight, alignment: .topLeading)
         }
         .frame(width: cardWidth)
         .background(AppTheme.card)
@@ -598,7 +598,7 @@ struct DiscoverProfileCard: View {
                 .onChanged { _ in isPressed = true }
                 .onEnded { _ in isPressed = false }
         )
-        .onChange(of: mediaURLs.count) { newCount in
+        .onChange(of: mediaURLs.count) { _, newCount in
             // Reset index if it's out of bounds after mediaURLs changes
             if currentImageIndex >= newCount && newCount > 0 {
                 currentImageIndex = newCount - 1

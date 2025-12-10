@@ -614,7 +614,7 @@ struct ProfileCardView: View {
             .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
         }
         .aspectRatio(0.7, contentMode: .fit)
-        .onChange(of: mediaURLs.count) { newCount in
+        .onChange(of: mediaURLs.count) { _, newCount in
             // Reset index if it's out of bounds after mediaURLs changes
             if currentImageIndex >= newCount {
                 currentImageIndex = max(0, newCount - 1)
