@@ -204,33 +204,52 @@ struct FlowLayout: Layout {
 struct ProfileDetailPlaceholder: View {
     let profile: UserProfile
     @Environment(\.dismiss) var dismiss
-    
+
+    private let imageHeight: CGFloat = 400
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Profile Image
-                    if let firstMediaURL = profile.mediaURLs?.first {
-                        AsyncImage(url: URL(string: firstMediaURL)) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 400)
-                                    .clipped()
-                            default:
-                                AppTheme.gradient
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 400)
+                    // Profile Image with consistent sizing
+                    GeometryReader { geo in
+                        if let firstMediaURL = profile.mediaURLs?.first {
+                            AsyncImage(url: URL(string: firstMediaURL)) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: geo.size.width, height: imageHeight)
+                                        .clipped()
+                                case .empty:
+                                    ZStack {
+                                        AppTheme.gradient
+                                        ProgressView()
+                                            .tint(.white)
+                                    }
+                                    .frame(width: geo.size.width, height: imageHeight)
+                                default:
+                                    ZStack {
+                                        AppTheme.gradient
+                                        Image(systemName: "person.fill")
+                                            .font(.system(size: 80))
+                                            .foregroundStyle(.white.opacity(0.4))
+                                    }
+                                    .frame(width: geo.size.width, height: imageHeight)
+                                }
                             }
+                        } else {
+                            ZStack {
+                                AppTheme.gradient
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 80))
+                                    .foregroundStyle(.white.opacity(0.4))
+                            }
+                            .frame(width: geo.size.width, height: imageHeight)
                         }
-                    } else {
-                        AppTheme.gradient
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 400)
                     }
+                    .frame(height: imageHeight)
                     
                     VStack(alignment: .leading, spacing: 16) {
                         // Name and Age
@@ -251,7 +270,7 @@ struct ProfileDetailPlaceholder: View {
                         }
                         
                         // Bio
-                        if let bio = profile.bio {
+                        if let bio = profile.bio, !bio.isEmpty {
                             Text(bio)
                                 .font(.body)
                                 .foregroundStyle(.secondary)

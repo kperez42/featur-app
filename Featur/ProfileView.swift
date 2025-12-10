@@ -181,11 +181,19 @@ private struct SignedInProfile: View {
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 120, height: 120)
+                                .clipped()
                                 .clipShape(Circle())
+                        case .empty:
+                            ZStack {
+                                avatarPlaceholder
+                                ProgressView()
+                                    .tint(.white)
+                            }
                         default:
                             avatarPlaceholder
                         }
                     }
+                    .frame(width: 120, height: 120)
                 } else {
                     avatarPlaceholder
                 }
@@ -387,9 +395,12 @@ private struct SignedInProfile: View {
                                         image
                                             .resizable()
                                             .scaledToFill()
+                                            .frame(width: 100, height: 100)
+                                            .clipped()
                                     case .failure(_):
                                         Rectangle()
                                             .fill(.red.opacity(0.2))
+                                            .frame(width: 100, height: 100)
                                             .overlay(
                                                 Image(systemName: "exclamationmark.triangle")
                                                     .foregroundStyle(.red)
@@ -397,6 +408,7 @@ private struct SignedInProfile: View {
                                     case .empty:
                                         Rectangle()
                                             .fill(.gray.opacity(0.2))
+                                            .frame(width: 100, height: 100)
                                             .overlay(
                                                 ProgressView()
                                                     .tint(AppTheme.accent)
@@ -404,6 +416,7 @@ private struct SignedInProfile: View {
                                     @unknown default:
                                         Rectangle()
                                             .fill(.gray.opacity(0.2))
+                                            .frame(width: 100, height: 100)
                                     }
                                 }
                                 .frame(width: 100, height: 100)

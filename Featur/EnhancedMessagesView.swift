@@ -302,13 +302,19 @@ struct ConversationRow: View {
             image
                 .resizable()
                 .scaledToFill()
+                .frame(width: 56, height: 56)
                 .clipped()
-                .frame(width: 56, height: 56)
-                .clipShape(Circle())
         } placeholder: {
-            ProgressView()
-                .frame(width: 56, height: 56)
+            ZStack {
+                Circle()
+                    .fill(AppTheme.accent.opacity(0.2))
+                ProgressView()
+                    .tint(AppTheme.accent)
+            }
+            .frame(width: 56, height: 56)
         }
+        .frame(width: 56, height: 56)
+        .clipShape(Circle())
     }
 
     @ViewBuilder
@@ -449,14 +455,15 @@ struct ChatView: View {
                             image
                                 .resizable()
                                 .scaledToFill()
+                                .frame(width: 44, height: 44)
                                 .clipped()
                         } placeholder: {
                             Circle()
                                 .fill(AppTheme.accent.opacity(0.2))
+                                .frame(width: 44, height: 44)
                         }
                         .frame(width: 44, height: 44)
                         .clipShape(Circle())
-
                     }
                     
                     Text(conversation.participantProfiles?.values.first?.displayName ?? "Chat")
@@ -783,9 +790,12 @@ struct NewChatView: View {
                                                 image
                                                     .resizable()
                                                     .scaledToFill()
+                                                    .frame(width: 50, height: 50)
+                                                    .clipped()
                                             } placeholder: {
                                                 Circle()
                                                     .fill(AppTheme.accent.opacity(0.2))
+                                                    .frame(width: 50, height: 50)
                                                     .overlay {
                                                         Text(profile.displayName.prefix(1))
                                                             .font(.title2.bold())
