@@ -733,9 +733,9 @@ struct GetFeaturedSheet: View {
                                 VStack(spacing: 12) {
                                     TestProductCard(
                                         duration: "24 Hours",
-                                        price: "$4.99",
+                                        price: "$0.99",
                                         productId: FeaturedProduct.featured24h.rawValue,
-                                        features: ["24-hour spotlight", "Featured badge", "Priority support"],
+                                        features: ["24-hour spotlight", "Featured badge", "Priority placement"],
                                         store: store,
                                         onPurchaseSuccess: {
                                             showSuccess = true
@@ -745,10 +745,10 @@ struct GetFeaturedSheet: View {
 
                                     TestProductCard(
                                         duration: "7 Days",
-                                        price: "$19.99",
+                                        price: "$4.99",
                                         productId: FeaturedProduct.featured7d.rawValue,
                                         popular: true,
-                                        features: ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"],
+                                        features: ["Full week featured", "Featured badge", "Analytics dashboard", "Best value"],
                                         store: store,
                                         onPurchaseSuccess: {
                                             showSuccess = true
@@ -758,9 +758,9 @@ struct GetFeaturedSheet: View {
 
                                     TestProductCard(
                                         duration: "30 Days",
-                                        price: "$59.99",
+                                        price: "$14.99",
                                         productId: FeaturedProduct.featured30d.rawValue,
-                                        features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"],
+                                        features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Priority support"],
                                         store: store,
                                         onPurchaseSuccess: {
                                             showSuccess = true
