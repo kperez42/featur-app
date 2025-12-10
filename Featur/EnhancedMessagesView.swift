@@ -197,20 +197,11 @@ struct EnhancedMessagesView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-            
-            Text("No Messages Yet")
-                .font(.title2.bold())
-            
-            Text("Start swiping to match with creators and begin conversations")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-        .frame(maxHeight: .infinity)
+        EmptyStateView(
+            icon: "bubble.left.and.bubble.right",
+            title: "No Messages Yet",
+            message: "Match with creators to start conversations and collaborate"
+        )
         .background(AppTheme.bg)
     }
     

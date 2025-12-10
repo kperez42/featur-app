@@ -4,16 +4,32 @@ import SwiftUI
 // MARK: - Glass Card
 struct GlassCard<Content: View>: View {
     let content: Content
-    
-    init(@ViewBuilder content: () -> Content) {
+    var padding: CGFloat = 16
+
+    init(padding: CGFloat = 16, @ViewBuilder content: () -> Content) {
+        self.padding = padding
         self.content = content()
     }
-    
+
     var body: some View {
         content
-            .padding()
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.06)))
+            .padding(padding)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.radiusLarge)
+                    .fill(AppTheme.card)
+                    .shadow(color: AppTheme.shadowLight, radius: 8, x: 0, y: 4)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.radiusLarge)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.15), Color.white.opacity(0.05)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
     }
 }
 
@@ -21,15 +37,27 @@ struct GlassCard<Content: View>: View {
 struct TagChip: View {
     let title: String
     let active: Bool
-    
+
     var body: some View {
         Text(title)
             .font(.caption.weight(.semibold))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
             .background(
-                active ? AppTheme.accent : AppTheme.card,
-                in: Capsule()
+                Group {
+                    if active {
+                        Capsule()
+                            .fill(AppTheme.gradient)
+                            .shadow(color: AppTheme.shadowAccent, radius: 4, x: 0, y: 2)
+                    } else {
+                        Capsule()
+                            .fill(AppTheme.card)
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            )
+                    }
+                }
             )
             .foregroundStyle(active ? .white : .primary)
     }
@@ -60,26 +88,45 @@ struct TagPills: View {
 struct SearchBar: View {
     @Binding var text: String
     let placeholder: String
-    
+    @FocusState private var isFocused: Bool
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(isFocused ? AppTheme.accent : .secondary)
+                .animation(.easeInOut(duration: AppTheme.animFast), value: isFocused)
+
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
-            
+                .focused($isFocused)
+
             if !text.isEmpty {
                 Button {
-                    text = ""
+                    withAnimation(.easeInOut(duration: AppTheme.animFast)) {
+                        text = ""
+                    }
+                    Haptics.impact(.light)
                 } label: {
                     Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
                         .foregroundStyle(.secondary)
                 }
+                .transition(.scale.combined(with: .opacity))
             }
         }
-        .padding(12)
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.radiusMedium)
+                .fill(AppTheme.card)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusMedium)
+                        .stroke(isFocused ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 2)
+                )
+                .shadow(color: isFocused ? AppTheme.shadowAccent.opacity(0.2) : .clear, radius: 8, x: 0, y: 4)
+        )
+        .animation(.easeInOut(duration: AppTheme.animMedium), value: isFocused)
         .padding(.horizontal)
     }
 }
@@ -373,5 +420,218 @@ struct FilterChip: View {
                 .onEnded { _ in isPressed = false }
         )
         .animation(.easeInOut(duration: 0.15), value: isSelected)
+    }
+}
+
+// MARK: - Primary Button Style
+struct PrimaryButtonStyle: ButtonStyle {
+    var isEnabled: Bool = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                Group {
+                    if isEnabled {
+                        RoundedRectangle(cornerRadius: AppTheme.radiusMedium)
+                            .fill(AppTheme.gradient)
+                            .shadow(color: AppTheme.shadowAccent, radius: configuration.isPressed ? 2 : 8, x: 0, y: configuration.isPressed ? 1 : 4)
+                    } else {
+                        RoundedRectangle(cornerRadius: AppTheme.radiusMedium)
+                            .fill(Color.gray.opacity(0.3))
+                    }
+                }
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Secondary Button Style
+struct SecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(AppTheme.accent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.radiusMedium)
+                    .stroke(AppTheme.accent, lineWidth: 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppTheme.radiusMedium)
+                            .fill(AppTheme.accent.opacity(configuration.isPressed ? 0.1 : 0))
+                    )
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Icon Button Style
+struct IconButtonStyle: ButtonStyle {
+    var size: CGFloat = 50
+    var backgroundColor: Color = AppTheme.card
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: size * 0.4, weight: .semibold))
+            .frame(width: size, height: size)
+            .background(
+                Circle()
+                    .fill(backgroundColor)
+                    .shadow(color: AppTheme.shadowLight, radius: 4, x: 0, y: 2)
+            )
+            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Shimmer Loading Effect
+struct ShimmerModifier: ViewModifier {
+    @State private var phase: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geo in
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0),
+                            Color.white.opacity(0.3),
+                            Color.white.opacity(0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * 2)
+                    .offset(x: -geo.size.width + (geo.size.width * 2 * phase))
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMedium))
+            .onAppear {
+                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                    phase = 1
+                }
+            }
+    }
+}
+
+extension View {
+    func shimmer() -> some View {
+        modifier(ShimmerModifier())
+    }
+}
+
+// MARK: - Skeleton Loading View
+struct SkeletonView: View {
+    var width: CGFloat? = nil
+    var height: CGFloat = 20
+    var cornerRadius: CGFloat = AppTheme.radiusSmall
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(AppTheme.card)
+            .frame(width: width, height: height)
+            .shimmer()
+    }
+}
+
+// MARK: - Empty State View
+struct EmptyStateView: View {
+    let icon: String
+    let title: String
+    let message: String
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: icon)
+                .font(.system(size: 64))
+                .foregroundStyle(AppTheme.accent.opacity(0.6))
+                .symbolEffect(.pulse)
+
+            VStack(spacing: 8) {
+                Text(title)
+                    .font(.title2.bold())
+                    .foregroundStyle(.primary)
+
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+
+            if let actionTitle = actionTitle, let action = action {
+                Button(actionTitle) {
+                    Haptics.impact(.medium)
+                    action()
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .padding(.horizontal, 60)
+                .padding(.top, 8)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Verified Badge
+struct VerifiedBadge: View {
+    var size: CGFloat = 16
+
+    var body: some View {
+        Image(systemName: "checkmark.seal.fill")
+            .font(.system(size: size))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [Color.blue, Color.cyan],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+    }
+}
+
+// MARK: - Online Status Indicator
+struct OnlineIndicator: View {
+    var size: CGFloat = 12
+    var showBorder: Bool = true
+
+    var body: some View {
+        Circle()
+            .fill(AppTheme.success)
+            .frame(width: size, height: size)
+            .overlay(
+                showBorder ?
+                    Circle()
+                        .stroke(AppTheme.bg, lineWidth: 2)
+                    : nil
+            )
+    }
+}
+
+// MARK: - Gradient Border Modifier
+struct GradientBorderModifier: ViewModifier {
+    var lineWidth: CGFloat = 3
+    var cornerRadius: CGFloat = AppTheme.radiusLarge
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(AppTheme.vibrantGradient, lineWidth: lineWidth)
+            )
+    }
+}
+
+extension View {
+    func gradientBorder(lineWidth: CGFloat = 3, cornerRadius: CGFloat = AppTheme.radiusLarge) -> some View {
+        modifier(GradientBorderModifier(lineWidth: lineWidth, cornerRadius: cornerRadius))
     }
 }

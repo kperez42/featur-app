@@ -342,35 +342,18 @@ struct EnhancedDiscoverView: View {
     }
     
     private var emptyState: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-
-            Text("No Creators Found")
-                .font(.title2.bold())
-
-            Text("Try adjusting your filters or search terms")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            Button {
-                Haptics.impact(.medium)
-                withAnimation {
-                    viewModel.clearAllFilters()
-                    selectedCategory = nil
-                    searchText = ""
-                }
-            } label: {
-                Text("Clear Filters")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(width: 200, height: 50)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 25))
+        EmptyStateView(
+            icon: "magnifyingglass",
+            title: "No Creators Found",
+            message: "Try adjusting your filters or search terms",
+            actionTitle: "Clear Filters"
+        ) {
+            withAnimation(.spring(response: 0.3)) {
+                viewModel.clearAllFilters()
+                selectedCategory = nil
+                searchText = ""
             }
         }
-        .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
     }
     

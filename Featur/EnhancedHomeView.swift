@@ -273,34 +273,16 @@ struct EnhancedHomeView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "person.2.slash")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-
-            Text("No More Profiles")
-                .font(.title2.bold())
-
-            Text("Check back later or adjust your filters")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            Button {
-                Haptics.impact(.medium)
-                Task {
-                    await viewModel.refresh(currentUserId: auth.user?.uid ?? "")
-                }
-            } label: {
-                Text("Refresh")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(width: 200, height: 50)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 25))
+        EmptyStateView(
+            icon: "sparkles",
+            title: "You've Seen Everyone!",
+            message: "Check back later for new creators or try adjusting your preferences",
+            actionTitle: "Refresh"
+        ) {
+            Task {
+                await viewModel.refresh(currentUserId: auth.user?.uid ?? "")
             }
-            .padding(.top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
     }
     
