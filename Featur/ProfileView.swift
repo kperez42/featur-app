@@ -1010,7 +1010,12 @@ struct MatchedProfilesSheet: View {
         do {
             let matches = try await service.fetchMatches(forUser: userId)
             let matchedUserIds = matches.compactMap { match -> String? in
-                match.users.first { $0 != userId }
+                // Get the other user's ID from the match
+                if match.userId1 == userId {
+                    return match.userId2
+                } else {
+                    return match.userId1
+                }
             }
 
             let db = Firestore.firestore()
