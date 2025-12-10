@@ -471,7 +471,10 @@ struct FeaturedCategoryChip: View {
 
 struct FeaturedCreatorCard: View {
     let creator: FeaturedCreator
-    
+
+    // Fixed dimensions for consistent card sizing
+    private let imageSize: CGFloat = 100
+
     var body: some View {
         HStack(spacing: 16) {
             // Profile Image / Avatar
@@ -481,15 +484,26 @@ struct FeaturedCreatorCard: View {
                         image
                             .resizable()
                             .scaledToFill()
+                            .frame(width: imageSize, height: imageSize)
+                            .clipped()
                     } placeholder: {
                         ZStack {
                             AppTheme.gradient
                             ProgressView()
                                 .tint(.white)
                         }
+                        .frame(width: imageSize, height: imageSize)
                     }
+                    .frame(width: imageSize, height: imageSize)
+                    .clipped()
                 } else {
-                    AppTheme.gradient
+                    ZStack {
+                        AppTheme.gradient
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .frame(width: imageSize, height: imageSize)
                 }
 
                 // Featured Badge
@@ -505,7 +519,7 @@ struct FeaturedCreatorCard: View {
                     Spacer()
                 }
             }
-            .frame(width: 100, height: 100)
+            .frame(width: imageSize, height: imageSize)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 16))
             

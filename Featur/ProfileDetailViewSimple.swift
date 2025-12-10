@@ -19,7 +19,10 @@ struct ProfileDetailViewSimple: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
 
-                    // Main image
+                    // Main image - fixed dimensions for consistency
+                    let imageWidth = UIScreen.main.bounds.width - 32
+                    let imageHeight: CGFloat = 420
+
                     if let first = profile.mediaURLs?.first?.trimmingCharacters(in: .whitespacesAndNewlines),
                        let url = URL(string: first) {
 
@@ -29,23 +32,42 @@ struct ProfileDetailViewSimple: View {
                                 image
                                     .resizable()
                                     .scaledToFill()
-                                    .frame(width: UIScreen.main.bounds.width - 32, height: 420)
+                                    .frame(width: imageWidth, height: imageHeight)
                                     .clipped()
                                     .cornerRadius(12)
 
-
                             case .empty:
                                 ZStack {
-                                    Color.black.opacity(0.1)
+                                    AppTheme.gradient.opacity(0.3)
                                     ProgressView()
+                                        .tint(AppTheme.accent)
                                 }
-                                .frame(height: 420)
+                                .frame(width: imageWidth, height: imageHeight)
+                                .cornerRadius(12)
 
                             default:
-                                Color.gray.opacity(0.25)
-                                    .frame(height: 420)
+                                ZStack {
+                                    AppTheme.gradient.opacity(0.3)
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 80))
+                                        .foregroundStyle(.white.opacity(0.6))
+                                }
+                                .frame(width: imageWidth, height: imageHeight)
+                                .cornerRadius(12)
                             }
                         }
+                        .frame(width: imageWidth, height: imageHeight)
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                    } else {
+                        // Fallback when no image URL exists
+                        ZStack {
+                            AppTheme.gradient.opacity(0.3)
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 80))
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
+                        .frame(width: imageWidth, height: imageHeight)
                         .cornerRadius(12)
                         .padding(.horizontal)
                     }
