@@ -857,18 +857,3 @@ extension Product {
     }
 }
 
-// MARK: - Haptics (if not defined elsewhere)
-
-#if !canImport(SharedComponents)
-enum Haptics {
-    static func notify(_ type: UINotificationFeedbackGenerator.FeedbackType) {
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(type)
-    }
-
-    static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        let generator = UIImpactFeedbackGenerator(style: style)
-        generator.impactOccurred()
-    }
-}
-#endif
