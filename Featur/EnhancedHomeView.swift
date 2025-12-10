@@ -195,7 +195,7 @@ struct EnhancedHomeView: View {
             // Pass Button
             ActionButton(
                 icon: "xmark",
-                color: .red,
+                color: AppTheme.error,
                 size: 60
             ) {
                 Haptics.impact(.rigid)
@@ -205,11 +205,11 @@ struct EnhancedHomeView: View {
                     }
                 }
             }
-            
+
             // Undo Button
             ActionButton(
                 icon: "arrow.uturn.left",
-                color: AppTheme.accent,
+                color: AppTheme.warning,
                 size: 50
             ) {
                 Haptics.impact(.soft)
@@ -221,11 +221,11 @@ struct EnhancedHomeView: View {
             }
             .disabled(viewModel.swipeHistory.isEmpty)
             .opacity(viewModel.swipeHistory.isEmpty ? 0.5 : 1.0)
-            
+
             // Super Like Button
             ActionButton(
                 icon: "star.fill",
-                color: .blue,
+                color: AppTheme.superLike,
                 size: 50
             ) {
                 Haptics.notify(.success)
@@ -236,11 +236,11 @@ struct EnhancedHomeView: View {
                     }
                 }
             }
-            
+
             // Like Button
             ActionButton(
                 icon: "heart.fill",
-                color: .green,
+                color: AppTheme.like,
                 size: 60
             ) {
                 Haptics.impact(.heavy)
@@ -653,10 +653,17 @@ struct ActionButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
+                // Outer glow
+                Circle()
+                    .fill(color.opacity(0.15))
+                    .frame(width: size + 8, height: size + 8)
+                    .blur(radius: 4)
+
+                // Main button
                 Circle()
                     .fill(.white)
                     .frame(width: size, height: size)
-                    .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                    .shadow(color: color.opacity(0.3), radius: isPressed ? 4 : 8, y: isPressed ? 2 : 4)
 
                 Image(systemName: icon)
                     .font(.system(size: size * 0.4, weight: .bold))

@@ -736,29 +736,34 @@ struct MessageBubble: View {
                             .frame(width: 200, height: 200)
                             .clipped()
                     } placeholder: {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
                             .fill(AppTheme.card)
                             .frame(width: 200, height: 200)
-                            .overlay(ProgressView())
+                            .overlay(ProgressView().tint(AppTheme.accent))
                     }
                     .frame(width: 200, height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(isFromCurrentUser ? AppTheme.accent : Color.clear, lineWidth: 2)
-                    )
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous))
+                    .shadow(color: AppTheme.shadowLight, radius: 4, x: 0, y: 2)
                 }
 
                 // Show text content (always show for context, especially for images)
-                if !message.content.isEmpty {
+                if !message.content.isEmpty && message.content != "📷 Photo" {
                     Text(message.content)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(
-                            isFromCurrentUser ? AppTheme.accent : AppTheme.card,
-                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            Group {
+                                if isFromCurrentUser {
+                                    RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
+                                        .fill(AppTheme.gradient)
+                                } else {
+                                    RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
+                                        .fill(AppTheme.card)
+                                }
+                            }
                         )
                         .foregroundStyle(isFromCurrentUser ? .white : .primary)
+                        .shadow(color: isFromCurrentUser ? AppTheme.shadowAccent.opacity(0.3) : AppTheme.shadowLight, radius: 4, x: 0, y: 2)
                 }
 
                 // Time and read receipt
@@ -771,7 +776,7 @@ struct MessageBubble: View {
                     if isFromCurrentUser {
                         Image(systemName: message.isRead ? "checkmark.circle.fill" : "checkmark.circle")
                             .font(.caption2)
-                            .foregroundStyle(message.isRead ? .blue : .secondary)
+                            .foregroundStyle(message.isRead ? AppTheme.success : .secondary)
                     }
                 }
                 .padding(.horizontal, 4)
