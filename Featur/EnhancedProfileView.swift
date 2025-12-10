@@ -3090,7 +3090,7 @@ private struct MainProfileContent: View {
                             }
                         }
 
-                        if let location = profile.location, profile.age != nil {
+                        if profile.location != nil, profile.age != nil {
                             Text("•")
                                 .foregroundStyle(.secondary)
                         }
