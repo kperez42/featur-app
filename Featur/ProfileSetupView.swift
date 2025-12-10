@@ -1,5 +1,5 @@
 // ProfileSetupView.swift
-// Onboarding flow for new gamers to complete their profile
+// Onboarding flow for new users to complete their profile
 
 import SwiftUI
 import PhotosUI
@@ -10,6 +10,7 @@ struct ProfileSetupView: View {
     @StateObject private var viewModel: ProfileSetupViewModel
 
     init() {
+        // Initialize with a temporary viewModel - will set auth reference later
         _viewModel = StateObject(wrappedValue: ProfileSetupViewModel())
     }
 
@@ -22,16 +23,12 @@ struct ProfileSetupView: View {
                     VStack(spacing: 24) {
                         // Header
                         VStack(spacing: 8) {
-                            Image(systemName: "gamecontroller.fill")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.white)
-
-                            Text("Create Your Profile")
+                            Text("Complete Your Profile")
                                 .font(.largeTitle)
                                 .fontWeight(.bold)
                                 .foregroundStyle(.white)
 
-                            Text("Set up your gaming profile to find teammates")
+                            Text("Let's set up your creator profile")
                                 .font(.subheadline)
                                 .foregroundStyle(.white.opacity(0.8))
                         }
@@ -72,7 +69,7 @@ struct ProfileSetupView: View {
                                 viewModel.showImagePicker = true
                             }
 
-                            Text("Tap to add your avatar")
+                            Text("Tap to add photo")
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.7))
                         }
@@ -80,83 +77,88 @@ struct ProfileSetupView: View {
 
                         // Form Fields
                         VStack(spacing: 20) {
-                            // Gamer Tag / Display Name
+                            // Display Name
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Image(systemName: "at")
-                                        .foregroundStyle(.white.opacity(0.7))
-                                    Text("Gamer Tag")
-                                        .font(.headline)
-                                        .foregroundStyle(.white)
-                                }
+                                Text("Display Name")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
 
-                                TextField("Your gaming name", text: $viewModel.displayName)
+                                TextField("Enter your name", text: $viewModel.displayName)
                                     .textFieldStyle(ProfileSetupTextFieldStyle())
                             }
 
                             // Bio
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Image(systemName: "text.alignleft")
-                                        .foregroundStyle(.white.opacity(0.7))
-                                    Text("Bio")
-                                        .font(.headline)
-                                        .foregroundStyle(.white)
-                                }
+                                Text("Bio")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
 
                                 TextEditor(text: $viewModel.bio)
-                                    .frame(height: 80)
+                                    .frame(height: 100)
                                     .padding(12)
                                     .background(Color.white.opacity(0.15))
                                     .cornerRadius(12)
                                     .foregroundStyle(.white)
                                     .scrollContentBackground(.hidden)
-
-                                Text("Describe your gaming style, achievements, or what you're looking for")
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.6))
                             }
 
                             // Age
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Image(systemName: "calendar")
-                                        .foregroundStyle(.white.opacity(0.7))
-                                    Text("Age")
-                                        .font(.headline)
-                                        .foregroundStyle(.white)
-                                }
+                                Text("Age")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
 
-                                TextField("Your age", text: $viewModel.ageText)
+                                TextField("Enter your age", text: $viewModel.ageText)
                                     .textFieldStyle(ProfileSetupTextFieldStyle())
                                     .keyboardType(.numberPad)
                             }
 
-                            // Account Type (Gaming-focused)
+                            // Gender
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Image(systemName: "person.badge.shield.checkmark")
-                                        .foregroundStyle(.white.opacity(0.7))
-                                    Text("Account Type")
-                                        .font(.headline)
-                                        .foregroundStyle(.white)
+                                Text("Gender")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+
+                                Menu {
+                                    ForEach(["Male", "Female", "Non-binary", "Other", "Prefer not to say"], id: \.self) { gender in
+                                        Button(gender) {
+                                            viewModel.gender = gender
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(viewModel.gender.isEmpty ? "Select gender" : viewModel.gender)
+                                            .foregroundStyle(viewModel.gender.isEmpty ? .white.opacity(0.5) : .white)
+                                        Spacer()
+                                        Image(systemName: "chevron.down")
+                                            .foregroundStyle(.white.opacity(0.5))
+                                    }
+                                    .padding(12)
+                                    .background(Color.white.opacity(0.15))
+                                    .cornerRadius(12)
                                 }
+                            }
+
+                            // Account Type
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Account Type")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
 
                                 HStack(spacing: 12) {
-                                    ForEach(AccountType.allCases, id: \.self) { type in
+                                    ForEach(["creator", "business"], id: \.self) { type in
                                         Button {
-                                            viewModel.accountType = type.rawValue
-                                            Haptics.impact(.light)
+                                            viewModel.accountType = type
                                         } label: {
                                             VStack(spacing: 8) {
-                                                Image(systemName: type.icon)
+                                                Image(systemName: type == "creator" ? "person.fill" : "briefcase.fill")
                                                     .font(.system(size: 24))
-                                                Text(type.title)
-                                                    .font(.caption.weight(.medium))
+                                                Text(type.capitalized)
+                                                    .font(.caption)
                                             }
                                             .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 14)
-                                            .background(viewModel.accountType == type.rawValue ? AppTheme.accent : Color.white.opacity(0.15))
+                                            .padding()
+                                            .background(viewModel.accountType == type ? AppTheme.accent : Color.white.opacity(0.15))
                                             .foregroundStyle(.white)
                                             .cornerRadius(12)
                                         }
@@ -164,39 +166,28 @@ struct ProfileSetupView: View {
                                 }
                             }
 
-                            // Game Genres
+                            // Content Styles
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Image(systemName: "gamecontroller.fill")
-                                        .foregroundStyle(.white.opacity(0.7))
-                                    Text("Game Genres")
-                                        .font(.headline)
-                                        .foregroundStyle(.white)
-                                }
+                                Text("Content Styles")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
 
-                                Text("Select all games you play")
+                                Text("Select all that apply")
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.7))
 
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 10) {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 12) {
                                     ForEach(UserProfile.ContentStyle.allCases, id: \.self) { style in
                                         Button {
                                             viewModel.toggleContentStyle(style)
-                                            Haptics.impact(.light)
                                         } label: {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: style.icon)
-                                                    .font(.caption)
-                                                Text(style.rawValue)
-                                                    .font(.caption)
-                                                    .lineLimit(1)
-                                                    .minimumScaleFactor(0.8)
-                                            }
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 8)
-                                            .background(viewModel.contentStyles.contains(style) ? AppTheme.accent : Color.white.opacity(0.15))
-                                            .foregroundStyle(.white)
-                                            .cornerRadius(20)
+                                            Text(style.rawValue)
+                                                .font(.caption)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .background(viewModel.contentStyles.contains(style) ? AppTheme.accent : Color.white.opacity(0.15))
+                                                .foregroundStyle(.white)
+                                                .cornerRadius(20)
                                         }
                                     }
                                 }
@@ -210,13 +201,12 @@ struct ProfileSetupView: View {
                                 await viewModel.completeSetup(auth: auth)
                             }
                         } label: {
-                            HStack(spacing: 8) {
+                            HStack {
                                 if viewModel.isLoading {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Image(systemName: "checkmark.circle.fill")
-                                    Text("Start Gaming")
+                                    Text("Complete Setup")
                                         .fontWeight(.semibold)
                                 }
                             }
@@ -247,30 +237,6 @@ struct ProfileSetupView: View {
     }
 }
 
-// MARK: - Account Types
-
-enum AccountType: String, CaseIterable {
-    case gamer = "gamer"
-    case streamer = "streamer"
-    case esports = "esports"
-
-    var title: String {
-        switch self {
-        case .gamer: return "Gamer"
-        case .streamer: return "Streamer"
-        case .esports: return "Pro/Esports"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .gamer: return "gamecontroller.fill"
-        case .streamer: return "video.fill"
-        case .esports: return "trophy.fill"
-        }
-    }
-}
-
 // MARK: - Custom Text Field Style
 
 struct ProfileSetupTextFieldStyle: TextFieldStyle {
@@ -290,7 +256,8 @@ final class ProfileSetupViewModel: ObservableObject {
     @Published var displayName = ""
     @Published var bio = ""
     @Published var ageText = ""
-    @Published var accountType: String = "gamer"
+    @Published var gender = ""
+    @Published var accountType: String = "creator"
     @Published var contentStyles: [UserProfile.ContentStyle] = []
 
     @Published var selectedPhotoItem: PhotosPickerItem?
@@ -307,6 +274,7 @@ final class ProfileSetupViewModel: ObservableObject {
         !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !ageText.isEmpty &&
         Int(ageText) != nil &&
+        !gender.isEmpty &&
         selectedImage != nil
     }
 
@@ -367,8 +335,8 @@ final class ProfileSetupViewModel: ObservableObject {
                 age: age,
                 bio: bio.trimmingCharacters(in: .whitespacesAndNewlines),
                 location: nil,
-                interests: [accountType],
-                contentStyles: contentStyles.isEmpty ? [.fps] : contentStyles,
+                interests: [gender], // Store gender as interest for now
+                contentStyles: contentStyles.isEmpty ? [.fitness] : contentStyles,
                 socialLinks: nil,
                 mediaURLs: nil,
                 profileImageURL: photoURL,
@@ -389,6 +357,8 @@ final class ProfileSetupViewModel: ObservableObject {
             AnalyticsManager.shared.setUserProperty(name: "account_type", value: accountType)
             AnalyticsManager.shared.trackProfileEdit(field: "initial_setup")
 
+            // Manually reload the profile in AuthViewModel to trigger UI update
+            // The auth state listener should pick this up automatically, but we'll trigger it manually to be safe
             auth.userProfile = profile
             print("✅ Profile setup complete - navigating to main app")
 

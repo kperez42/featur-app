@@ -109,47 +109,45 @@ struct UserProfile: Identifiable, Codable {
         var lookingFor: [CollabType]
         var availability: [Availability]
         var responseTime: ResponseTime
-
+        
+        
+        
         enum CollabType: String, Codable, CaseIterable {
-            case coopStreams = "Co-op Streams"
-            case tournamentTeam = "Tournament Teams"
-            case contentCollab = "Content Collabs"
-            case coaching = "Coaching/Mentoring"
-            case gameReviews = "Game Reviews"
-            case modDev = "Mod Development"
-            case esportsTeam = "Esports Teams"
-            case voiceActing = "Voice Acting"
+            case twitchStream = "Twitch Streamers"
+            case musicCollab = "Music Collabs"
+            case podcastGuest = "Podcast Guests"
+            case tiktokLive = "Tiktok Lives"
+            case brandDeal = "Brand Deals"
+            case contentSeries = "Content Series"
         }
-
+        
         enum Availability: String, Codable {
-            case weekdays, weekends, flexible, lateNight
+            case weekdays, weekends, flexible
         }
-
+        
         enum ResponseTime: String, Codable {
             case fast = "Usually responds within hours"
             case moderate = "Usually responds within a day"
             case slow = "Usually responds within a week"
         }
+        
     }
-
-    // Gaming-focused content styles
+    
     enum ContentStyle: String, Codable, CaseIterable {
-        case fps = "FPS/Shooters"
-        case battleRoyale = "Battle Royale"
-        case rpg = "RPG/MMO"
-        case strategy = "Strategy/RTS"
-        case sports = "Sports Games"
-        case racing = "Racing"
-        case fighting = "Fighting Games"
-        case horror = "Horror"
-        case indie = "Indie Games"
-        case retro = "Retro Gaming"
-        case mobile = "Mobile Gaming"
-        case vr = "VR Gaming"
-        case esports = "Esports"
-        case gameDev = "Game Dev"
-        case speedrun = "Speedrunning"
-        case letsPlay = "Let's Play"
+        case comedy = "Comedy"
+        case editing = "Editing"
+        case beauty = "Beauty"
+        case fashion = "Fashion"
+        case fitness = "Fitness"
+        case mukbang = "Mukbang"
+        case cooking = "Cooking"
+        case dance = "Dance"
+        case music = "Music"
+        case gaming = "Video Games"
+        case pet = "Pet"
+        case tech = "Tech"
+        case art = "Art"
+        case sports = "Sports"
     }
     //custom initializer that replaces any missing/null fields with safe defaults to prevent crashing when fetching
     init(from decoder: Decoder) throws {

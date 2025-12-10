@@ -115,14 +115,9 @@ struct ProfileCreationFlow: View {
 
                 // --- Continue Button ---
                 Button(action: onContinue) {
-                    HStack(spacing: 8) {
-                        if step == .review {
-                            Image(systemName: "gamecontroller.fill")
-                        }
-                        Text(step == .review ? "Start Gaming" : "Continue")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                    Text(step == .review ? "Finish" : "Continue")
+                        .frame(maxWidth: .infinity)
+                        .padding()
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!isStepValid(step))
@@ -179,7 +174,7 @@ struct ProfileCreationFlow: View {
         let db = Firestore.firestore()
         let doc = try? await db.collection("users").document(uid).getDocument()
         
-        let nameFromRegistration = doc?.get("name") as? String ?? user?.displayName ?? "New Gamer"
+        let nameFromRegistration = doc?.get("name") as? String ?? user?.displayName ?? "New Creator"
 
         let newProfile = UserProfile(
             uid: uid,
