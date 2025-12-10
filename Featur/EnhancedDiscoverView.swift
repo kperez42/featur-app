@@ -423,6 +423,7 @@ struct EnhancedDiscoverView: View {
 struct DiscoverProfileCard: View {
     let profile: UserProfile
     @State private var currentImageIndex = 0
+    @State private var isPressed = false
 
     // Fixed card dimensions for consistency
     private let cardWidth: CGFloat = UIScreen.main.bounds.width / 2 - 24
@@ -588,6 +589,13 @@ struct DiscoverProfileCard: View {
         .background(AppTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
         .onChange(of: mediaURLs.count) { newCount in
             // Reset index if it's out of bounds after mediaURLs changes
             if currentImageIndex >= newCount && newCount > 0 {

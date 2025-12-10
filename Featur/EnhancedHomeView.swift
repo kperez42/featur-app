@@ -342,13 +342,14 @@ struct TinderSwipeCard: View {
     let onSwipeLeft: () -> Void
     let onSwipeRight: () -> Void
     let onTap: () -> Void
-    
+
     @State private var offset: CGSize = .zero
     @State private var rotation: Double = 0
     @State private var scale: CGFloat = 1.0
-    
+    @State private var hasTriggeredThresholdHaptic = false
+
     private let swipeThreshold: CGFloat = 100
-    
+
     var body: some View {
         ProfileCardView(profile: profile)
             .overlay(alignment: .topLeading) {
@@ -374,10 +375,20 @@ struct TinderSwipeCard: View {
                         offset = gesture.translation
                         rotation = Double(gesture.translation.width / 20)
                         scale = 0.95
+
+                        // Haptic feedback when crossing threshold
+                        let isOverThreshold = abs(gesture.translation.width) > swipeThreshold
+                        if isOverThreshold && !hasTriggeredThresholdHaptic {
+                            Haptics.impact(.medium)
+                            hasTriggeredThresholdHaptic = true
+                        } else if !isOverThreshold {
+                            hasTriggeredThresholdHaptic = false
+                        }
                     }
                     .onEnded { gesture in
                         let horizontalSwipe = gesture.translation.width
-                        
+                        hasTriggeredThresholdHaptic = false
+
                         if abs(horizontalSwipe) > swipeThreshold {
                             // Swipe completed
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -387,7 +398,7 @@ struct TinderSwipeCard: View {
                                 )
                                 rotation = horizontalSwipe > 0 ? 15 : -15
                             }
-                            
+
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 if horizontalSwipe > 0 {
                                     onSwipeRight()
@@ -396,7 +407,8 @@ struct TinderSwipeCard: View {
                                 }
                             }
                         } else {
-                            // Snap back
+                            // Snap back with light haptic
+                            Haptics.impact(.light)
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                                 offset = .zero
                                 rotation = 0
