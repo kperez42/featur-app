@@ -4,25 +4,48 @@
 import SwiftUI
 import FirebaseFirestore
 
-// MARK: - ContentStyle Icon Extension
+// MARK: - ContentStyle Icon Extension (Gaming-Focused)
 
 extension UserProfile.ContentStyle {
     var icon: String {
         switch self {
-        case .comedy: return "theatermasks.fill"
-        case .editing: return "scissors"
-        case .beauty: return "sparkles"
-        case .fashion: return "tshirt.fill"
-        case .fitness: return "figure.run"
-        case .mukbang: return "fork.knife"
-        case .cooking: return "frying.pan.fill"
-        case .dance: return "figure.dance"
-        case .music: return "music.note"
-        case .gaming: return "gamecontroller.fill"
-        case .pet: return "pawprint.fill"
-        case .tech: return "laptopcomputer"
-        case .art: return "paintpalette.fill"
-        case .sports: return "sportscourt.fill"
+        case .fps: return "scope"
+        case .battleRoyale: return "shield.checkered"
+        case .rpg: return "wand.and.stars"
+        case .strategy: return "puzzlepiece.fill"
+        case .sports: return "soccerball"
+        case .racing: return "car.fill"
+        case .fighting: return "figure.martial.arts"
+        case .horror: return "moon.stars.fill"
+        case .indie: return "sparkles"
+        case .retro: return "arcade.stick"
+        case .mobile: return "iphone"
+        case .vr: return "visionpro"
+        case .esports: return "trophy.fill"
+        case .gameDev: return "hammer.fill"
+        case .speedrun: return "stopwatch.fill"
+        case .letsPlay: return "play.rectangle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .fps: return .red
+        case .battleRoyale: return .orange
+        case .rpg: return .purple
+        case .strategy: return .blue
+        case .sports: return .green
+        case .racing: return .yellow
+        case .fighting: return .red
+        case .horror: return .gray
+        case .indie: return .pink
+        case .retro: return .cyan
+        case .mobile: return .mint
+        case .vr: return .indigo
+        case .esports: return .yellow
+        case .gameDev: return .brown
+        case .speedrun: return .orange
+        case .letsPlay: return .teal
         }
     }
 }

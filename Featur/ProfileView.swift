@@ -62,8 +62,8 @@ private struct GuestProfileSignIn: View {
                 VStack(spacing: 12) {
                     Text("Welcome to FEATUR")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
-                    
-                    Text("Sign in to connect with creators, save your matches, and unlock premium features.")
+
+                    Text("Sign in to connect with gamers, find teammates, and level up your gaming experience.")
                         .font(.body)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
@@ -279,27 +279,27 @@ private struct SignedInProfile: View {
     private func statsSection(profile: UserProfile) -> some View {
         HStack(spacing: 0) {
             statBox(
-                value: formatFollowerCount(profile.followerCount ?? 0),
-                label: "Followers",
-                icon: "person.2.fill"
-            )
-            
-            Divider()
-                .frame(height: 40)
-            
-            statBox(
                 value: "\((profile.mediaURLs ?? []).count)",
-                label: "Posts",
+                label: "Screenshots",
                 icon: "photo.stack.fill"
             )
-            
+
             Divider()
                 .frame(height: 40)
-            
+
             statBox(
                 value: "\(profile.contentStyles.count)",
-                label: "Styles",
-                icon: "star.fill"
+                label: "Games",
+                icon: "gamecontroller.fill"
+            )
+
+            Divider()
+                .frame(height: 40)
+
+            statBox(
+                value: "\(profile.interests?.count ?? 0)",
+                label: "Badges",
+                icon: "trophy.fill"
             )
         }
         .padding(.vertical, 20)
@@ -355,36 +355,37 @@ private struct SignedInProfile: View {
     // MARK: - Profile Info Cards
     private func profileInfoCards(profile: UserProfile) -> some View {
         VStack(spacing: 16) {
-            // Content Styles Card
+            // Game Genres Card
             if !profile.contentStyles.isEmpty {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("Content Styles", systemImage: "sparkles")
+                        Label("Game Genres", systemImage: "gamecontroller.fill")
                             .font(.headline)
-                        
+
                         FlowLayout(spacing: 8) {
                             ForEach(profile.contentStyles, id: \.self) { style in
                                 HStack(spacing: 6) {
                                     Image(systemName: style.icon)
                                         .font(.caption)
+                                        .foregroundStyle(style.color)
                                     Text(style.rawValue)
                                         .font(.caption.weight(.medium))
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
-                                .background(AppTheme.accent.opacity(0.15), in: Capsule())
-                                .foregroundStyle(AppTheme.accent)
+                                .background(style.color.opacity(0.15), in: Capsule())
+                                .foregroundStyle(style.color)
                             }
                         }
                     }
                 }
             }
 
-            // Photo Gallery Card
+            // Screenshots/Clips Card
             if let mediaURLs = profile.mediaURLs, !mediaURLs.isEmpty {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("My Photos", systemImage: "photo.on.rectangle.angled")
+                        Label("Screenshots & Clips", systemImage: "photo.on.rectangle.angled")
                             .font(.headline)
 
                         LazyVGrid(columns: [GridItem(.fixed(100)), GridItem(.fixed(100)), GridItem(.fixed(100))], spacing: 8) {
@@ -427,31 +428,41 @@ private struct SignedInProfile: View {
                 }
             }
 
-            // Social Links Card
+            // Gaming Platforms Card
             if profile.socialLinks?.tiktok != nil ||
                profile.socialLinks?.instagram != nil ||
                profile.socialLinks?.youtube != nil ||
                profile.socialLinks?.twitch != nil {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("Social Media", systemImage: "link")
+                        Label("Gaming Profiles", systemImage: "link")
                             .font(.headline)
 
                         VStack(spacing: 10) {
+                            if let twitch = profile.socialLinks?.twitch {
+                                socialLinkRow(
+                                    platform: "Twitch",
+                                    icon: "tv",
+                                    username: twitch.username,
+                                    followers: twitch.followerCount,
+                                    isVerified: twitch.isVerified
+                                )
+                            }
+
                             if let instagram = profile.socialLinks?.instagram {
                                 socialLinkRow(
-                                    platform: "Instagram",
-                                    icon: "camera",
+                                    platform: "Discord",
+                                    icon: "message.fill",
                                     username: instagram.username,
-                                    followers: instagram.followerCount,
+                                    followers: nil,
                                     isVerified: instagram.isVerified
                                 )
                             }
 
                             if let tiktok = profile.socialLinks?.tiktok {
                                 socialLinkRow(
-                                    platform: "TikTok",
-                                    icon: "music.note",
+                                    platform: "Steam/Xbox/PSN",
+                                    icon: "gamecontroller.fill",
                                     username: tiktok.username,
                                     followers: tiktok.followerCount,
                                     isVerified: tiktok.isVerified
@@ -460,21 +471,11 @@ private struct SignedInProfile: View {
 
                             if let youtube = profile.socialLinks?.youtube {
                                 socialLinkRow(
-                                    platform: "YouTube",
-                                    icon: "play.rectangle",
+                                    platform: "YouTube Gaming",
+                                    icon: "play.rectangle.fill",
                                     username: youtube.username,
                                     followers: youtube.followerCount,
                                     isVerified: youtube.isVerified
-                                )
-                            }
-
-                            if let twitch = profile.socialLinks?.twitch {
-                                socialLinkRow(
-                                    platform: "Twitch",
-                                    icon: "gamecontroller",
-                                    username: twitch.username,
-                                    followers: twitch.followerCount,
-                                    isVerified: twitch.isVerified
                                 )
                             }
                         }
@@ -502,31 +503,33 @@ private struct SignedInProfile: View {
                 }
             }
             
-            // Collaboration Preferences Card
+            // Looking For Teammates Card
             if !(profile.collaborationPreferences?.lookingFor ?? []).isEmpty {
 
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("Looking to Collaborate", systemImage: "hand.wave.fill")
+                        Label("Looking For", systemImage: "person.2.fill")
                             .font(.headline)
-                        
+
                         FlowLayout(spacing: 8) {
                             ForEach(profile.collaborationPreferences?.lookingFor ?? [], id: \.self) { collab in
-
-                                Text(collab.rawValue)
-                                    .font(.caption)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(AppTheme.card, in: Capsule())
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption2)
+                                    Text(collab.rawValue)
+                                        .font(.caption)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(AppTheme.accent.opacity(0.15), in: Capsule())
+                                .foregroundStyle(AppTheme.accent)
                             }
                         }
-                        
+
                         HStack(spacing: 4) {
                             Image(systemName: "clock")
                                 .font(.caption)
                             Text("Responds \(profile.collaborationPreferences?.responseTime.rawValue ?? "N/A")")
-
-
                                 .font(.caption)
                         }
                         .foregroundStyle(.secondary)
@@ -537,7 +540,7 @@ private struct SignedInProfile: View {
         }
         .padding(.horizontal, 16)
     }
-    
+
     private func socialLinkRow(platform: String, icon: String, username: String, followers: Int?, isVerified: Bool) -> some View {
         HStack {
             Image(systemName: icon)
@@ -553,7 +556,7 @@ private struct SignedInProfile: View {
                 }
 
                 HStack(spacing: 4) {
-                    Text("@\(username)")
+                    Text(username)
                         .font(.body.weight(.medium))
 
                     if isVerified {
@@ -574,32 +577,35 @@ private struct SignedInProfile: View {
         }
         .padding(.vertical, 8)
     }
-    
+
     // MARK: - Setup Profile Card
     private var setupProfileCard: some View {
         GlassCard {
             VStack(spacing: 16) {
-                Image(systemName: "person.crop.circle.badge.plus")
+                Image(systemName: "gamecontroller.fill")
                     .font(.system(size: 60))
                     .foregroundStyle(AppTheme.accent)
-                
+
                 Text("Complete Your Profile")
                     .font(.title3.bold())
-                
-                Text("Add your content styles, social links, and photos to start connecting with other creators.")
+
+                Text("Add your game genres, gaming profiles, and screenshots to start finding teammates.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                
+
                 Button {
                     showEditProfile = true
                 } label: {
-                    Text("Set Up Profile")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))
-                        .foregroundStyle(.white)
+                    HStack(spacing: 8) {
+                        Image(systemName: "pencil")
+                        Text("Set Up Profile")
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 14))
+                    .foregroundStyle(.white)
                 }
             }
             .padding(.vertical, 8)
