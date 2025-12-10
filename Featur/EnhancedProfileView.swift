@@ -267,7 +267,12 @@ private struct MainProfileContent: View {
             .sheet(isPresented: $showShareSheet) {
                 let profileURL = "https://featur.app/profile/\(profile.uid)"
                 let shareText = "Check out \(profile.displayName)'s profile on Featur!"
-                ShareSheet(items: [shareText, URL(string: profileURL)!])
+                let items: [Any] = if let url = URL(string: profileURL) {
+                    [shareText, url]
+                } else {
+                    [shareText]
+                }
+                ShareSheet(items: items)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }

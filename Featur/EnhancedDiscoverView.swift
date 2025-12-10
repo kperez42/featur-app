@@ -1201,7 +1201,7 @@ final class DiscoverViewModel: ObservableObject {
                 if searchCache.count > 20 {
                     // Remove oldest entries
                     let sortedKeys = searchCache.keys.sorted {
-                        searchCache[$0]!.timestamp < searchCache[$1]!.timestamp
+                        (searchCache[$0]?.timestamp ?? Date.distantPast) < (searchCache[$1]?.timestamp ?? Date.distantPast)
                     }
                     for key in sortedKeys.prefix(5) {
                         searchCache.removeValue(forKey: key)
