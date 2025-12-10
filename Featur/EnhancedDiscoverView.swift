@@ -435,12 +435,18 @@ struct DiscoverProfileCard: View {
         mediaURLs.count > 1
     }
 
+    // Safe current index that stays within bounds
+    private var safeCurrentIndex: Int {
+        guard !mediaURLs.isEmpty else { return 0 }
+        return min(currentImageIndex, mediaURLs.count - 1)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Profile Image with Carousel
             ZStack(alignment: .topTrailing) {
                 if !mediaURLs.isEmpty {
-                    let currentURL = mediaURLs[currentImageIndex]
+                    let currentURL = mediaURLs[safeCurrentIndex]
                     CachedAsyncImage(url: URL(string: currentURL)) { image in
                         image
                             .resizable()
@@ -457,7 +463,7 @@ struct DiscoverProfileCard: View {
                     }
                     .frame(width: cardWidth, height: imageHeight)
                     .clipped()
-                    .id(currentImageIndex) // Force reload when index changes
+                    .id(safeCurrentIndex) // Force reload when index changes
                 } else {
                     // Fallback placeholder with fixed dimensions
                     ZStack {
@@ -475,7 +481,7 @@ struct DiscoverProfileCard: View {
                         HStack(spacing: 4) {
                             ForEach(0..<mediaURLs.count, id: \.self) { index in
                                 Circle()
-                                    .fill(index == currentImageIndex ? .white : .white.opacity(0.5))
+                                    .fill(index == safeCurrentIndex ? .white : .white.opacity(0.5))
                                     .frame(width: 6, height: 6)
                             }
                         }
@@ -506,7 +512,7 @@ struct DiscoverProfileCard: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                withAnimation {
+                                withAnimation(.easeInOut(duration: 0.2)) {
                                     currentImageIndex = max(0, currentImageIndex - 1)
                                 }
                                 Haptics.impact(.light)
@@ -516,7 +522,7 @@ struct DiscoverProfileCard: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                withAnimation {
+                                withAnimation(.easeInOut(duration: 0.2)) {
                                     currentImageIndex = min(mediaURLs.count - 1, currentImageIndex + 1)
                                 }
                                 Haptics.impact(.light)
@@ -580,6 +586,12 @@ struct DiscoverProfileCard: View {
         .background(AppTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+        .onChange(of: mediaURLs.count) { newCount in
+            // Reset index if it's out of bounds after mediaURLs changes
+            if currentImageIndex >= newCount && newCount > 0 {
+                currentImageIndex = newCount - 1
+            }
+        }
     }
 }
 

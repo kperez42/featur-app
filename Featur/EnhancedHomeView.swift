@@ -425,12 +425,18 @@ struct ProfileCardView: View {
         mediaURLs.count > 1
     }
 
+    // Safe current index that stays within bounds
+    private var safeCurrentIndex: Int {
+        guard !mediaURLs.isEmpty else { return 0 }
+        return min(currentImageIndex, mediaURLs.count - 1)
+    }
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
                 // Background Image/Gradient with Carousel (CACHED)
                 if !mediaURLs.isEmpty {
-                    let currentURL = mediaURLs[currentImageIndex]
+                    let currentURL = mediaURLs[safeCurrentIndex]
                     if let url = URL(string: currentURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
                         CachedAsyncImage(url: url) { image in
                             image
@@ -442,8 +448,6 @@ struct ProfileCardView: View {
                                     // Add slight fade so gradient gently merges into image
                                     AppTheme.gradient.opacity(0.15)
                                 )
-                                .transition(.opacity)
-                                .animation(.easeInOut(duration: 0.3), value: UUID())
                         } placeholder: {
                             // While loading: subtle gradient + blur shimmer
                             ZStack {
@@ -454,14 +458,18 @@ struct ProfileCardView: View {
                                 ProgressView()
                                     .tint(.white)
                             }
-                            .transition(.opacity)
+                            .frame(width: geo.size.width, height: geo.size.height)
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
-                        .id(currentImageIndex) // Force reload when index changes
+                        .id(safeCurrentIndex) // Force reload when index changes
+                    } else {
+                        // Invalid URL fallback
+                        fallbackGradient(size: geo.size)
                     }
                 } else {
-                    AppTheme.gradient
+                    // No images fallback
+                    fallbackGradient(size: geo.size)
                 }
 
                 // Image Navigation Areas (tap left/right to navigate)
@@ -471,7 +479,7 @@ struct ProfileCardView: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                withAnimation {
+                                withAnimation(.easeInOut(duration: 0.2)) {
                                     currentImageIndex = max(0, currentImageIndex - 1)
                                 }
                                 Haptics.impact(.light)
@@ -481,7 +489,7 @@ struct ProfileCardView: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                withAnimation {
+                                withAnimation(.easeInOut(duration: 0.2)) {
                                     currentImageIndex = min(mediaURLs.count - 1, currentImageIndex + 1)
                                 }
                                 Haptics.impact(.light)
@@ -495,7 +503,7 @@ struct ProfileCardView: View {
                         HStack(spacing: 6) {
                             ForEach(0..<mediaURLs.count, id: \.self) { index in
                                 Capsule()
-                                    .fill(index == currentImageIndex ? .white : .white.opacity(0.5))
+                                    .fill(index == safeCurrentIndex ? .white : .white.opacity(0.5))
                                     .frame(height: 4)
                                     .frame(maxWidth: .infinity)
                             }
@@ -507,14 +515,14 @@ struct ProfileCardView: View {
                     }
                 }
 
-                
+
                 // Gradient Overlay
                 LinearGradient(
                     colors: [.clear, .black.opacity(0.8)],
                     startPoint: .center,
                     endPoint: .bottom
                 )
-                
+
                 // Profile Info
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -549,30 +557,32 @@ struct ProfileCardView: View {
                             .background(.green, in: Capsule())
                         }
                     }
-                    
-                    if let bio = profile.bio {
+
+                    if let bio = profile.bio, !bio.isEmpty {
                         Text(bio)
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.9))
                             .lineLimit(2)
                     }
-                    
+
                     // Content Styles
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(profile.contentStyles.prefix(3), id: \.self) { style in
-                                Text(style.rawValue)
-                                    .font(.caption.bold())
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(.white.opacity(0.2), in: Capsule())
-                                    .foregroundStyle(.white)
+                    if !profile.contentStyles.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(profile.contentStyles.prefix(3), id: \.self) { style in
+                                    Text(style.rawValue)
+                                        .font(.caption.bold())
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(.white.opacity(0.2), in: Capsule())
+                                        .foregroundStyle(.white)
+                                }
                             }
                         }
                     }
-                    
+
                     // Location
-                    if let location = profile.location, let city = location.city {
+                    if let location = profile.location, let city = location.city, !city.isEmpty {
                         HStack(spacing: 4) {
                             Image(systemName: "mappin.circle.fill")
                                 .font(.caption)
@@ -590,6 +600,24 @@ struct ProfileCardView: View {
             .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
         }
         .aspectRatio(0.7, contentMode: .fit)
+        .onChange(of: mediaURLs.count) { newCount in
+            // Reset index if it's out of bounds after mediaURLs changes
+            if currentImageIndex >= newCount {
+                currentImageIndex = max(0, newCount - 1)
+            }
+        }
+    }
+
+    // Fallback gradient view with person icon
+    @ViewBuilder
+    private func fallbackGradient(size: CGSize) -> some View {
+        ZStack {
+            AppTheme.gradient
+            Image(systemName: "person.fill")
+                .font(.system(size: 80))
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .frame(width: size.width, height: size.height)
     }
 }
 
