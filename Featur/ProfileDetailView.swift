@@ -217,6 +217,10 @@ private struct ActionButtonsRow: View {
     let onShare: () -> Void
     @ObservedObject var viewModel: ProfileDetailViewModel
 
+    @State private var likePressed = false
+    @State private var messagePressed = false
+    @State private var sharePressed = false
+
     var body: some View {
         HStack(spacing: 12) {
             // Like Button
@@ -227,6 +231,7 @@ private struct ActionButtonsRow: View {
                             .tint(isLiked ? .white : AppTheme.accent)
                     } else {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
+                            .symbolEffect(.bounce, value: isLiked)
                         Text(isLiked ? "Liked" : "Like")
                     }
                 }
@@ -238,11 +243,22 @@ private struct ActionButtonsRow: View {
                     isLiked ? AppTheme.accent : AppTheme.card,
                     in: RoundedRectangle(cornerRadius: 16)
                 )
+                .scaleEffect(likePressed ? 0.95 : 1.0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: likePressed)
             }
+            .buttonStyle(.plain)
             .disabled(viewModel.isLoading)
-            
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in likePressed = true }
+                    .onEnded { _ in likePressed = false }
+            )
+
             // Message Button
-            Button(action: onMessage) {
+            Button {
+                Haptics.impact(.light)
+                onMessage()
+            } label: {
                 HStack {
                     Image(systemName: "message.fill")
                     Text("Message")
@@ -252,16 +268,35 @@ private struct ActionButtonsRow: View {
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                .scaleEffect(messagePressed ? 0.95 : 1.0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: messagePressed)
             }
-            
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in messagePressed = true }
+                    .onEnded { _ in messagePressed = false }
+            )
+
             // Share Button
-            Button(action: onShare) {
+            Button {
+                Haptics.impact(.light)
+                onShare()
+            } label: {
                 Image(systemName: "square.and.arrow.up")
                     .font(.title3)
                     .foregroundStyle(AppTheme.accent)
                     .frame(width: 56, height: 56)
                     .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                    .scaleEffect(sharePressed ? 0.9 : 1.0)
+                    .animation(.spring(response: 0.2, dampingFraction: 0.6), value: sharePressed)
             }
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in sharePressed = true }
+                    .onEnded { _ in sharePressed = false }
+            )
         }
     }
 }
@@ -829,6 +864,7 @@ struct MessageSheet: View {
                 Spacer()
                 
                 Button {
+                    Haptics.impact(.medium)
                     Task {
                         await sendMessage()
                     }
@@ -838,6 +874,7 @@ struct MessageSheet: View {
                             ProgressView()
                                 .tint(.white)
                         } else {
+                            Image(systemName: "paperplane.fill")
                             Text("Send Message")
                                 .font(.headline)
                         }
@@ -845,7 +882,11 @@ struct MessageSheet: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
+                    .background(
+                        messageText.isEmpty ? Color.gray : AppTheme.accent,
+                        in: RoundedRectangle(cornerRadius: 16)
+                    )
+                    .animation(.easeInOut(duration: 0.2), value: messageText.isEmpty)
                 }
                 .disabled(messageText.isEmpty || isSending)
                 .padding(.horizontal)
@@ -911,12 +952,14 @@ struct MessageSheet: View {
 
             print("✅ Message sent successfully to \(recipientProfile.displayName)")
 
-            // Dismiss on success
+            // Success haptic and dismiss
+            Haptics.notify(.success)
             isSending = false
             dismiss()
 
         } catch {
             isSending = false
+            Haptics.notify(.error)
             errorMessage = "Failed to send message: \(error.localizedDescription)"
             showError = true
             print("❌ Error sending message: \(error)")

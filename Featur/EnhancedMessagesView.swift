@@ -229,17 +229,41 @@ struct EnhancedMessagesView: View {
 
 struct ConversationRow: View {
     let conversation: Conversation
-    
+
+    private var otherUserId: String? {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return nil }
+        return conversation.participantIds.first { $0 != currentUserId }
+    }
+
+    private var isOtherUserOnline: Bool {
+        guard let userId = otherUserId else { return false }
+        return PresenceManager.shared.isOnline(userId: userId)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar
-            if conversation.isGroupChat {
-                groupAvatar
-            } else if let otherProfile = conversation.participantProfiles?.values.first {
-                profileAvatar(otherProfile)
-            } else {
-                // Fallback avatar when profile not loaded
-                defaultAvatar
+            // Avatar with online indicator
+            ZStack(alignment: .bottomTrailing) {
+                if conversation.isGroupChat {
+                    groupAvatar
+                } else if let otherProfile = conversation.participantProfiles?.values.first {
+                    profileAvatar(otherProfile)
+                } else {
+                    // Fallback avatar when profile not loaded
+                    defaultAvatar
+                }
+
+                // Online indicator
+                if !conversation.isGroupChat && isOtherUserOnline {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 14, height: 14)
+                        .overlay(
+                            Circle()
+                                .stroke(AppTheme.bg, lineWidth: 2)
+                        )
+                        .offset(x: 2, y: 2)
+                }
             }
 
             // Content
@@ -248,22 +272,23 @@ struct ConversationRow: View {
                     Text(displayName)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
-                    
+
                     Spacer()
-                    
+
                     Text(timeString)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 HStack {
                     Text(conversation.lastMessage ?? "Start chatting")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(unreadCount > 0 ? .primary : .secondary)
+                        .fontWeight(unreadCount > 0 ? .medium : .regular)
                         .lineLimit(1)
-                    
+
                     Spacer()
-                    
+
                     if unreadCount > 0 {
                         Text("\(unreadCount)")
                             .font(.caption.weight(.bold))
@@ -278,6 +303,12 @@ struct ConversationRow: View {
         .padding(.horizontal)
         .padding(.vertical, 12)
         .background(AppTheme.bg)
+        .task {
+            // Fetch online status for the other user
+            if let userId = otherUserId {
+                await PresenceManager.shared.fetchOnlineStatus(userId: userId)
+            }
+        }
     }
     
     private var displayName: String {
@@ -389,6 +420,74 @@ struct NewMatchCard: View {
     }
 }
 
+// MARK: - Chat Toolbar Content
+
+private struct ChatToolbarContent: View {
+    let conversation: Conversation
+
+    private var otherUserId: String? {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return nil }
+        return conversation.participantIds.first { $0 != currentUserId }
+    }
+
+    private var isOtherUserOnline: Bool {
+        guard let userId = otherUserId else { return false }
+        return PresenceManager.shared.isOnline(userId: userId)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // Avatar with online indicator
+            ZStack(alignment: .bottomTrailing) {
+                if let profile = conversation.participantProfiles?.values.first,
+                   let urlString = (profile.mediaURLs ?? []).first,
+                   let url = URL(string: urlString) {
+                    CachedAsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 36, height: 36)
+                            .clipped()
+                    } placeholder: {
+                        Circle()
+                            .fill(AppTheme.accent.opacity(0.2))
+                            .frame(width: 36, height: 36)
+                    }
+                    .frame(width: 36, height: 36)
+                    .clipShape(Circle())
+                }
+
+                if !conversation.isGroupChat && isOtherUserOnline {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 10, height: 10)
+                        .overlay(
+                            Circle()
+                                .stroke(AppTheme.bg, lineWidth: 2)
+                        )
+                        .offset(x: 2, y: 2)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(conversation.participantProfiles?.values.first?.displayName ?? "Chat")
+                    .font(.subheadline.weight(.semibold))
+
+                if !conversation.isGroupChat {
+                    Text(isOtherUserOnline ? "Online" : "Offline")
+                        .font(.caption2)
+                        .foregroundStyle(isOtherUserOnline ? .green : .secondary)
+                }
+            }
+        }
+        .task {
+            if let userId = otherUserId {
+                await PresenceManager.shared.fetchOnlineStatus(userId: userId)
+            }
+        }
+    }
+}
+
 // MARK: - Chat View
 
 struct ChatView: View {
@@ -474,28 +573,7 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 8) {
-                    if let profile = conversation.participantProfiles?.values.first,
-                       let urlString = (profile.mediaURLs ?? []).first,
-                       let url = URL(string: urlString) {
-                        CachedAsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 44, height: 44)
-                                .clipped()
-                        } placeholder: {
-                            Circle()
-                                .fill(AppTheme.accent.opacity(0.2))
-                                .frame(width: 44, height: 44)
-                        }
-                        .frame(width: 44, height: 44)
-                        .clipShape(Circle())
-                    }
-                    
-                    Text(conversation.participantProfiles?.values.first?.displayName ?? "Chat")
-                        .font(.headline)
-                }
+                ChatToolbarContent(conversation: conversation)
             }
         }
         .background(AppTheme.bg)
@@ -603,7 +681,7 @@ struct ChatView: View {
 struct MessageBubble: View {
     let message: Message
     let isFromCurrentUser: Bool
-    
+
     var body: some View {
         HStack {
             if isFromCurrentUser { Spacer(minLength: 60) }
@@ -643,16 +721,26 @@ struct MessageBubble: View {
                         .foregroundStyle(isFromCurrentUser ? .white : .primary)
                 }
 
-                Text(timeString)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
+                // Time and read receipt
+                HStack(spacing: 4) {
+                    Text(timeString)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    // Read receipt for sent messages
+                    if isFromCurrentUser {
+                        Image(systemName: message.isRead ? "checkmark.circle.fill" : "checkmark.circle")
+                            .font(.caption2)
+                            .foregroundStyle(message.isRead ? .blue : .secondary)
+                    }
+                }
+                .padding(.horizontal, 4)
             }
 
             if !isFromCurrentUser { Spacer(minLength: 60) }
         }
     }
-    
+
     private var timeString: String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
