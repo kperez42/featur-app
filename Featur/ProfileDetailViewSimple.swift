@@ -297,19 +297,15 @@ struct ProfileDetailViewSimple: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 16) {
             // Like Button
             Button {
                 toggleLike()
             } label: {
                 HStack(spacing: 8) {
-                    if isLoading {
-                        ProgressView()
-                            .tint(isLiked ? .white : AppTheme.accent)
-                    } else {
-                        Image(systemName: isLiked ? "heart.fill" : "heart")
-                            .symbolEffect(.bounce, value: isLiked)
-                    }
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                        .font(.title3)
+                        .symbolEffect(.bounce, value: isLiked)
                     Text(isLiked ? "Liked" : "Like")
                         .fontWeight(.semibold)
                 }
@@ -321,16 +317,22 @@ struct ProfileDetailViewSimple: View {
                     isLiked ? AppTheme.accent : AppTheme.card,
                     in: RoundedRectangle(cornerRadius: 14)
                 )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(isLiked ? Color.clear : AppTheme.accent.opacity(0.3), lineWidth: 1)
+                )
             }
             .disabled(isLoading)
+            .opacity(isLoading ? 0.7 : 1)
 
             // Message Button
             Button {
-                Haptics.impact(.light)
+                Haptics.impact(.medium)
                 showMessageSheet = true
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "message.fill")
+                        .font(.title3)
                     Text("Message")
                         .fontWeight(.semibold)
                 }
@@ -350,7 +352,10 @@ struct ProfileDetailViewSimple: View {
     private func loadLikeStatus() async {
         guard let currentUserId = Auth.auth().currentUser?.uid else { return }
         do {
-            isLiked = try await service.checkLikeStatus(userId: currentUserId, targetUserId: profile.uid)
+            let liked = try await service.checkLikeStatus(userId: currentUserId, targetUserId: profile.uid)
+            await MainActor.run {
+                isLiked = liked
+            }
         } catch {
             print("Error loading like status: \(error)")
         }
@@ -358,28 +363,44 @@ struct ProfileDetailViewSimple: View {
 
     private func toggleLike() {
         guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+        guard !isLoading else { return }
 
-        withAnimation(.spring(response: 0.3)) {
+        // Immediate feedback
+        Haptics.impact(isLiked ? .light : .medium)
+
+        let previousState = isLiked
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
             isLiked.toggle()
         }
-        Haptics.impact(isLiked ? .medium : .light)
 
         Task {
-            isLoading = true
-            defer { isLoading = false }
+            await MainActor.run { isLoading = true }
 
             do {
-                if isLiked {
-                    _ = try await service.saveLike(userId: currentUserId, targetUserId: profile.uid)
+                if !previousState {
+                    // Was not liked, now liking
+                    let result = try await service.saveLike(userId: currentUserId, targetUserId: profile.uid)
+                    if result.isMatch {
+                        await MainActor.run {
+                            Haptics.notify(.success)
+                        }
+                    }
                 } else {
+                    // Was liked, now unliking
                     try await service.removeLike(userId: currentUserId, targetUserId: profile.uid)
                 }
             } catch {
-                withAnimation {
-                    isLiked.toggle()
+                // Revert on error
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.3)) {
+                        isLiked = previousState
+                    }
+                    Haptics.notify(.error)
                 }
-                Haptics.notify(.error)
+                print("Error toggling like: \(error)")
             }
+
+            await MainActor.run { isLoading = false }
         }
     }
 }
