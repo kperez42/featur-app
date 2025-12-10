@@ -1092,7 +1092,7 @@ struct ImageViewerSheet: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .opacity(1.0 - min(abs(dragOffset.height) / 300, 0.5))
+                .opacity(1.0 - min(abs(dragOffset.height) / 300.0, 0.5))
 
             TabView(selection: $selectedIndex) {
                 ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
@@ -1116,7 +1116,7 @@ struct ImageViewerSheet: View {
                         dragOffset = value.translation
                     }
                     .onEnded { value in
-                        if abs(value.translation.height) > 100 {
+                        if abs(value.translation.height) > 100.0 {
                             Haptics.impact(.light)
                             dismiss()
                         } else {
