@@ -26,56 +26,39 @@ struct ProfileDetailViewSimple: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Drag Handle
-            Capsule()
-                .fill(Color.gray.opacity(0.35))
-                .frame(width: 40, height: 5)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 20) {
+                // Image Gallery with Carousel
+                imageGallery
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    // Image Gallery with Carousel
-                    imageGallery
+                // Profile Info
+                profileInfo
 
-                    // Profile Info
-                    profileInfo
+                // Stats Row
+                statsRow
 
-                    // Stats Row
-                    statsRow
-
-                    // Content Styles
-                    if !profile.contentStyles.isEmpty {
-                        contentStylesSection
-                    }
-
-                    // Bio
-                    if let bio = profile.bio, !bio.isEmpty {
-                        bioSection(bio)
-                    }
-
-                    // Interests
-                    if let interests = profile.interests, !interests.isEmpty {
-                        interestsSection(interests)
-                    }
-
-                    // Action Buttons
-                    actionButtons
-
-                    Spacer().frame(height: 40)
+                // Content Styles
+                if !profile.contentStyles.isEmpty {
+                    contentStylesSection
                 }
+
+                // Bio
+                if let bio = profile.bio, !bio.isEmpty {
+                    bioSection(bio)
+                }
+
+                // Interests
+                if let interests = profile.interests, !interests.isEmpty {
+                    interestsSection(interests)
+                }
+
+                // Action Buttons
+                actionButtons
+
+                Spacer().frame(height: 40)
             }
         }
-        .interactiveDismissDisabled(false)
         .background(AppTheme.bg)
-        .gesture(
-            DragGesture().onEnded { value in
-                if value.translation.height > 120 {
-                    dismiss()
-                }
-            }
-        )
         .task {
             await loadLikeStatus()
         }
