@@ -21,11 +21,12 @@ struct SettingsSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                // FEATUREd Subscription Section (NEW!)
+                // FEATUREd Subscription Section (ENHANCED!)
                 Section {
                     if viewModel.isFeatured {
-                        // Active subscription view
-                        VStack(alignment: .leading, spacing: 12) {
+                        // Active subscription view with enhanced details
+                        VStack(alignment: .leading, spacing: 16) {
+                            // Header
                             HStack {
                                 Image(systemName: "star.fill")
                                     .foregroundStyle(.yellow)
@@ -49,52 +50,157 @@ struct SettingsSheet: View {
                                     .font(.title3)
                             }
 
-                            // Featured status badge
-                            HStack {
-                                Text("✨ Your profile is being featured")
-                                    .font(.caption)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(AppTheme.accent, in: Capsule())
+                            // Time remaining indicator
+                            if let expiresAt = viewModel.featuredExpiresAt {
+                                let remaining = store.formatRemainingTime()
+                                HStack(spacing: 8) {
+                                    Image(systemName: "clock.fill")
+                                        .foregroundStyle(viewModel.isExpiringSoon ? .orange : .green)
+                                        .font(.caption)
+                                    Text(remaining)
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(viewModel.isExpiringSoon ? .orange : .primary)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    (viewModel.isExpiringSoon ? Color.orange : Color.green).opacity(0.1),
+                                    in: RoundedRectangle(cornerRadius: 8)
+                                )
+
+                                // Warning if expiring soon
+                                if viewModel.isExpiringSoon {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundStyle(.orange)
+                                            .font(.caption)
+                                        Text("Expiring soon! Extend now to stay visible.")
+                                            .font(.caption)
+                                            .foregroundStyle(.orange)
+                                    }
+                                }
+                            }
+
+                            // Extend button
+                            Button {
+                                Haptics.impact(.light)
+                                showFeaturedSheet = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("Extend Featured Time")
+                                        .fontWeight(.semibold)
+                                }
+                                .font(.subheadline)
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10))
                             }
                         }
                         .padding(.vertical, 8)
                     } else {
-                        // Inactive - promote getting featured
-                        Button {
-                            Haptics.impact(.light)
-                            showFeaturedSheet = true
-                        } label: {
-                            HStack {
-                                Image(systemName: "star.circle")
-                                    .foregroundStyle(.yellow)
-                                    .font(.title2)
+                        // Check if recently expired
+                        if case .expired(let expiredAt) = store.subscriptionStatus {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Image(systemName: "star.slash")
+                                        .foregroundStyle(.orange)
+                                        .font(.title2)
 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Get FEATUREd")
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Featured Expired")
+                                            .font(.headline)
 
-                                    Text("Boost your visibility and reach thousands")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        Text("Expired \(expiredAt.formatted(date: .abbreviated, time: .shortened))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
                                 }
 
-                                Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .foregroundStyle(.secondary)
+                                Text("Your featured placement has ended. Get featured again to boost your visibility!")
                                     .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                Button {
+                                    Haptics.impact(.light)
+                                    showFeaturedSheet = true
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "star.fill")
+                                        Text("Get Featured Again")
+                                            .fontWeight(.semibold)
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10))
+                                }
+                            }
+                            .padding(.vertical, 8)
+                        } else {
+                            // Never featured - promote getting featured
+                            Button {
+                                Haptics.impact(.light)
+                                showFeaturedSheet = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "star.circle")
+                                        .foregroundStyle(.yellow)
+                                        .font(.title2)
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Get FEATUREd")
+                                            .font(.headline)
+                                            .foregroundStyle(.primary)
+
+                                        Text("Boost your visibility and reach thousands")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .foregroundStyle(.secondary)
+                                        .font(.caption)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                        }
+                    }
+
+                    // Restore Purchases Button
+                    Button {
+                        Haptics.impact(.light)
+                        Task {
+                            await store.restorePurchases()
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundStyle(.blue)
+                            Text("Restore Purchases")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if store.isRestoring {
+                                ProgressView()
+                                    .scaleEffect(0.8)
                             }
                         }
-                        .padding(.vertical, 8)
                     }
+                    .disabled(store.isRestoring)
                 } header: {
                     Text("FEATUREd Status")
                 } footer: {
                     if viewModel.isFeatured {
-                        Text("Your profile is currently featured in the FEATUREd tab.")
+                        Text("Your profile is currently featured in the FEATUREd tab. Extend anytime to stay visible longer.")
+                    } else if case .expired = store.subscriptionStatus {
+                        Text("Your featured placement has ended. Tap 'Restore Purchases' if you made a recent purchase.")
                     } else {
                         Text("Get featured to increase your profile visibility by 10x.")
                     }
@@ -375,6 +481,13 @@ final class SettingsViewModel: ObservableObject {
     // Featured status
     @Published var isFeatured = false
     @Published var featuredExpiresAt: Date?
+
+    // Check if expiring within 24 hours
+    var isExpiringSoon: Bool {
+        guard let expiresAt = featuredExpiresAt else { return false }
+        let hoursRemaining = expiresAt.timeIntervalSince(Date()) / 3600
+        return hoursRemaining > 0 && hoursRemaining <= 24
+    }
 
     var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
