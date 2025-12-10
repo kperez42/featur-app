@@ -1,9 +1,15 @@
 //
 import SwiftUI
+import FirebaseAuth
 
 struct ProfileDetailViewSimple: View {
     let profile: UserProfile
     @Environment(\.dismiss) var dismiss
+    @State private var isLiked = false
+    @State private var showMessageSheet = false
+    @State private var isLoading = false
+
+    private let service = FirebaseService()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -124,11 +130,35 @@ struct ProfileDetailViewSimple: View {
                         .padding(.horizontal)
                     }
 
+                    // Action Buttons
+                    HStack(spacing: 16) {
+                        // Like Button
+                        QuickActionButton(
+                            icon: isLiked ? "heart.fill" : "heart",
+                            color: isLiked ? .pink : .gray,
+                            isLoading: isLoading
+                        ) {
+                            toggleLike()
+                        }
+
+                        // Message Button
+                        QuickActionButton(
+                            icon: "message.fill",
+                            color: AppTheme.accent,
+                            isLoading: false
+                        ) {
+                            Haptics.impact(.light)
+                            showMessageSheet = true
+                        }
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.top, 10)
+
                     Spacer().frame(height: 40)
                 }
             }
         }
-        .interactiveDismissDisabled(false)  // ALLOW SWIPE DOWN EVEN WITH SCROLLVIEW
+        .interactiveDismissDisabled(false)
         .background(AppTheme.bg)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -141,10 +171,92 @@ struct ProfileDetailViewSimple: View {
         }
         .gesture(
             DragGesture().onEnded { value in
-                if value.translation.height > 120 {  // Tinder-style threshold
+                if value.translation.height > 120 {
                     dismiss()
                 }
             }
+        )
+        .task {
+            await loadLikeStatus()
+        }
+        .sheet(isPresented: $showMessageSheet) {
+            MessageSheet(recipientProfile: profile)
+        }
+    }
+
+    private func loadLikeStatus() async {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+        do {
+            isLiked = try await service.checkLikeStatus(userId: currentUserId, targetUserId: profile.uid)
+        } catch {
+            print("Error loading like status: \(error)")
+        }
+    }
+
+    private func toggleLike() {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+
+        withAnimation(.spring(response: 0.3)) {
+            isLiked.toggle()
+        }
+        Haptics.impact(isLiked ? .medium : .light)
+
+        Task {
+            isLoading = true
+            defer { isLoading = false }
+
+            do {
+                if isLiked {
+                    _ = try await service.saveLike(userId: currentUserId, targetUserId: profile.uid)
+                } else {
+                    try await service.removeLike(userId: currentUserId, targetUserId: profile.uid)
+                }
+            } catch {
+                // Revert on error
+                withAnimation {
+                    isLiked.toggle()
+                }
+                Haptics.notify(.error)
+            }
+        }
+    }
+}
+
+// MARK: - Quick Action Button
+
+private struct QuickActionButton: View {
+    let icon: String
+    let color: Color
+    let isLoading: Bool
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.15))
+                    .frame(width: 60, height: 60)
+
+                if isLoading {
+                    ProgressView()
+                        .tint(color)
+                } else {
+                    Image(systemName: icon)
+                        .font(.title2)
+                        .foregroundStyle(color)
+                }
+            }
+            .scaleEffect(isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
         )
     }
 }
