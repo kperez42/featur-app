@@ -651,7 +651,9 @@ struct ActionButton: View {
     let color: Color
     let size: CGFloat
     let action: () -> Void
-    
+
+    @State private var isPressed = false
+
     var body: some View {
         Button(action: action) {
             ZStack {
@@ -659,12 +661,20 @@ struct ActionButton: View {
                     .fill(.white)
                     .frame(width: size, height: size)
                     .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
-                
+
                 Image(systemName: icon)
                     .font(.system(size: size * 0.4, weight: .bold))
                     .foregroundStyle(color)
             }
+            .scaleEffect(isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
         }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 

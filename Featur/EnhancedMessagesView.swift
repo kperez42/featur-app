@@ -357,16 +357,19 @@ struct ConversationRow: View {
 
 struct NewMatchCard: View {
     let profile: UserProfile
-    
+
     var body: some View {
         VStack(spacing: 8) {
             CachedAsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .scaledToFill()
+                    .frame(width: 80, height: 80)
+                    .clipped()
             } placeholder: {
                 Circle()
                     .fill(AppTheme.accent.opacity(0.2))
+                    .frame(width: 80, height: 80)
             }
             .frame(width: 80, height: 80)
             .clipShape(Circle())
@@ -374,7 +377,7 @@ struct NewMatchCard: View {
                 Circle()
                     .stroke(AppTheme.accent, lineWidth: 3)
             )
-            
+
             Text(profile.displayName)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
@@ -575,12 +578,15 @@ struct MessageBubble: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: 200, height: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .clipped()
                     } placeholder: {
-                        ProgressView()
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(AppTheme.card)
                             .frame(width: 200, height: 200)
+                            .overlay(ProgressView())
                     }
                     .frame(width: 200, height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .stroke(isFromCurrentUser ? AppTheme.accent : Color.clear, lineWidth: 2)

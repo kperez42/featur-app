@@ -307,7 +307,9 @@ struct EnhancedDiscoverView: View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
             ForEach(viewModel.filteredProfiles) { profile in
                 DiscoverProfileCard(profile: profile)
+                    .contentShape(RoundedRectangle(cornerRadius: 16))
                     .onTapGesture {
+                        Haptics.impact(.light)
                         selectedProfile = profile
                         // Track profile view analytics
                         AnalyticsManager.shared.trackProfileView(
