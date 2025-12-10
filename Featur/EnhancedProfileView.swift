@@ -370,9 +370,16 @@ private struct MainProfileContent: View {
                             image
                                 .resizable()
                                 .scaledToFill()
+                                .frame(width: 140, height: 140)
+                                .clipped()
                         case .empty:
-                            ProgressView()
-                                .tint(.white)
+                            ZStack {
+                                Circle()
+                                    .fill(AppTheme.accent.opacity(0.2))
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                            .frame(width: 140, height: 140)
                         case .failure:
                             InitialsAvatar(name: profile.displayName, size: 140)
                         @unknown default:
@@ -1072,6 +1079,7 @@ private struct MainProfileContent: View {
                                             .resizable()
                                             .scaledToFill()
                                             .frame(width: 120, height: 160)
+                                            .clipped()
                                             .clipShape(RoundedRectangle(cornerRadius: 12))
                                             .onTapGesture {
                                                 selectedImageIndex = index
@@ -1081,7 +1089,7 @@ private struct MainProfileContent: View {
                                         RoundedRectangle(cornerRadius: 12)
                                             .fill(Color.gray.opacity(0.2))
                                             .frame(width: 120, height: 160)
-                                            .overlay(ProgressView())
+                                            .overlay(ProgressView().tint(AppTheme.accent))
                                     default:
                                         RoundedRectangle(cornerRadius: 12)
                                             .fill(Color.gray.opacity(0.2))
@@ -1618,9 +1626,14 @@ private struct MainProfileContent: View {
                         // Profile image
                         if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
                             AsyncImage(url: url) { image in
-                                image.resizable().scaledToFill()
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 80, height: 80)
+                                    .clipped()
                             } placeholder: {
                                 Color.white.opacity(0.3)
+                                    .frame(width: 80, height: 80)
                             }
                             .frame(width: 80, height: 80)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -2226,9 +2239,16 @@ private struct MainProfileContent: View {
                         HStack {
                             if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
                                 AsyncImage(url: url) { image in
-                                    image.resizable().scaledToFill()
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 80, height: 80)
+                                        .clipped()
                                 } placeholder: {
-                                    Color.gray
+                                    Circle()
+                                        .fill(Color.gray.opacity(0.3))
+                                        .frame(width: 80, height: 80)
+                                        .overlay(ProgressView().tint(AppTheme.accent))
                                 }
                                 .frame(width: 80, height: 80)
                                 .clipShape(Circle())
@@ -2287,6 +2307,7 @@ private struct MainProfileContent: View {
                                                     .resizable()
                                                     .scaledToFill()
                                                     .frame(width: 100, height: 100)
+                                                    .clipped()
                                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                                             case .failure(_):
                                                 RoundedRectangle(cornerRadius: 12)
@@ -2588,9 +2609,15 @@ private struct MainProfileContent: View {
                     VStack(spacing: 8) {
                         if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
                             AsyncImage(url: url) { image in
-                                image.resizable().scaledToFill()
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 60, height: 60)
+                                    .clipped()
                             } placeholder: {
-                                Color.gray
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 60, height: 60)
                             }
                             .frame(width: 60, height: 60)
                             .clipShape(Circle())
@@ -5496,9 +5523,15 @@ struct TestimonialCard: View {
             HStack(spacing: 12) {
                 if let imageURL = testimonial.authorImageURL, let url = URL(string: imageURL) {
                     AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 40, height: 40)
+                            .clipped()
                     } placeholder: {
-                        Circle().fill(AppTheme.accent.opacity(0.3))
+                        Circle()
+                            .fill(AppTheme.accent.opacity(0.3))
+                            .frame(width: 40, height: 40)
                     }
                     .frame(width: 40, height: 40)
                     .clipShape(Circle())
@@ -6246,9 +6279,15 @@ struct CollabHistoryCard: View {
             // Avatar
             if let imageURL = partnerProfile?.profileImageURL, let url = URL(string: imageURL) {
                 AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 50, height: 50)
+                        .clipped()
                 } placeholder: {
-                    Circle().fill(AppTheme.accent.opacity(0.3))
+                    Circle()
+                        .fill(AppTheme.accent.opacity(0.3))
+                        .frame(width: 50, height: 50)
                 }
                 .frame(width: 50, height: 50)
                 .clipShape(Circle())
