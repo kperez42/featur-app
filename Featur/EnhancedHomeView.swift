@@ -1173,17 +1173,3 @@ struct SwipeRecord: Identifiable {
     let timestamp = Date()
     let swipeData: SwipeAction? // Store for undo functionality
 }
-
-// MARK: - Haptics Helper
-
-struct Haptics2 {
-    static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        let generator = UIImpactFeedbackGenerator(style: style)
-        generator.impactOccurred()
-    }
-    
-    static func notify(_ type: UINotificationFeedbackGenerator.FeedbackType) {
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(type)
-    }
-}
