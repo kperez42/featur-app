@@ -109,7 +109,10 @@ struct EnhancedMessagesView: View {
                             ConversationRow(conversation: conversation)
                         }
                         .buttonStyle(.plain)
-                        
+                        .simultaneousGesture(TapGesture().onEnded {
+                            Haptics.impact(.light)
+                        })
+
                         Divider()
                             .padding(.leading, 76)
                     }
@@ -395,7 +398,8 @@ struct ChatView: View {
     @FocusState private var isInputFocused: Bool
     @State private var showImagePicker = false
     @State private var selectedImage: UIImage?
-    
+    @State private var scrollProxy: ScrollViewProxy?
+
     var body: some View {
         VStack(spacing: 0) {
             // Messages List
@@ -404,47 +408,67 @@ struct ChatView: View {
                     LazyVStack(spacing: 12) {
                         ForEach(viewModel.messages) { message in
                             MessageBubble(message: message, isFromCurrentUser: message.senderId == Auth.auth().currentUser?.uid)
+                                .id(message.id)
                         }
                     }
                     .padding()
-                    .onChange(of: viewModel.messages.count) { _, _ in
-                        if let lastMessage = viewModel.messages.last {
-                            withAnimation {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                            }
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onAppear {
+                    scrollProxy = proxy
+                }
+                .onChange(of: viewModel.messages.count) { _, _ in
+                    scrollToBottom(proxy: proxy)
+                }
+                .onChange(of: isInputFocused) { _, focused in
+                    if focused {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            scrollToBottom(proxy: proxy)
                         }
                     }
                 }
             }
-            
+
             // Input Bar
-            HStack(spacing: 12) {
-                Button {
-                    showImagePicker = true
-                } label: {
-                    Image(systemName: "photo.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(AppTheme.accent)
+            VStack(spacing: 0) {
+                Divider()
+                HStack(spacing: 12) {
+                    Button {
+                        Haptics.impact(.light)
+                        showImagePicker = true
+                    } label: {
+                        Image(systemName: "photo.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(AppTheme.accent)
+                    }
+
+                    TextField("Message", text: $messageText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
+                        .focused($isInputFocused)
+                        .lineLimit(1...5)
+                        .submitLabel(.send)
+                        .onSubmit {
+                            if !messageText.isEmpty {
+                                sendMessage()
+                            }
+                        }
+
+                    Button {
+                        sendMessage()
+                    } label: {
+                        Image(systemName: messageText.isEmpty ? "mic.fill" : "arrow.up.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(messageText.isEmpty ? .secondary : AppTheme.accent)
+                            .animation(.easeInOut(duration: 0.15), value: messageText.isEmpty)
+                    }
+                    .disabled(messageText.isEmpty)
                 }
-                
-                TextField("Message", text: $messageText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .padding(10)
-                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
-                    .focused($isInputFocused)
-                    .lineLimit(1...5)
-                
-                Button {
-                    sendMessage()
-                } label: {
-                    Image(systemName: messageText.isEmpty ? "mic.fill" : "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(messageText.isEmpty ? .secondary : AppTheme.accent)
-                }
-                .disabled(messageText.isEmpty)
+                .padding(.horizontal)
+                .padding(.vertical, 10)
             }
-            .padding()
-            .background(AppTheme.bg.opacity(0.95))
+            .background(AppTheme.bg)
         }
         .navigationTitle(conversation.isGroupChat ? (conversation.groupName ?? "Group") : (conversation.participantProfiles?.values.first?.displayName ?? "Chat"))
         .navigationBarTitleDisplayMode(.inline)
@@ -478,10 +502,16 @@ struct ChatView: View {
         .onAppear {
             guard let conversationId = conversation.id else { return }
 
-            // Load initial messages
+            // Load initial messages and scroll to bottom
             Task {
                 await viewModel.loadMessages(conversationId: conversationId)
                 await viewModel.markAsRead(conversationId: conversationId)
+                // Scroll to bottom after messages load
+                if let proxy = scrollProxy {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        scrollToBottom(proxy: proxy)
+                    }
+                }
             }
 
             // Start real-time listener for new messages
@@ -556,6 +586,14 @@ struct ChatView: View {
         } catch {
             print("❌ Error sending image: \(error.localizedDescription)")
             Haptics.notify(.error)
+        }
+    }
+
+    private func scrollToBottom(proxy: ScrollViewProxy) {
+        if let lastMessage = viewModel.messages.last {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+            }
         }
     }
 }
