@@ -170,42 +170,6 @@ final class AnalyticsManager {
         print("📊 Analytics: Screen view - \(screenName)")
     }
 
-    // MARK: - Purchase Events
-
-    /// Track purchase completed
-    func trackPurchase(productId: String, price: String) {
-        Analytics.logEvent(AnalyticsEventPurchase, parameters: [
-            AnalyticsParameterItemID: productId,
-            AnalyticsParameterPrice: price,
-            AnalyticsParameterCurrency: "USD"
-        ])
-        print("📊 Analytics: Purchase completed - \(productId) at \(price)")
-    }
-
-    /// Track purchase started
-    func trackPurchaseStarted(productId: String) {
-        Analytics.logEvent("purchase_started", parameters: [
-            AnalyticsParameterItemID: productId
-        ])
-        print("📊 Analytics: Purchase started - \(productId)")
-    }
-
-    /// Track purchase restored
-    func trackPurchaseRestored(productId: String) {
-        Analytics.logEvent("purchase_restored", parameters: [
-            AnalyticsParameterItemID: productId
-        ])
-        print("📊 Analytics: Purchase restored - \(productId)")
-    }
-
-    /// Track subscription expired
-    func trackSubscriptionExpired(productId: String) {
-        Analytics.logEvent("subscription_expired", parameters: [
-            AnalyticsParameterItemID: productId
-        ])
-        print("📊 Analytics: Subscription expired - \(productId)")
-    }
-
     // MARK: - Error Events
 
     /// Track error

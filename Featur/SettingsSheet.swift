@@ -21,59 +21,11 @@ struct SettingsSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                // User Profile Header
-                Section {
-                    HStack(spacing: 14) {
-                        // Profile Image
-                        if let photoURL = viewModel.profileImageURL,
-                           let url = URL(string: photoURL) {
-                            AsyncImage(url: url) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 60, height: 60)
-                                    .clipped()
-                            } placeholder: {
-                                profilePlaceholder
-                            }
-                            .frame(width: 60, height: 60)
-                            .clipShape(Circle())
-                        } else {
-                            profilePlaceholder
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(viewModel.displayName)
-                                .font(.headline)
-
-                            if let email = Auth.auth().currentUser?.email {
-                                Text(email)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            if viewModel.isFeatured {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "star.fill")
-                                        .font(.caption2)
-                                    Text("FEATUREd")
-                                        .font(.caption.weight(.semibold))
-                                }
-                                .foregroundStyle(.yellow)
-                            }
-                        }
-
-                        Spacer()
-                    }
-                    .padding(.vertical, 8)
-                }
-
-                // FEATUREd Subscription Section (ENHANCED!)
+                // FEATUREd Subscription Section (NEW!)
                 Section {
                     if viewModel.isFeatured {
-                        // Active subscription view with enhanced details
-                        VStack(alignment: .leading, spacing: 16) {
-                            // Header
+                        // Active subscription view
+                        VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "star.fill")
                                     .foregroundStyle(.yellow)
@@ -97,157 +49,51 @@ struct SettingsSheet: View {
                                     .font(.title3)
                             }
 
-                            // Time remaining indicator
-                            if let expiresAt = viewModel.featuredExpiresAt {
-                                let remaining = store.formatRemainingTime()
-                                HStack(spacing: 8) {
-                                    Image(systemName: "clock.fill")
-                                        .foregroundStyle(viewModel.isExpiringSoon ? .orange : .green)
-                                        .font(.caption)
-                                    Text(remaining)
-                                        .font(.subheadline.weight(.medium))
-                                        .foregroundStyle(viewModel.isExpiringSoon ? .orange : .primary)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(
-                                    (viewModel.isExpiringSoon ? Color.orange : Color.green).opacity(0.1),
-                                    in: RoundedRectangle(cornerRadius: 8)
-                                )
-
-                                // Warning if expiring soon
-                                if viewModel.isExpiringSoon {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "exclamationmark.triangle.fill")
-                                            .foregroundStyle(.orange)
-                                            .font(.caption)
-                                        Text("Expiring soon! Extend now to stay visible.")
-                                            .font(.caption)
-                                            .foregroundStyle(.orange)
-                                    }
-                                }
-                            }
-
-                            // Extend button
-                            Button {
-                                Haptics.impact(.light)
-                                showFeaturedSheet = true
-                            } label: {
-                                HStack {
-                                    Image(systemName: "plus.circle.fill")
-                                    Text("Extend Featured Time")
-                                        .fontWeight(.semibold)
-                                }
-                                .font(.subheadline)
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10))
+                            // Featured status badge
+                            HStack {
+                                Text("✨ Your profile is being featured")
+                                    .font(.caption)
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(AppTheme.accent, in: Capsule())
                             }
                         }
                         .padding(.vertical, 8)
                     } else {
-                        // Check if recently expired
-                        if case .expired(let expiredAt) = store.subscriptionStatus {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack {
-                                    Image(systemName: "star.slash")
-                                        .foregroundStyle(.orange)
-                                        .font(.title2)
+                        // Inactive - promote getting featured
+                        Button {
+                            showFeaturedSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "star.circle")
+                                    .foregroundStyle(.yellow)
+                                    .font(.title2)
 
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Featured Expired")
-                                            .font(.headline)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Get FEATUREd")
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
 
-                                        Text("Expired \(expiredAt.formatted(date: .abbreviated, time: .shortened))")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Spacer()
-                                }
-
-                                Text("Your featured placement has ended. Get featured again to boost your visibility!")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-
-                                Button {
-                                    Haptics.impact(.light)
-                                    showFeaturedSheet = true
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "star.fill")
-                                        Text("Get Featured Again")
-                                            .fontWeight(.semibold)
-                                    }
-                                    .font(.subheadline)
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 10))
-                                }
-                            }
-                            .padding(.vertical, 8)
-                        } else {
-                            // Never featured - promote getting featured
-                            Button {
-                                Haptics.impact(.light)
-                                showFeaturedSheet = true
-                            } label: {
-                                HStack {
-                                    Image(systemName: "star.circle")
-                                        .foregroundStyle(.yellow)
-                                        .font(.title2)
-
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Get FEATUREd")
-                                            .font(.headline)
-                                            .foregroundStyle(.primary)
-
-                                        Text("Boost your visibility and reach thousands")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    Image(systemName: "chevron.right")
-                                        .foregroundStyle(.secondary)
+                                    Text("Boost your visibility and reach thousands")
                                         .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
-                            }
-                            .padding(.vertical, 8)
-                        }
-                    }
 
-                    // Restore Purchases Button
-                    Button {
-                        Haptics.impact(.light)
-                        Task {
-                            await store.restorePurchases()
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "arrow.clockwise")
-                                .foregroundStyle(.blue)
-                            Text("Restore Purchases")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            if store.isRestoring {
-                                ProgressView()
-                                    .scaleEffect(0.8)
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.secondary)
+                                    .font(.caption)
                             }
                         }
+                        .padding(.vertical, 8)
                     }
-                    .disabled(store.isRestoring)
                 } header: {
                     Text("FEATUREd Status")
                 } footer: {
                     if viewModel.isFeatured {
-                        Text("Your profile is currently featured in the FEATUREd tab. Extend anytime to stay visible longer.")
-                    } else if case .expired = store.subscriptionStatus {
-                        Text("Your featured placement has ended. Tap 'Restore Purchases' if you made a recent purchase.")
+                        Text("Your profile is currently featured in the FEATUREd tab.")
                     } else {
                         Text("Get featured to increase your profile visibility by 10x.")
                     }
@@ -308,7 +154,6 @@ struct SettingsSheet: View {
                         SettingRow(icon: "bell.fill", title: "Push Notifications", color: .orange)
                     }
                     .onChange(of: viewModel.pushNotifications) { _, newValue in
-                        Haptics.selection()
                         viewModel.updateNotificationPermissions(enabled: newValue)
                     }
                 }
@@ -430,14 +275,12 @@ struct SettingsSheet: View {
                 // Danger Zone
                 Section {
                     Button(role: .destructive) {
-                        Haptics.impact(.medium)
                         showLogoutConfirmation = true
                     } label: {
                         SettingRow(icon: "rectangle.portrait.and.arrow.right", title: "Sign Out", color: .red)
                     }
-
+                    
                     Button(role: .destructive) {
-                        Haptics.impact(.heavy)
                         showDeleteConfirmation = true
                     } label: {
                         SettingRow(icon: "trash", title: "Delete Account", color: .red)
@@ -489,20 +332,8 @@ struct SettingsSheet: View {
             }
             .task {
                 await viewModel.checkFeaturedStatus()
-                viewModel.loadUserInfo()
             }
         }
-    }
-
-    private var profilePlaceholder: some View {
-        Circle()
-            .fill(AppTheme.accent.opacity(0.2))
-            .frame(width: 60, height: 60)
-            .overlay {
-                Text(viewModel.displayName.prefix(1).uppercased())
-                    .font(.title2.bold())
-                    .foregroundStyle(AppTheme.accent)
-            }
     }
 }
 
@@ -537,20 +368,9 @@ final class SettingsViewModel: ObservableObject {
     @Published var autoplayVideos = true
     @Published var highQualityUploads = false
 
-    // User info
-    @Published var displayName = ""
-    @Published var profileImageURL: String?
-
     // Featured status
     @Published var isFeatured = false
     @Published var featuredExpiresAt: Date?
-
-    // Check if expiring within 24 hours
-    var isExpiringSoon: Bool {
-        guard let expiresAt = featuredExpiresAt else { return false }
-        let hoursRemaining = expiresAt.timeIntervalSince(Date()) / 3600
-        return hoursRemaining > 0 && hoursRemaining <= 24
-    }
 
     var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -558,22 +378,6 @@ final class SettingsViewModel: ObservableObject {
 
     var buildNumber: String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-    }
-
-    func loadUserInfo() {
-        if let user = Auth.auth().currentUser {
-            displayName = user.displayName ?? "User"
-
-            // Try to get profile image from Firestore
-            Task {
-                if let profile = try? await FirebaseService().fetchProfile(uid: user.uid) {
-                    await MainActor.run {
-                        self.displayName = profile.displayName
-                        self.profileImageURL = profile.profileImageURL ?? profile.mediaURLs?.first
-                    }
-                }
-            }
-        }
     }
 
     func checkFeaturedStatus() async {
@@ -986,7 +790,6 @@ struct EditAccountView: View {
                                     .resizable()
                                     .scaledToFill()
                                     .frame(width: 120, height: 120)
-                                    .clipped()
                                     .clipShape(Circle())
                                     .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 2))
                             } else if let photoURL = auth.userProfile?.profileImageURL,
@@ -995,13 +798,10 @@ struct EditAccountView: View {
                                     image
                                         .resizable()
                                         .scaledToFill()
-                                        .frame(width: 120, height: 120)
-                                        .clipped()
                                 } placeholder: {
                                     Image(systemName: "person.circle.fill")
                                         .resizable()
                                         .foregroundStyle(.gray)
-                                        .frame(width: 120, height: 120)
                                 }
                                 .frame(width: 120, height: 120)
                                 .clipShape(Circle())
@@ -1243,12 +1043,9 @@ struct EditAccountView: View {
                                         image
                                             .resizable()
                                             .scaledToFill()
-                                            .frame(width: 100, height: 100)
-                                            .clipped()
                                     case .failure(_):
                                         Rectangle()
                                             .fill(.red.opacity(0.2))
-                                            .frame(width: 100, height: 100)
                                             .overlay(
                                                 Image(systemName: "exclamationmark.triangle")
                                                     .foregroundStyle(.red)
@@ -1256,7 +1053,6 @@ struct EditAccountView: View {
                                     case .empty:
                                         Rectangle()
                                             .fill(.gray.opacity(0.2))
-                                            .frame(width: 100, height: 100)
                                             .overlay(
                                                 ProgressView()
                                                     .tint(AppTheme.accent)
@@ -1264,7 +1060,6 @@ struct EditAccountView: View {
                                     @unknown default:
                                         Rectangle()
                                             .fill(.gray.opacity(0.2))
-                                            .frame(width: 100, height: 100)
                                     }
                                 }
                                 .frame(width: 100, height: 100)
