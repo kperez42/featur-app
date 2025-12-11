@@ -716,23 +716,23 @@ struct GetFeaturedSheet: View {
                                 // 🧪 DEBUG MODE: Show test products
                                 VStack(spacing: 12) {
                                     TestProductCard(
-                                        duration: "24 Hours",
+                                        duration: "1 Week",
+                                        price: "$2.99",
+                                        productId: FeaturedProduct.featured1Week.rawValue,
+                                        features: ["7-day spotlight", "Featured badge", "Basic analytics"],
+                                        store: store,
+                                        onPurchaseSuccess: {
+                                            showSuccess = true
+                                            onPurchaseComplete?()
+                                        }
+                                    )
+
+                                    TestProductCard(
+                                        duration: "1 Month",
                                         price: "$4.99",
-                                        productId: FeaturedProduct.featured24h.rawValue,
-                                        features: ["24-hour spotlight", "Featured badge", "Priority support"],
-                                        store: store,
-                                        onPurchaseSuccess: {
-                                            showSuccess = true
-                                            onPurchaseComplete?()
-                                        }
-                                    )
-
-                                    TestProductCard(
-                                        duration: "7 Days",
-                                        price: "$19.99",
-                                        productId: FeaturedProduct.featured7d.rawValue,
+                                        productId: FeaturedProduct.featured1Month.rawValue,
                                         popular: true,
-                                        features: ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"],
+                                        features: ["30-day spotlight", "Featured badge", "Full analytics", "Priority support"],
                                         store: store,
                                         onPurchaseSuccess: {
                                             showSuccess = true
@@ -741,10 +741,10 @@ struct GetFeaturedSheet: View {
                                     )
 
                                     TestProductCard(
-                                        duration: "30 Days",
-                                        price: "$59.99",
-                                        productId: FeaturedProduct.featured30d.rawValue,
-                                        features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"],
+                                        duration: "3 Months",
+                                        price: "$9.99",
+                                        productId: FeaturedProduct.featured3Months.rawValue,
+                                        features: ["90-day spotlight", "Featured badge", "Advanced analytics", "Priority support", "Best value - save 45%"],
                                         store: store,
                                         onPurchaseSuccess: {
                                             showSuccess = true
@@ -752,7 +752,7 @@ struct GetFeaturedSheet: View {
                                         }
                                     )
 
-                                    Text("🧪 Test Mode - Products not configured in App Store Connect")
+                                    Text("🧪 Test Mode - Sandbox/TestFlight Testing")
                                         .font(.caption2)
                                         .foregroundStyle(.orange)
                                         .padding(.top, 8)
@@ -767,7 +767,7 @@ struct GetFeaturedSheet: View {
                             ForEach(store.products, id: \.id) { product in
                                 PricingCard(
                                     product: product,
-                                    popular: product.id.contains("7d"),
+                                    popular: product.id.contains("1month"),
                                     store: store,
                                     onPurchaseSuccess: {
                                         showSuccess = true

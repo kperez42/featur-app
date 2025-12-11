@@ -9,25 +9,74 @@ import FirebaseFirestore
 // MARK: - Product IDs
 
 enum FeaturedProduct: String, CaseIterable {
-    case featured24h = "com.featur.featured.24h"
-    case featured7d = "com.featur.featured.7d"
-    case featured30d = "com.featur.featured.30d"
+    case featured1Week = "com.featur.featured.1week"
+    case featured1Month = "com.featur.featured.1month"
+    case featured3Months = "com.featur.featured.3months"
 
     var displayName: String {
         switch self {
-        case .featured24h: return "24 Hours"
-        case .featured7d: return "7 Days"
-        case .featured30d: return "30 Days"
+        case .featured1Week: return "1 Week"
+        case .featured1Month: return "1 Month"
+        case .featured3Months: return "3 Months"
         }
     }
 
     var duration: Int {
         switch self {
-        case .featured24h: return 1
-        case .featured7d: return 7
-        case .featured30d: return 30
+        case .featured1Week: return 7
+        case .featured1Month: return 30
+        case .featured3Months: return 90
         }
     }
+
+    var price: String {
+        switch self {
+        case .featured1Week: return "$2.99"
+        case .featured1Month: return "$4.99"
+        case .featured3Months: return "$9.99"
+        }
+    }
+
+    var pricePerDay: String {
+        switch self {
+        case .featured1Week: return "$0.43/day"
+        case .featured1Month: return "$0.17/day"
+        case .featured3Months: return "$0.11/day"
+        }
+    }
+}
+
+// MARK: - User-Friendly Error Messages
+
+private func userFriendlyPurchaseError(_ error: Error) -> String {
+    if let storeKitError = error as? StoreKitError {
+        switch storeKitError {
+        case .networkError:
+            return "Network connection failed. Please check your internet and try again."
+        case .systemError:
+            return "A system error occurred. Please restart the app and try again."
+        case .notAvailableInStorefront:
+            return "This purchase is not available in your region."
+        case .userCancelled:
+            return "Purchase was cancelled."
+        case .notEntitled:
+            return "You're not eligible for this purchase."
+        default:
+            return "Purchase failed. Please try again later."
+        }
+    }
+
+    // Handle common error patterns
+    let errorDescription = error.localizedDescription.lowercased()
+    if errorDescription.contains("network") || errorDescription.contains("internet") {
+        return "Network connection failed. Please check your internet and try again."
+    } else if errorDescription.contains("payment") {
+        return "Payment could not be processed. Please check your payment method in Settings."
+    } else if errorDescription.contains("cancel") {
+        return "Purchase was cancelled."
+    }
+
+    return "Purchase failed. Please try again or contact support."
 }
 
 // MARK: - Store Manager
@@ -157,7 +206,7 @@ class StoreKitManager: ObservableObject {
             print("⚠️ User cancelled purchase")
         } catch {
             print("❌ Purchase failed: \(error)")
-            purchaseError = error.localizedDescription
+            purchaseError = userFriendlyPurchaseError(error)
             AnalyticsManager.shared.trackError(error: "purchase_failed", context: product.id)
             Haptics.notify(.error)
             throw error

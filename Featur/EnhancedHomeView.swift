@@ -917,6 +917,9 @@ final class HomeViewModel: ObservableObject {
             if !profiles.isEmpty {
                 let userIds = profiles.map { $0.uid }
                 await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
+
+                // Prefetch images for smooth scrolling
+                prefetchProfileImages(profiles: profiles)
             }
 
             isLoading = false
@@ -1132,7 +1135,33 @@ final class HomeViewModel: ObservableObject {
     }
 
     func applyFilters() async {
-        
+
+    }
+
+    /// Prefetch profile images for smooth scrolling
+    private func prefetchProfileImages(profiles: [UserProfile]) {
+        var urls: [URL] = []
+
+        for profile in profiles {
+            // Add profile image
+            if let urlString = profile.profileImageURL,
+               let url = URL(string: urlString) {
+                urls.append(url)
+            }
+
+            // Add media URLs (first 2 for each profile)
+            if let mediaURLs = profile.mediaURLs {
+                for urlString in mediaURLs.prefix(2) {
+                    if let url = URL(string: urlString.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                        urls.append(url)
+                    }
+                }
+            }
+        }
+
+        // Prefetch in background
+        ImageCache.shared.prefetch(urls: urls)
+        print("⚡ Prefetching \(urls.count) images for smooth scrolling")
     }
 }
 
