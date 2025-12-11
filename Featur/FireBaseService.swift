@@ -336,16 +336,7 @@ final class FirebaseService: ObservableObject {
             } else {
                 print("ℹ️ Match already exists between \(userId) and \(targetUserId)")
             }
-
-            // Create conversation for the match
-            do {
-                let conversation = try await getOrCreateConversation(between: userId, and: targetUserId)
-                print("✅ Conversation created for match: \(conversation.id ?? "unknown")")
-            } catch {
-                print("⚠️ Failed to create conversation for match: \(error)")
-            }
-
-        }else{
+        } else {
             // Debug statement no match created
             print("❌ No reciprocal like yet for \(userId) ↔ \(targetUserId)")
 

@@ -60,8 +60,13 @@ struct PhotosPage: View {
                                     image
                                         .resizable()
                                         .scaledToFill()
+                                        .frame(width: 100, height: 100)
+                                        .clipped()
                                 } placeholder: {
-                                    Color.gray.opacity(0.2)
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.gray.opacity(0.2))
+                                        .frame(width: 100, height: 100)
+                                        .overlay(ProgressView().tint(AppTheme.accent))
                                 }
                                 .frame(width: 100, height: 100)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))

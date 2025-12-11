@@ -266,6 +266,7 @@ struct FeaturedView: View {
                 .multilineTextAlignment(.center)
             
             Button {
+                Haptics.impact(.medium)
                 selectedCategory = .all
                 Task { await viewModel.loadFeatured(forceRefresh: true) }
             } label: {
@@ -280,9 +281,9 @@ struct FeaturedView: View {
         .padding(.vertical, 60)
         .padding(.horizontal)
     }
-    
+
     // MARK: - Error Toast
-    
+
     private func errorToast(_ message: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -295,6 +296,7 @@ struct FeaturedView: View {
             Spacer()
 
             Button {
+                Haptics.impact(.light)
                 Task {
                     await viewModel.loadFeatured(forceRefresh: true)
                 }
@@ -471,7 +473,10 @@ struct FeaturedCategoryChip: View {
 
 struct FeaturedCreatorCard: View {
     let creator: FeaturedCreator
-    
+
+    // Fixed dimensions for consistent card sizing
+    private let imageSize: CGFloat = 100
+
     var body: some View {
         HStack(spacing: 16) {
             // Profile Image / Avatar
@@ -481,15 +486,26 @@ struct FeaturedCreatorCard: View {
                         image
                             .resizable()
                             .scaledToFill()
+                            .frame(width: imageSize, height: imageSize)
+                            .clipped()
                     } placeholder: {
                         ZStack {
                             AppTheme.gradient
                             ProgressView()
                                 .tint(.white)
                         }
+                        .frame(width: imageSize, height: imageSize)
                     }
+                    .frame(width: imageSize, height: imageSize)
+                    .clipped()
                 } else {
-                    AppTheme.gradient
+                    ZStack {
+                        AppTheme.gradient
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .frame(width: imageSize, height: imageSize)
                 }
 
                 // Featured Badge
@@ -505,7 +521,7 @@ struct FeaturedCreatorCard: View {
                     Spacer()
                 }
             }
-            .frame(width: 100, height: 100)
+            .frame(width: imageSize, height: imageSize)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 16))
             
@@ -717,9 +733,9 @@ struct GetFeaturedSheet: View {
                                 VStack(spacing: 12) {
                                     TestProductCard(
                                         duration: "24 Hours",
-                                        price: "$4.99",
+                                        price: "$0.99",
                                         productId: FeaturedProduct.featured24h.rawValue,
-                                        features: ["24-hour spotlight", "Featured badge", "Priority support"],
+                                        features: ["24-hour spotlight", "Featured badge", "Priority placement"],
                                         store: store,
                                         onPurchaseSuccess: {
                                             showSuccess = true
@@ -729,10 +745,10 @@ struct GetFeaturedSheet: View {
 
                                     TestProductCard(
                                         duration: "7 Days",
-                                        price: "$19.99",
+                                        price: "$4.99",
                                         productId: FeaturedProduct.featured7d.rawValue,
                                         popular: true,
-                                        features: ["Full week featured", "Featured badge", "Analytics dashboard", "Priority support"],
+                                        features: ["Full week featured", "Featured badge", "Analytics dashboard", "Best value"],
                                         store: store,
                                         onPurchaseSuccess: {
                                             showSuccess = true
@@ -742,9 +758,9 @@ struct GetFeaturedSheet: View {
 
                                     TestProductCard(
                                         duration: "30 Days",
-                                        price: "$59.99",
+                                        price: "$14.99",
                                         productId: FeaturedProduct.featured30d.rawValue,
-                                        features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Dedicated support", "Best value"],
+                                        features: ["Monthly spotlight", "Featured badge", "Advanced analytics", "Priority support"],
                                         store: store,
                                         onPurchaseSuccess: {
                                             showSuccess = true
@@ -809,7 +825,7 @@ struct GetFeaturedSheet: View {
             } message: {
                 Text(store.purchaseError ?? "Purchase failed. Please try again.")
             }
-            .onChange(of: store.purchaseError) { newValue in
+            .onChange(of: store.purchaseError) { _, newValue in
                 showError = newValue != nil
             }
         }

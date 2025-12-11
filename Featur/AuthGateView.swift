@@ -58,7 +58,7 @@ struct AuthGateView: View {
                 ContentView()
             }
         }
-        .onChange(of: auth.user) {
+        .onChange(of: auth.user) { _, _ in
             Task { await auth.refreshUserState() }
         }
     }

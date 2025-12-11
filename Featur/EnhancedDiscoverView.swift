@@ -29,8 +29,8 @@ struct EnhancedDiscoverView: View {
                     
                     // Search Bar
                     EnhancedSearchBar(text: $searchText)
-                        .onChange(of: searchText) { _ in
-                            Task { await viewModel.search(query: searchText) }
+                        .onChange(of: searchText) { _, newValue in
+                            Task { await viewModel.search(query: newValue) }
                         }
                     
                     // Quick Stats
@@ -307,7 +307,9 @@ struct EnhancedDiscoverView: View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
             ForEach(viewModel.filteredProfiles) { profile in
                 DiscoverProfileCard(profile: profile)
+                    .contentShape(RoundedRectangle(cornerRadius: 16))
                     .onTapGesture {
+                        Haptics.impact(.light)
                         selectedProfile = profile
                         // Track profile view analytics
                         AnalyticsManager.shared.trackProfileView(
@@ -340,34 +342,18 @@ struct EnhancedDiscoverView: View {
     }
     
     private var emptyState: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-            
-            Text("No Creators Found")
-                .font(.title2.bold())
-            
-            Text("Try adjusting your filters or search terms")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            
-            Button {
-                withAnimation {
-                    viewModel.clearAllFilters()
-                    selectedCategory = nil
-                    searchText = ""
-                }
-            } label: {
-                Text("Clear Filters")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(width: 200, height: 50)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 25))
+        EmptyStateView(
+            icon: "magnifyingglass",
+            title: "No Creators Found",
+            message: "Try adjusting your filters or search terms",
+            actionTitle: "Clear Filters"
+        ) {
+            withAnimation(.spring(response: 0.3)) {
+                viewModel.clearAllFilters()
+                selectedCategory = nil
+                searchText = ""
             }
         }
-        .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
     }
     
@@ -386,6 +372,7 @@ struct EnhancedDiscoverView: View {
             Spacer()
 
             Button {
+                Haptics.impact(.light)
                 Task {
                     await viewModel.loadProfiles()
                 }
@@ -421,6 +408,12 @@ struct EnhancedDiscoverView: View {
 struct DiscoverProfileCard: View {
     let profile: UserProfile
     @State private var currentImageIndex = 0
+    @State private var isPressed = false
+
+    // Fixed card dimensions for consistency
+    private let cardWidth: CGFloat = UIScreen.main.bounds.width / 2 - 24
+    private let imageHeight: CGFloat = 200
+    private let infoMinHeight: CGFloat = 90
 
     private var mediaURLs: [String] {
         profile.mediaURLs ?? []
@@ -430,29 +423,44 @@ struct DiscoverProfileCard: View {
         mediaURLs.count > 1
     }
 
+    // Safe current index that stays within bounds
+    private var safeCurrentIndex: Int {
+        guard !mediaURLs.isEmpty else { return 0 }
+        return min(currentImageIndex, mediaURLs.count - 1)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Profile Image with Carousel
             ZStack(alignment: .topTrailing) {
                 if !mediaURLs.isEmpty {
-                    let currentURL = mediaURLs[currentImageIndex]
+                    let currentURL = mediaURLs[safeCurrentIndex]
                     CachedAsyncImage(url: URL(string: currentURL)) { image in
                         image
                             .resizable()
                             .scaledToFill()
+                            .frame(width: cardWidth, height: imageHeight)
+                            .clipped()
                     } placeholder: {
                         ZStack {
                             AppTheme.gradient
                             ProgressView()
                                 .tint(.white)
                         }
+                        .frame(width: cardWidth, height: imageHeight)
                     }
-                    .frame(width: UIScreen.main.bounds.width / 2 - 24, height: 200)
+                    .frame(width: cardWidth, height: imageHeight)
                     .clipped()
-                    .id(currentImageIndex) // Force reload when index changes
+                    .id(safeCurrentIndex) // Force reload when index changes
                 } else {
-                    AppTheme.gradient
-                        .frame(height: 200)
+                    // Fallback placeholder with fixed dimensions
+                    ZStack {
+                        AppTheme.gradient
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 50))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .frame(width: cardWidth, height: imageHeight)
                 }
 
                 // Image Indicators (dots)
@@ -461,7 +469,7 @@ struct DiscoverProfileCard: View {
                         HStack(spacing: 4) {
                             ForEach(0..<mediaURLs.count, id: \.self) { index in
                                 Circle()
-                                    .fill(index == currentImageIndex ? .white : .white.opacity(0.5))
+                                    .fill(index == safeCurrentIndex ? .white : .white.opacity(0.5))
                                     .frame(width: 6, height: 6)
                             }
                         }
@@ -481,8 +489,9 @@ struct DiscoverProfileCard: View {
                         .padding(8)
                 }
             }
-            .frame(height: 200)
+            .frame(width: cardWidth, height: imageHeight)
             .clipped()
+            .contentShape(Rectangle())
             .overlay(
                 // Image Navigation Areas (tap left/right)
                 HStack(spacing: 0) {
@@ -491,7 +500,7 @@ struct DiscoverProfileCard: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                withAnimation {
+                                withAnimation(.easeInOut(duration: 0.2)) {
                                     currentImageIndex = max(0, currentImageIndex - 1)
                                 }
                                 Haptics.impact(.light)
@@ -501,7 +510,7 @@ struct DiscoverProfileCard: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                withAnimation {
+                                withAnimation(.easeInOut(duration: 0.2)) {
                                     currentImageIndex = min(mediaURLs.count - 1, currentImageIndex + 1)
                                 }
                                 Haptics.impact(.light)
@@ -509,13 +518,15 @@ struct DiscoverProfileCard: View {
                     }
                 }
             )
-            
-            // Profile Info
+
+            // Profile Info - Fixed minimum height for consistency
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(profile.displayName)
                         .font(.headline)
                         .lineLimit(1)
+
+                    Spacer(minLength: 0)
 
                     // Online Status Badge
                     if PresenceManager.shared.isOnline(userId: profile.uid) {
@@ -533,14 +544,13 @@ struct DiscoverProfileCard: View {
                     }
                 }
 
-                if let bio = profile.bio {
-                    Text(bio)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
+                Text(profile.bio ?? " ")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Content Style Tag
+                // Content Style Tag - always show space even if no style
                 if let firstStyle = profile.contentStyles.first {
                     Text(firstStyle.rawValue)
                         .font(.caption2.bold())
@@ -548,14 +558,35 @@ struct DiscoverProfileCard: View {
                         .padding(.vertical, 4)
                         .background(AppTheme.accent.opacity(0.2), in: Capsule())
                         .foregroundStyle(AppTheme.accent)
+                } else {
+                    // Invisible placeholder to maintain consistent height
+                    Text(" ")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .opacity(0)
                 }
             }
             .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: infoMinHeight, alignment: .topLeading)
         }
+        .frame(width: cardWidth)
         .background(AppTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .onChange(of: mediaURLs.count) { _, newCount in
+            // Reset index if it's out of bounds after mediaURLs changes
+            if currentImageIndex >= newCount && newCount > 0 {
+                currentImageIndex = newCount - 1
+            }
+        }
     }
 }
 
@@ -591,29 +622,45 @@ struct AnimatedHeroHeader: View {
 struct EnhancedSearchBar: View {
     @Binding var text: String
     @FocusState private var isFocused: Bool
-    
+
     var body: some View {
         HStack(spacing: 12) {
             HStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                
+                    .foregroundStyle(isFocused ? AppTheme.accent : .secondary)
+                    .animation(.easeInOut(duration: 0.2), value: isFocused)
+
                 TextField("Search creators...", text: $text)
                     .focused($isFocused)
-                
+                    .submitLabel(.search)
+
                 if !text.isEmpty {
                     Button {
-                        text = ""
+                        Haptics.impact(.light)
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            text = ""
+                        }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
                     }
+                    .transition(.scale.combined(with: .opacity))
                 }
             }
             .padding(12)
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isFocused ? AppTheme.accent.opacity(0.5) : Color.clear, lineWidth: 2)
+            )
+            .animation(.easeInOut(duration: 0.2), value: isFocused)
         }
         .padding(.horizontal)
+        .onChange(of: isFocused) { _, focused in
+            if focused {
+                Haptics.selection()
+            }
+        }
     }
 }
 
@@ -647,9 +694,14 @@ struct CategoryCard: View {
     let icon: String
     let count: Int
     let action: () -> Void
-    
+
+    @State private var isPressed = false
+
     var body: some View {
-        Button(action: action) {
+        Button {
+            Haptics.impact(.light)
+            action()
+        } label: {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Image(systemName: icon)
@@ -660,7 +712,7 @@ struct CategoryCard: View {
                         .font(.caption.bold())
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Text(category)
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
@@ -671,20 +723,31 @@ struct CategoryCard: View {
             .frame(height: 100)
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
+            .scaleEffect(isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPressed)
         }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 
 struct FilterTag: View {
     let text: String
     let onRemove: () -> Void
-    
+
     var body: some View {
         HStack(spacing: 6) {
             Text(text)
                 .font(.caption.weight(.semibold))
-            
-            Button(action: onRemove) {
+
+            Button {
+                Haptics.impact(.light)
+                onRemove()
+            } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
             }
@@ -733,23 +796,26 @@ struct ImprovedFilterSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Maximum Distance")
                             .font(.headline)
-                        
+
                         HStack {
                             Text("\(Int(viewModel.activeFilters.maxDistance)) miles")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            
+
                             Spacer()
-                            
+
                             if viewModel.activeFilters.maxDistance < 1000 {
-                                Button("Any Distance") {
+                                Button {
+                                    Haptics.impact(.light)
                                     viewModel.activeFilters.maxDistance = 1000
+                                } label: {
+                                    Text("Any Distance")
+                                        .font(.caption)
+                                        .foregroundStyle(AppTheme.accent)
                                 }
-                                .font(.caption)
-                                .foregroundStyle(AppTheme.accent)
                             }
                         }
-                        
+
                         Slider(value: $viewModel.activeFilters.maxDistance, in: 1...1000, step: 5)
                             .tint(AppTheme.accent)
                     }
@@ -760,12 +826,18 @@ struct ImprovedFilterSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Quick Filters")
                             .font(.headline)
-                        
+
                         Toggle("Verified Creators Only", isOn: $viewModel.activeFilters.verifiedOnly)
-                        
+                            .onChange(of: viewModel.activeFilters.verifiedOnly) { _, _ in
+                                Haptics.selection()
+                            }
+
                         Divider()
-                        
+
                         Toggle("Currently Online", isOn: $viewModel.activeFilters.onlineOnly)
+                            .onChange(of: viewModel.activeFilters.onlineOnly) { _, _ in
+                                Haptics.selection()
+                            }
                     }
                     .padding()
                     .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
@@ -1112,7 +1184,7 @@ final class DiscoverViewModel: ObservableObject {
                 if searchCache.count > 20 {
                     // Remove oldest entries
                     let sortedKeys = searchCache.keys.sorted {
-                        searchCache[$0]!.timestamp < searchCache[$1]!.timestamp
+                        (searchCache[$0]?.timestamp ?? Date.distantPast) < (searchCache[$1]?.timestamp ?? Date.distantPast)
                     }
                     for key in sortedKeys.prefix(5) {
                         searchCache.removeValue(forKey: key)
