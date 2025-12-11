@@ -90,18 +90,13 @@ struct QRCodeGenerator {
             // Background gradient
             let colors = [UIColor(red: 0.4, green: 0.3, blue: 0.8, alpha: 1.0).cgColor,
                          UIColor(red: 0.6, green: 0.4, blue: 0.9, alpha: 1.0).cgColor]
-            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                        colors: colors as CFArray,
-                                        locations: [0.0, 1.0]) {
-                context.cgContext.drawLinearGradient(gradient,
-                                                     start: CGPoint(x: 0, y: 0),
-                                                     end: CGPoint(x: size.width, y: size.height),
-                                                     options: [])
-            } else {
-                // Fallback solid color
-                context.cgContext.setFillColor(UIColor(red: 0.5, green: 0.35, blue: 0.85, alpha: 1.0).cgColor)
-                context.cgContext.fill(rect)
-            }
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                     colors: colors as CFArray,
+                                     locations: [0.0, 1.0])!
+            context.cgContext.drawLinearGradient(gradient,
+                                                 start: CGPoint(x: 0, y: 0),
+                                                 end: CGPoint(x: size.width, y: size.height),
+                                                 options: [])
 
             // White container
             let containerRect = CGRect(x: 50, y: 150, width: size.width - 100, height: 700)

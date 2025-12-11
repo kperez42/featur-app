@@ -103,9 +103,9 @@ struct ProfileCreationFlow: View {
                 .animation(.easeInOut, value: step)
                 .transition(.opacity)
                 // Automatically advance once user grants location access
-                .onChange(of: locationManager.authorizationStatus) { _, newStatus in
-                    if newStatus == .authorizedWhenInUse ||
-                       newStatus == .authorizedAlways {
+                .onChange(of: locationManager.authorizationStatus) {
+                    if locationManager.authorizationStatus == .authorizedWhenInUse ||
+                       locationManager.authorizationStatus == .authorizedAlways {
                         withAnimation(.easeInOut) {
                             step = .review
                         }
@@ -125,7 +125,9 @@ struct ProfileCreationFlow: View {
                 .padding(.bottom, 12)
             }
         }
-        .background(AppTheme.bg.ignoresSafeArea())
+                .background(AppTheme.bg.ignoresSafeArea(.all)) // Ensures background covers safe areas
+                .edgesIgnoringSafeArea(.top)
+                .padding(.top, 44) // Offset to clear status bar (adjust based on device, e.g., 20–44 points)
         .animation(.spring(), value: step)
     }
 

@@ -81,7 +81,6 @@ struct ProfileDetailView: View {
 
                     // Report Button
                     Button {
-                        Haptics.impact(.light)
                         showReportSheet = true
                     } label: {
                         HStack {
@@ -121,7 +120,7 @@ private struct ImageGalleryHeader: View {
     let mediaURLs: [String]
     @Binding var selectedIndex: Int
     let onTapImage: () -> Void
-
+    
     var body: some View {
         ZStack(alignment: .bottom) {
             TabView(selection: $selectedIndex) {
@@ -141,18 +140,12 @@ private struct ImageGalleryHeader: View {
                         .frame(height: 500)
                     }
                     .tag(index)
-                    .onTapGesture {
-                        Haptics.impact(.light)
-                        onTapImage()
-                    }
+                    .onTapGesture(perform: onTapImage)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: 500)
-            .onChange(of: selectedIndex) { _, _ in
-                Haptics.selection()
-            }
-
+            
             // Custom Page Indicator
             if mediaURLs.count > 1 {
                 HStack(spacing: 6) {
@@ -224,10 +217,6 @@ private struct ActionButtonsRow: View {
     let onShare: () -> Void
     @ObservedObject var viewModel: ProfileDetailViewModel
 
-    @State private var likePressed = false
-    @State private var messagePressed = false
-    @State private var sharePressed = false
-
     var body: some View {
         HStack(spacing: 12) {
             // Like Button
@@ -238,7 +227,6 @@ private struct ActionButtonsRow: View {
                             .tint(isLiked ? .white : AppTheme.accent)
                     } else {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
-                            .symbolEffect(.bounce, value: isLiked)
                         Text(isLiked ? "Liked" : "Like")
                     }
                 }
@@ -250,22 +238,11 @@ private struct ActionButtonsRow: View {
                     isLiked ? AppTheme.accent : AppTheme.card,
                     in: RoundedRectangle(cornerRadius: 16)
                 )
-                .scaleEffect(likePressed ? 0.95 : 1.0)
-                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: likePressed)
             }
-            .buttonStyle(.plain)
             .disabled(viewModel.isLoading)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in likePressed = true }
-                    .onEnded { _ in likePressed = false }
-            )
-
+            
             // Message Button
-            Button {
-                Haptics.impact(.light)
-                onMessage()
-            } label: {
+            Button(action: onMessage) {
                 HStack {
                     Image(systemName: "message.fill")
                     Text("Message")
@@ -275,35 +252,16 @@ private struct ActionButtonsRow: View {
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
-                .scaleEffect(messagePressed ? 0.95 : 1.0)
-                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: messagePressed)
             }
-            .buttonStyle(.plain)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in messagePressed = true }
-                    .onEnded { _ in messagePressed = false }
-            )
-
+            
             // Share Button
-            Button {
-                Haptics.impact(.light)
-                onShare()
-            } label: {
+            Button(action: onShare) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.title3)
                     .foregroundStyle(AppTheme.accent)
                     .frame(width: 56, height: 56)
                     .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-                    .scaleEffect(sharePressed ? 0.9 : 1.0)
-                    .animation(.spring(response: 0.2, dampingFraction: 0.6), value: sharePressed)
             }
-            .buttonStyle(.plain)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in sharePressed = true }
-                    .onEnded { _ in sharePressed = false }
-            )
         }
     }
 }
@@ -395,6 +353,7 @@ private struct SocialLinksGrid: View {
                         SocialLinkCard(
                             platform: link.platform,
                             username: account.username,
+                            followers: account.followerCount,
                             verified: account.isVerified,
                             icon: link.icon,
                             color: link.color
@@ -409,6 +368,7 @@ private struct SocialLinksGrid: View {
 private struct SocialLinkCard: View {
     let platform: String
     let username: String
+    let followers: Int?
     let verified: Bool
     let icon: String
     let color: Color
@@ -433,6 +393,12 @@ private struct SocialLinkCard: View {
             Text("@\(username)")
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
+
+            if let followers = followers {
+                Text(formatNumber(followers))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding()
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
@@ -451,16 +417,21 @@ private struct StatsRow: View {
         profile.contentStyles.count
     }
 
-    private var interestsCount: Int {
-        profile.interests?.count ?? 0
-    }
-
     var body: some View {
         HStack(spacing: 0) {
-            // Photos
+            // Followers
+            StatItem(
+                value: formatNumber(profile.followerCount ?? 0),
+                label: "Followers"
+            )
+
+            Divider()
+                .frame(height: 40)
+
+            // Posts
             StatItem(
                 value: "\(postsCount)",
-                label: "Photos"
+                label: "Posts"
             )
 
             Divider()
@@ -470,15 +441,6 @@ private struct StatsRow: View {
             StatItem(
                 value: "\(stylesCount)",
                 label: "Styles"
-            )
-
-            Divider()
-                .frame(height: 40)
-
-            // Interests
-            StatItem(
-                value: "\(interestsCount)",
-                label: "Interests"
             )
         }
         .padding(.vertical, 16)
@@ -775,9 +737,7 @@ final class ProfileDetailViewModel: ObservableObject {
         Haptics.impact(.light)
 
         // Create shareable content
-        guard let profileURL = URL(string: "https://featur.app/profile/\(profile.uid)") else {
-            return
-        }
+        let profileURL = URL(string: "https://featur.app/profile/\(profile.uid)")!
         let shareText = "Check out \(profile.displayName) on Featur! 🎬"
 
         // Present iOS share sheet
@@ -828,16 +788,11 @@ struct MessageSheet: View {
                 VStack(spacing: 12) {
                     if let imageURL = recipientProfile.profileImageURL, let url = URL(string: imageURL) {
                         CachedAsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 80, height: 80)
-                                .clipped()
+                            image.resizable().scaledToFill()
                         } placeholder: {
                             Circle()
                                 .fill(Color.gray.opacity(0.3))
-                                .frame(width: 80, height: 80)
-                                .overlay(ProgressView().tint(AppTheme.accent))
+                                .overlay(ProgressView())
                         }
                         .frame(width: 80, height: 80)
                         .clipShape(Circle())
@@ -867,7 +822,6 @@ struct MessageSheet: View {
                 Spacer()
                 
                 Button {
-                    Haptics.impact(.medium)
                     Task {
                         await sendMessage()
                     }
@@ -877,7 +831,6 @@ struct MessageSheet: View {
                             ProgressView()
                                 .tint(.white)
                         } else {
-                            Image(systemName: "paperplane.fill")
                             Text("Send Message")
                                 .font(.headline)
                         }
@@ -885,11 +838,7 @@ struct MessageSheet: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(
-                        messageText.isEmpty ? Color.gray : AppTheme.accent,
-                        in: RoundedRectangle(cornerRadius: 16)
-                    )
-                    .animation(.easeInOut(duration: 0.2), value: messageText.isEmpty)
+                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 16))
                 }
                 .disabled(messageText.isEmpty || isSending)
                 .padding(.horizontal)
@@ -955,14 +904,12 @@ struct MessageSheet: View {
 
             print("✅ Message sent successfully to \(recipientProfile.displayName)")
 
-            // Success haptic and dismiss
-            Haptics.notify(.success)
+            // Dismiss on success
             isSending = false
             dismiss()
 
         } catch {
             isSending = false
-            Haptics.notify(.error)
             errorMessage = "Failed to send message: \(error.localizedDescription)"
             showError = true
             print("❌ Error sending message: \(error)")
@@ -994,9 +941,14 @@ struct ReportSheet: View {
         NavigationStack {
             Form {
                 Section("Reason") {
-                    reasonPicker
+                    Picker("Select a reason", selection: $selectedReason) {
+                        Text("Select...").tag("")
+                        ForEach(reasons, id: \.self) { reason in
+                            Text(reason).tag(reason)
+                        }
+                    }
                 }
-
+                
                 Section("Additional Details") {
                     TextEditor(text: $details)
                         .frame(height: 100)
@@ -1006,14 +958,10 @@ struct ReportSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        Haptics.impact(.light)
-                        dismiss()
-                    }
+                    Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Submit") {
-                        Haptics.impact(.medium)
                         Task {
                             await submitReport()
                         }
@@ -1025,20 +973,6 @@ struct ReportSheet: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage)
-            }
-        }
-    }
-
-    private var reasonPicker: some View {
-        Picker("Select a reason", selection: $selectedReason) {
-            Text("Select...").tag("")
-            ForEach(reasons, id: \.self) { reason in
-                Text(reason).tag(reason)
-            }
-        }
-        .onChange(of: selectedReason) { _, _ in
-            if !selectedReason.isEmpty {
-                Haptics.selection()
             }
         }
     }
@@ -1083,13 +1017,11 @@ struct ImageViewerSheet: View {
     let mediaURLs: [String]
     @Binding var selectedIndex: Int
     @Environment(\.dismiss) var dismiss
-    @State private var dragOffset: CGSize = .zero
-
+    
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .opacity(1.0 - min(abs(dragOffset.height) / 300.0, 0.5))
-
+            
             TabView(selection: $selectedIndex) {
                 ForEach(Array(mediaURLs.enumerated()), id: \.offset) { index, url in
                     CachedAsyncImage(url: URL(string: url)) { image in
@@ -1105,47 +1037,16 @@ struct ImageViewerSheet: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
-            .offset(y: dragOffset.height)
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        dragOffset = value.translation
-                    }
-                    .onEnded { value in
-                        if abs(value.translation.height) > 100.0 {
-                            Haptics.impact(.light)
-                            dismiss()
-                        } else {
-                            withAnimation(.spring(response: 0.3)) {
-                                dragOffset = .zero
-                            }
-                        }
-                    }
-            )
-            .onChange(of: selectedIndex) { _, _ in
-                Haptics.selection()
-            }
-
+            
             VStack {
                 HStack {
-                    // Image counter
-                    Text("\(selectedIndex + 1) / \(mediaURLs.count)")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.black.opacity(0.5), in: Capsule())
-                        .padding()
-
                     Spacer()
-
                     Button {
-                        Haptics.impact(.light)
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.title)
-                            .foregroundStyle(.white.opacity(0.8))
+                            .foregroundStyle(.white)
                             .padding()
                     }
                 }

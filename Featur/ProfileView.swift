@@ -1,7 +1,6 @@
 import SwiftUI
 import AuthenticationServices
 import FirebaseAuth
-import FirebaseFirestore
 
 struct ProfileView: View {
     @EnvironmentObject var auth: AuthViewModel
@@ -114,26 +113,20 @@ private struct SignedInProfile: View {
     @ObservedObject var profileViewModel: ProfileViewModel
     @Binding var showSettings: Bool
     @Binding var showEditProfile: Bool
-
+    
     @State private var displayName: String = ""
     @State private var email: String = ""
     @State private var appleAnon: Bool = false
-
-    // Sheet states for viewing activity
-    @State private var showLikedProfiles = false
-    @State private var showFavoriteProfiles = false
-    @State private var showViewedProfiles = false
-    @State private var showMatchedProfiles = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
                 // Header Section
                 profileHeader
-
+                
                 // Stats Section
-                if profileViewModel.profile != nil {
-                    activityStatsSection
+                if let profile = profileViewModel.profile {
+                    statsSection(profile: profile)
                 }
                 
                 // Action Buttons
@@ -163,33 +156,6 @@ private struct SignedInProfile: View {
             SettingsSheet()
                 .environmentObject(auth)
         }
-        .sheet(isPresented: $showLikedProfiles) {
-            ActivityProfilesSheet(
-                title: "Liked Profiles",
-                icon: "heart.fill",
-                actionType: .like,
-                userId: auth.user?.uid ?? ""
-            )
-        }
-        .sheet(isPresented: $showFavoriteProfiles) {
-            ActivityProfilesSheet(
-                title: "Favorite Profiles",
-                icon: "star.fill",
-                actionType: .superLike,
-                userId: auth.user?.uid ?? ""
-            )
-        }
-        .sheet(isPresented: $showViewedProfiles) {
-            ActivityProfilesSheet(
-                title: "Viewed Profiles",
-                icon: "eye.fill",
-                actionType: nil,
-                userId: auth.user?.uid ?? ""
-            )
-        }
-        .sheet(isPresented: $showMatchedProfiles) {
-            MatchedProfilesSheet(userId: auth.user?.uid ?? "")
-        }
         .onChange(of: showSettings) { _, isShowing in
             if !isShowing {
                 // Refresh profile when returning from settings
@@ -199,7 +165,7 @@ private struct SignedInProfile: View {
             }
         }
     }
-
+    
     // MARK: - Profile Header
     private var profileHeader: some View {
         VStack(spacing: 16) {
@@ -215,19 +181,11 @@ private struct SignedInProfile: View {
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 120, height: 120)
-                                .clipped()
                                 .clipShape(Circle())
-                        case .empty:
-                            ZStack {
-                                avatarPlaceholder
-                                ProgressView()
-                                    .tint(.white)
-                            }
                         default:
                             avatarPlaceholder
                         }
                     }
-                    .frame(width: 120, height: 120)
                 } else {
                     avatarPlaceholder
                 }
@@ -309,55 +267,53 @@ private struct SignedInProfile: View {
         }
     }
     
-    // MARK: - Activity Section
-    private var activityStatsSection: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                // Liked (Heart)
-                ActivityBoxButton(
-                    label: "Liked",
-                    icon: "heart.fill",
-                    color: .pink
-                ) {
-                    Haptics.impact(.light)
-                    showLikedProfiles = true
-                }
-
-                // Matches
-                ActivityBoxButton(
-                    label: "Matches",
-                    icon: "heart.circle.fill",
-                    color: .purple
-                ) {
-                    Haptics.impact(.light)
-                    showMatchedProfiles = true
-                }
-            }
-
-            HStack(spacing: 12) {
-                // Favorites (Star/SuperLike)
-                ActivityBoxButton(
-                    label: "Favorites",
-                    icon: "star.fill",
-                    color: .yellow
-                ) {
-                    Haptics.impact(.light)
-                    showFavoriteProfiles = true
-                }
-
-                // Profile Views
-                ActivityBoxButton(
-                    label: "Viewed",
-                    icon: "eye.fill",
-                    color: .blue
-                ) {
-                    Haptics.impact(.light)
-                    showViewedProfiles = true
-                }
-            }
+    // MARK: - Stats Section
+    private func statsSection(profile: UserProfile) -> some View {
+        HStack(spacing: 0) {
+            statBox(
+                value: formatFollowerCount(profile.followerCount ?? 0),
+                label: "Followers",
+                icon: "person.2.fill"
+            )
+            
+            Divider()
+                .frame(height: 40)
+            
+            statBox(
+                value: "\((profile.mediaURLs ?? []).count)",
+                label: "Posts",
+                icon: "photo.stack.fill"
+            )
+            
+            Divider()
+                .frame(height: 40)
+            
+            statBox(
+                value: "\(profile.contentStyles.count)",
+                label: "Styles",
+                icon: "star.fill"
+            )
         }
+        .padding(.vertical, 20)
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
         .padding(.horizontal, 16)
         .padding(.bottom, 20)
+    }
+    
+    private func statBox(value: String, label: String, icon: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(AppTheme.accent)
+            
+            Text(value)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+            
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
     
     // MARK: - Action Buttons
@@ -431,12 +387,9 @@ private struct SignedInProfile: View {
                                         image
                                             .resizable()
                                             .scaledToFill()
-                                            .frame(width: 100, height: 100)
-                                            .clipped()
                                     case .failure(_):
                                         Rectangle()
                                             .fill(.red.opacity(0.2))
-                                            .frame(width: 100, height: 100)
                                             .overlay(
                                                 Image(systemName: "exclamationmark.triangle")
                                                     .foregroundStyle(.red)
@@ -444,7 +397,6 @@ private struct SignedInProfile: View {
                                     case .empty:
                                         Rectangle()
                                             .fill(.gray.opacity(0.2))
-                                            .frame(width: 100, height: 100)
                                             .overlay(
                                                 ProgressView()
                                                     .tint(AppTheme.accent)
@@ -452,7 +404,6 @@ private struct SignedInProfile: View {
                                     @unknown default:
                                         Rectangle()
                                             .fill(.gray.opacity(0.2))
-                                            .frame(width: 100, height: 100)
                                     }
                                 }
                                 .frame(width: 100, height: 100)
@@ -479,6 +430,7 @@ private struct SignedInProfile: View {
                                     platform: "Instagram",
                                     icon: "camera",
                                     username: instagram.username,
+                                    followers: instagram.followerCount,
                                     isVerified: instagram.isVerified
                                 )
                             }
@@ -488,6 +440,7 @@ private struct SignedInProfile: View {
                                     platform: "TikTok",
                                     icon: "music.note",
                                     username: tiktok.username,
+                                    followers: tiktok.followerCount,
                                     isVerified: tiktok.isVerified
                                 )
                             }
@@ -497,6 +450,7 @@ private struct SignedInProfile: View {
                                     platform: "YouTube",
                                     icon: "play.rectangle",
                                     username: youtube.username,
+                                    followers: youtube.followerCount,
                                     isVerified: youtube.isVerified
                                 )
                             }
@@ -506,6 +460,7 @@ private struct SignedInProfile: View {
                                     platform: "Twitch",
                                     icon: "gamecontroller",
                                     username: twitch.username,
+                                    followers: twitch.followerCount,
                                     isVerified: twitch.isVerified
                                 )
                             }
@@ -570,7 +525,7 @@ private struct SignedInProfile: View {
         .padding(.horizontal, 16)
     }
     
-    private func socialLinkRow(platform: String, icon: String, username: String, isVerified: Bool) -> some View {
+    private func socialLinkRow(platform: String, icon: String, username: String, followers: Int?, isVerified: Bool) -> some View {
         HStack {
             Image(systemName: icon)
                 .font(.title3)
@@ -578,9 +533,11 @@ private struct SignedInProfile: View {
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(platform)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(platform)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 HStack(spacing: 4) {
                     Text("@\(username)")
@@ -591,6 +548,12 @@ private struct SignedInProfile: View {
                             .font(.caption)
                             .foregroundStyle(.blue)
                     }
+                }
+
+                if let followers = followers {
+                    Text("\(formatFollowerCount(followers)) followers")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -716,340 +679,6 @@ private struct SignedInProfile: View {
             return String(first).uppercased()
         }
         return letters.map { String($0).uppercased() }.joined()
-    }
-}
-
-// MARK: - Activity Profiles Sheet
-struct ActivityProfilesSheet: View {
-    let title: String
-    let icon: String
-    let actionType: SwipeAction.Action?
-    let userId: String
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var profiles: [UserProfile] = []
-    @State private var isLoading = true
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if isLoading {
-                    VStack(spacing: 16) {
-                        ProgressView()
-                        Text("Loading...")
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if profiles.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: icon)
-                            .font(.system(size: 50))
-                            .foregroundStyle(.secondary)
-
-                        Text("No profiles yet")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-
-                        Text("Start discovering to see your activity here")
-                            .font(.subheadline)
-                            .foregroundStyle(.tertiary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(profiles) { profile in
-                                ActivityProfileRow(profile: profile)
-                            }
-                        }
-                        .padding()
-                    }
-                }
-            }
-            .background(AppTheme.bg.ignoresSafeArea())
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .task {
-            await loadProfiles()
-        }
-    }
-
-    private func loadProfiles() async {
-        let db = Firestore.firestore()
-
-        do {
-            var targetUserIds: [String] = []
-
-            if let actionType = actionType {
-                // Get specific action type (like or superLike)
-                let snapshot = try await db.collection("swipes")
-                    .whereField("userId", isEqualTo: userId)
-                    .whereField("action", isEqualTo: actionType.rawValue)
-                    .getDocuments()
-
-                targetUserIds = snapshot.documents.compactMap { doc in
-                    doc.data()["targetUserId"] as? String
-                }
-            } else {
-                // Get all viewed profiles
-                let snapshot = try await db.collection("swipes")
-                    .whereField("userId", isEqualTo: userId)
-                    .getDocuments()
-
-                targetUserIds = snapshot.documents.compactMap { doc in
-                    doc.data()["targetUserId"] as? String
-                }
-            }
-
-            // Remove duplicates
-            let uniqueIds = Array(Set(targetUserIds))
-
-            // Fetch profiles in batches (Firestore limit is 10 for whereIn)
-            var fetchedProfiles: [UserProfile] = []
-            for batch in uniqueIds.chunked(into: 10) {
-                let profilesSnapshot = try await db.collection("profiles")
-                    .whereField("uid", in: batch)
-                    .getDocuments()
-
-                let batchProfiles = profilesSnapshot.documents.compactMap { doc -> UserProfile? in
-                    try? doc.data(as: UserProfile.self)
-                }
-                fetchedProfiles.append(contentsOf: batchProfiles)
-            }
-
-            await MainActor.run {
-                profiles = fetchedProfiles
-                isLoading = false
-            }
-        } catch {
-            print("Error loading profiles: \(error)")
-            await MainActor.run {
-                isLoading = false
-            }
-        }
-    }
-}
-
-// MARK: - Activity Profile Row
-private struct ActivityProfileRow: View {
-    let profile: UserProfile
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Profile Image
-            if let imageURL = profile.profileImageURL ?? profile.mediaURLs?.first,
-               let url = URL(string: imageURL) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    case .empty:
-                        ProgressView()
-                    case .failure:
-                        Image(systemName: "person.fill")
-                            .foregroundStyle(.secondary)
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                .frame(width: 56, height: 56)
-                .clipShape(Circle())
-            } else {
-                Circle()
-                    .fill(AppTheme.gradient)
-                    .frame(width: 56, height: 56)
-                    .overlay {
-                        Text(profile.displayName.prefix(1).uppercased())
-                            .font(.title2.bold())
-                            .foregroundStyle(.white)
-                    }
-            }
-
-            // Profile Info
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 4) {
-                    Text(profile.displayName)
-                        .font(.headline)
-
-                    if profile.isVerified == true {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                    }
-                }
-
-                if let age = profile.age {
-                    Text("\(age) years old")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                if !profile.contentStyles.isEmpty {
-                    Text(profile.contentStyles.prefix(2).map { $0.rawValue }.joined(separator: ", "))
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .padding()
-        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-// MARK: - Matched Profiles Sheet
-struct MatchedProfilesSheet: View {
-    let userId: String
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var profiles: [UserProfile] = []
-    @State private var isLoading = true
-
-    private let service = FirebaseService()
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if isLoading {
-                    VStack(spacing: 16) {
-                        ProgressView()
-                        Text("Loading...")
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if profiles.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "heart.circle.fill")
-                            .font(.system(size: 50))
-                            .foregroundStyle(.purple.opacity(0.5))
-
-                        Text("No matches yet")
-                            .font(.headline)
-
-                        Text("Keep swiping to find your matches!")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(profiles) { profile in
-                                ActivityProfileRow(profile: profile)
-                            }
-                        }
-                        .padding()
-                    }
-                }
-            }
-            .background(AppTheme.bg.ignoresSafeArea())
-            .navigationTitle("Matches")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-        .task {
-            await loadMatches()
-        }
-    }
-
-    private func loadMatches() async {
-        do {
-            let matches = try await service.fetchMatches(forUser: userId)
-            let matchedUserIds = matches.compactMap { match -> String? in
-                // Get the other user's ID from the match
-                if match.userId1 == userId {
-                    return match.userId2
-                } else {
-                    return match.userId1
-                }
-            }
-
-            let db = Firestore.firestore()
-            var fetchedProfiles: [UserProfile] = []
-
-            for batch in matchedUserIds.chunked(into: 10) {
-                let snapshot = try await db.collection("profiles")
-                    .whereField("uid", in: batch)
-                    .getDocuments()
-                let batchProfiles = snapshot.documents.compactMap { try? $0.data(as: UserProfile.self) }
-                fetchedProfiles.append(contentsOf: batchProfiles)
-            }
-
-            await MainActor.run {
-                profiles = fetchedProfiles
-                isLoading = false
-            }
-        } catch {
-            print("Error loading matches: \(error)")
-            await MainActor.run { isLoading = false }
-        }
-    }
-}
-
-// MARK: - Activity Box Button
-private struct ActivityBoxButton: View {
-    let label: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(color)
-                    .frame(width: 28, height: 28)
-
-                Text(label)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Array Extension for Chunking
-extension Array {
-    func chunked(into size: Int) -> [[Element]] {
-        stride(from: 0, to: count, by: size).map {
-            Array(self[$0..<Swift.min($0 + size, count)])
-        }
     }
 }
 

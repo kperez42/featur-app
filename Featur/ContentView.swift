@@ -29,9 +29,6 @@ struct ContentView: View {
                 .tag(AppStateManager.Tab.profile)
         }
         .tint(AppTheme.accent)
-        .onChange(of: appState.selectedTab) { _, _ in
-            Haptics.impact(.light)
-        }
         .onAppear {
             startPresenceUpdates()
         }
