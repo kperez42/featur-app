@@ -103,9 +103,9 @@ struct ProfileCreationFlow: View {
                 .animation(.easeInOut, value: step)
                 .transition(.opacity)
                 // Automatically advance once user grants location access
-                .onChange(of: locationManager.authorizationStatus) {
-                    if locationManager.authorizationStatus == .authorizedWhenInUse ||
-                       locationManager.authorizationStatus == .authorizedAlways {
+                .onChange(of: locationManager.authorizationStatus) { _, newStatus in
+                    if newStatus == .authorizedWhenInUse ||
+                       newStatus == .authorizedAlways {
                         withAnimation(.easeInOut) {
                             step = .review
                         }
@@ -125,9 +125,7 @@ struct ProfileCreationFlow: View {
                 .padding(.bottom, 12)
             }
         }
-                .background(AppTheme.bg.ignoresSafeArea(.all)) // Ensures background covers safe areas
-                .edgesIgnoringSafeArea(.top)
-                .padding(.top, 44) // Offset to clear status bar (adjust based on device, e.g., 20–44 points)
+        .background(AppTheme.bg.ignoresSafeArea())
         .animation(.spring(), value: step)
     }
 
@@ -197,33 +195,10 @@ struct ProfileCreationFlow: View {
 
 
         await viewModel.updateProfile(newProfile)
-
-        // CRITICAL: Set isCompleteProfile to make user visible on Discover
-        // Retry up to 3 times if it fails
-        var profileCompleted = false
-        for attempt in 1...3 {
-            do {
-                try await db.collection("users").document(uid).setData(
-                    ["isCompleteProfile": true],
-                    merge: true
-                )
-                profileCompleted = true
-                print("✅ Profile marked as complete (attempt \(attempt))")
-                break
-            } catch {
-                print("⚠️ Failed to mark profile complete (attempt \(attempt)): \(error)")
-                if attempt < 3 {
-                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
-                }
-            }
-        }
-
-        if !profileCompleted {
-            print("❌ CRITICAL: Could not mark profile as complete after 3 attempts")
-            // Profile will still be saved, but user won't appear in Discover
-            // This is logged so it can be debugged
-        }
-
+        try? await db.collection("users").document(uid).setData(
+                ["isCompleteProfile": true],
+                merge: true
+            )
         //refresh user auth state
         await auth.refreshUserState()
 

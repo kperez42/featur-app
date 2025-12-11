@@ -3,45 +3,6 @@ import FirebaseFirestore
 import FirebaseAuth
 import FirebaseStorage
 
-// MARK: - Profile Cache for Fast Loading
-
-final class ProfileCache {
-    static let shared = ProfileCache()
-    private var cache: [String: (profile: UserProfile, timestamp: Date)] = [:]
-    private let cacheValidityDuration: TimeInterval = 300 // 5 minutes
-    private let queue = DispatchQueue(label: "com.featur.profilecache", attributes: .concurrent)
-
-    private init() {}
-
-    func get(_ uid: String) -> UserProfile? {
-        queue.sync {
-            guard let cached = cache[uid],
-                  Date().timeIntervalSince(cached.timestamp) < cacheValidityDuration else {
-                return nil
-            }
-            return cached.profile
-        }
-    }
-
-    func set(_ profile: UserProfile) {
-        queue.async(flags: .barrier) {
-            self.cache[profile.uid] = (profile, Date())
-        }
-    }
-
-    func invalidate(_ uid: String) {
-        queue.async(flags: .barrier) {
-            self.cache.removeValue(forKey: uid)
-        }
-    }
-
-    func clear() {
-        queue.async(flags: .barrier) {
-            self.cache.removeAll()
-        }
-    }
-}
-
 @MainActor
 final class FirebaseService: ObservableObject {
     private let db = Firestore.firestore()
@@ -53,16 +14,10 @@ final class FirebaseService: ObservableObject {
         try db.collection("users").document(profile.uid).setData(from: profile)
     }
     
-    func fetchProfile(uid: String, useCache: Bool = true) async throws -> UserProfile? {
+    func fetchProfile(uid: String) async throws -> UserProfile? {
         guard !uid.isEmpty else {
             print("⚠️ fetchProfile: UID is empty. Returning nil.")
             return nil
-        }
-
-        // Check cache first for instant loading
-        if useCache, let cachedProfile = ProfileCache.shared.get(uid) {
-            print("⚡ Cache hit for profile: \(cachedProfile.displayName)")
-            return cachedProfile
         }
 
         do {
@@ -80,14 +35,11 @@ final class FirebaseService: ObservableObject {
                 if profile.uid.isEmpty {
                     profile.uid = document.documentID
                 }
-                // Cache the profile for fast future access
-                ProfileCache.shared.set(profile)
                 print("✅ Fetched profile for uid \(uid): \(profile.displayName)")
                 return profile
             } catch {
                 // Fallback: manually decode with document ID as uid
                 if let profile = decodeProfileFromDocument(doc: document, fallbackUid: uid) {
-                    ProfileCache.shared.set(profile)
                     print("✅ Fetched profile (fallback) for uid \(uid): \(profile.displayName)")
                     return profile
                 }
@@ -101,7 +53,7 @@ final class FirebaseService: ObservableObject {
     }
     // MARK: - Fetch All User Profiles
     func fetchAllProfiles(limit: Int = 50) async throws -> [UserProfile] {
-        let snapshot = try await db.collection("users")
+        let snapshot = try await db.collection("profiles")
             .limit(to: limit)
             .getDocuments()
 
@@ -384,16 +336,7 @@ final class FirebaseService: ObservableObject {
             } else {
                 print("ℹ️ Match already exists between \(userId) and \(targetUserId)")
             }
-
-            // Create conversation for the match
-            do {
-                let conversation = try await getOrCreateConversation(between: userId, and: targetUserId)
-                print("✅ Conversation created for match: \(conversation.id ?? "unknown")")
-            } catch {
-                print("⚠️ Failed to create conversation for match: \(error)")
-            }
-
-        }else{
+        } else {
             // Debug statement no match created
             print("❌ No reciprocal like yet for \(userId) ↔ \(targetUserId)")
 
@@ -459,20 +402,21 @@ final class FirebaseService: ObservableObject {
     // MARK: - Conversations (create/get)
 
     func getOrCreateConversation(between userA: String, and userB: String) async throws -> Conversation {
-        // Use deterministic ID to prevent race condition duplicates
-        let sortedIds = [userA, userB].sorted()
-        let conversationId = "\(sortedIds[0])_\(sortedIds[1])"
-        let docRef = db.collection("conversations").document(conversationId)
-
-        // Check if conversation already exists
-        let doc = try await docRef.getDocument()
-        if doc.exists, let existing = try? doc.data(as: Conversation.self) {
+        // 1) Try to find an existing conversation with both participants
+        let snapshot = try await db.collection("conversations")
+            .whereField("participantIds", arrayContains: userA)
+            .getDocuments()
+        
+        if let existing = snapshot.documents
+            .compactMap({ try? $0.data(as: Conversation.self) })
+            .first(where: { Set($0.participantIds) == Set([userA, userB]) }) {
             return existing
         }
-
-        // Create new conversation with deterministic ID
+        
+        // 2) Create a new conversation
+        let newRef = db.collection("conversations").document()
         let conv = Conversation(
-            id: conversationId,
+            id: newRef.documentID,
             participantIds: [userA, userB],
             lastMessage: nil,
             lastMessageAt: Date(),
@@ -480,8 +424,7 @@ final class FirebaseService: ObservableObject {
             isGroupChat: false,
             createdAt: Date()
         )
-        // Use merge to handle race condition - if another client creates it first, we just merge
-        try docRef.setData(from: conv, merge: true)
+        try newRef.setData(from: conv)
         return conv
     }
 

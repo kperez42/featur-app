@@ -74,10 +74,15 @@ struct EnhancedMessagesView: View {
     private func handlePendingMatch(currentUserId: String, matchedUserId: String) async {
         do {
             // Create or get existing conversation
-            let conversation = try await viewModel.service.getOrCreateConversation(
+            var conversation = try await viewModel.service.getOrCreateConversation(
                 between: currentUserId,
                 and: matchedUserId
             )
+
+            // Fetch the matched user's profile for display
+            if let profile = try? await viewModel.service.fetchProfile(uid: matchedUserId) {
+                conversation.participantProfiles = [matchedUserId: profile]
+            }
 
             // Navigate to the conversation
             navigateToConversation = conversation
@@ -109,7 +114,10 @@ struct EnhancedMessagesView: View {
                             ConversationRow(conversation: conversation)
                         }
                         .buttonStyle(.plain)
-                        
+                        .simultaneousGesture(TapGesture().onEnded {
+                            Haptics.impact(.light)
+                        })
+
                         Divider()
                             .padding(.leading, 76)
                     }
@@ -139,10 +147,13 @@ struct EnhancedMessagesView: View {
                                             ? match.userId2
                                             : match.userId1
 
-                                        let conversation = try await viewModel.service.getOrCreateConversation(
+                                        var conversation = try await viewModel.service.getOrCreateConversation(
                                             between: currentUserId,
                                             and: otherId
                                         )
+
+                                        // Attach the profile for display in ChatView
+                                        conversation.participantProfiles = [otherId: profile]
 
                                         await viewModel.service.markMatchAsMessaged(
                                             userA: currentUserId,
@@ -186,20 +197,11 @@ struct EnhancedMessagesView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-            
-            Text("No Messages Yet")
-                .font(.title2.bold())
-            
-            Text("Start swiping to match with creators and begin conversations")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-        .frame(maxHeight: .infinity)
+        EmptyStateView(
+            icon: "bubble.left.and.bubble.right",
+            title: "No Messages Yet",
+            message: "Match with creators to start conversations and collaborate"
+        )
         .background(AppTheme.bg)
     }
     
@@ -226,17 +228,41 @@ struct EnhancedMessagesView: View {
 
 struct ConversationRow: View {
     let conversation: Conversation
-    
+
+    private var otherUserId: String? {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return nil }
+        return conversation.participantIds.first { $0 != currentUserId }
+    }
+
+    private var isOtherUserOnline: Bool {
+        guard let userId = otherUserId else { return false }
+        return PresenceManager.shared.isOnline(userId: userId)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar
-            if conversation.isGroupChat {
-                groupAvatar
-            } else if let otherProfile = conversation.participantProfiles?.values.first {
-                profileAvatar(otherProfile)
-            } else {
-                // Fallback avatar when profile not loaded
-                defaultAvatar
+            // Avatar with online indicator
+            ZStack(alignment: .bottomTrailing) {
+                if conversation.isGroupChat {
+                    groupAvatar
+                } else if let otherProfile = conversation.participantProfiles?.values.first {
+                    profileAvatar(otherProfile)
+                } else {
+                    // Fallback avatar when profile not loaded
+                    defaultAvatar
+                }
+
+                // Online indicator
+                if !conversation.isGroupChat && isOtherUserOnline {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 14, height: 14)
+                        .overlay(
+                            Circle()
+                                .stroke(AppTheme.bg, lineWidth: 2)
+                        )
+                        .offset(x: 2, y: 2)
+                }
             }
 
             // Content
@@ -245,22 +271,23 @@ struct ConversationRow: View {
                     Text(displayName)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
-                    
+
                     Spacer()
-                    
+
                     Text(timeString)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 HStack {
                     Text(conversation.lastMessage ?? "Start chatting")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(unreadCount > 0 ? .primary : .secondary)
+                        .fontWeight(unreadCount > 0 ? .medium : .regular)
                         .lineLimit(1)
-                    
+
                     Spacer()
-                    
+
                     if unreadCount > 0 {
                         Text("\(unreadCount)")
                             .font(.caption.weight(.bold))
@@ -275,6 +302,12 @@ struct ConversationRow: View {
         .padding(.horizontal)
         .padding(.vertical, 12)
         .background(AppTheme.bg)
+        .task {
+            // Fetch online status for the other user
+            if let userId = otherUserId {
+                await PresenceManager.shared.fetchOnlineStatus(userId: userId)
+            }
+        }
     }
     
     private var displayName: String {
@@ -302,13 +335,19 @@ struct ConversationRow: View {
             image
                 .resizable()
                 .scaledToFill()
+                .frame(width: 56, height: 56)
                 .clipped()
-                .frame(width: 56, height: 56)
-                .clipShape(Circle())
         } placeholder: {
-            ProgressView()
-                .frame(width: 56, height: 56)
+            ZStack {
+                Circle()
+                    .fill(AppTheme.accent.opacity(0.2))
+                ProgressView()
+                    .tint(AppTheme.accent)
+            }
+            .frame(width: 56, height: 56)
         }
+        .frame(width: 56, height: 56)
+        .clipShape(Circle())
     }
 
     @ViewBuilder
@@ -351,28 +390,167 @@ struct ConversationRow: View {
 
 struct NewMatchCard: View {
     let profile: UserProfile
-    
+    @State private var isPressed = false
+
+    private var isOnline: Bool {
+        PresenceManager.shared.isOnline(userId: profile.uid)
+    }
+
     var body: some View {
         VStack(spacing: 8) {
-            CachedAsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Circle()
-                    .fill(AppTheme.accent.opacity(0.2))
+            ZStack(alignment: .bottomTrailing) {
+                CachedAsyncImage(url: URL(string: (profile.mediaURLs ?? []).first ?? "")) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 80, height: 80)
+                        .clipped()
+                } placeholder: {
+                    Circle()
+                        .fill(AppTheme.accent.opacity(0.2))
+                        .frame(width: 80, height: 80)
+                        .overlay {
+                            Text(profile.displayName.prefix(1))
+                                .font(.title.bold())
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                }
+                .frame(width: 80, height: 80)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [AppTheme.accent, AppTheme.accent.opacity(0.6)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 3
+                        )
+                )
+
+                // Online indicator
+                if isOnline {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 16, height: 16)
+                        .overlay(
+                            Circle()
+                                .stroke(AppTheme.bg, lineWidth: 2)
+                        )
+                        .offset(x: 2, y: 2)
+                }
             }
-            .frame(width: 80, height: 80)
-            .clipShape(Circle())
-            .overlay(
-                Circle()
-                    .stroke(AppTheme.accent, lineWidth: 3)
-            )
-            
+            .scaleEffect(isPressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
+
             Text(profile.displayName)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
                 .frame(width: 80)
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .task {
+            await PresenceManager.shared.fetchOnlineStatus(userId: profile.uid)
+        }
+    }
+}
+
+// MARK: - Chat Toolbar Content
+
+private struct ChatToolbarContent: View {
+    let conversation: Conversation
+    @State private var showProfilePreview = false
+
+    private var otherUserId: String? {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return nil }
+        return conversation.participantIds.first { $0 != currentUserId }
+    }
+
+    private var isOtherUserOnline: Bool {
+        guard let userId = otherUserId else { return false }
+        return PresenceManager.shared.isOnline(userId: userId)
+    }
+
+    private var otherProfile: UserProfile? {
+        conversation.participantProfiles?.values.first
+    }
+
+    var body: some View {
+        Button {
+            Haptics.impact(.light)
+            showProfilePreview = true
+        } label: {
+            HStack(spacing: 10) {
+                // Avatar with online indicator
+                ZStack(alignment: .bottomTrailing) {
+                    if let profile = otherProfile,
+                       let urlString = (profile.mediaURLs ?? []).first,
+                       let url = URL(string: urlString) {
+                        CachedAsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 36, height: 36)
+                                .clipped()
+                        } placeholder: {
+                            Circle()
+                                .fill(AppTheme.accent.opacity(0.2))
+                                .frame(width: 36, height: 36)
+                        }
+                        .frame(width: 36, height: 36)
+                        .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(AppTheme.accent.opacity(0.2))
+                            .frame(width: 36, height: 36)
+                            .overlay {
+                                Text(otherProfile?.displayName.prefix(1).uppercased() ?? "?")
+                                    .font(.headline)
+                                    .foregroundStyle(AppTheme.accent)
+                            }
+                    }
+
+                    if !conversation.isGroupChat && isOtherUserOnline {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 10, height: 10)
+                            .overlay(
+                                Circle()
+                                    .stroke(AppTheme.bg, lineWidth: 2)
+                            )
+                            .offset(x: 2, y: 2)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(otherProfile?.displayName ?? "Chat")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    if !conversation.isGroupChat {
+                        Text(isOtherUserOnline ? "Online" : "Offline")
+                            .font(.caption2)
+                            .foregroundStyle(isOtherUserOnline ? .green : .secondary)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showProfilePreview) {
+            if let profile = otherProfile {
+                ProfileDetailViewSimple(profile: profile)
+                    .presentationDragIndicator(.visible)
+            }
+        }
+        .task {
+            if let userId = otherUserId {
+                await PresenceManager.shared.fetchOnlineStatus(userId: userId)
+            }
         }
     }
 }
@@ -386,7 +564,8 @@ struct ChatView: View {
     @FocusState private var isInputFocused: Bool
     @State private var showImagePicker = false
     @State private var selectedImage: UIImage?
-    
+    @State private var scrollProxy: ScrollViewProxy?
+
     var body: some View {
         VStack(spacing: 0) {
             // Messages List
@@ -395,83 +574,89 @@ struct ChatView: View {
                     LazyVStack(spacing: 12) {
                         ForEach(viewModel.messages) { message in
                             MessageBubble(message: message, isFromCurrentUser: message.senderId == Auth.auth().currentUser?.uid)
+                                .id(message.id)
                         }
                     }
                     .padding()
-                    .onChange(of: viewModel.messages.count) { _, _ in
-                        if let lastMessage = viewModel.messages.last {
-                            withAnimation {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                            }
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onAppear {
+                    scrollProxy = proxy
+                }
+                .onChange(of: viewModel.messages.count) { _, _ in
+                    scrollToBottom(proxy: proxy)
+                }
+                .onChange(of: isInputFocused) { _, focused in
+                    if focused {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            scrollToBottom(proxy: proxy)
                         }
                     }
                 }
             }
-            
+
             // Input Bar
-            HStack(spacing: 12) {
-                Button {
-                    showImagePicker = true
-                } label: {
-                    Image(systemName: "photo.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(AppTheme.accent)
+            VStack(spacing: 0) {
+                Divider()
+                HStack(spacing: 12) {
+                    Button {
+                        Haptics.impact(.light)
+                        showImagePicker = true
+                    } label: {
+                        Image(systemName: "photo.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(AppTheme.accent)
+                    }
+
+                    TextField("Message", text: $messageText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
+                        .focused($isInputFocused)
+                        .lineLimit(1...5)
+                        .submitLabel(.send)
+                        .onSubmit {
+                            if !messageText.isEmpty {
+                                sendMessage()
+                            }
+                        }
+
+                    Button {
+                        sendMessage()
+                    } label: {
+                        Image(systemName: messageText.isEmpty ? "mic.fill" : "arrow.up.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(messageText.isEmpty ? .secondary : AppTheme.accent)
+                            .animation(.easeInOut(duration: 0.15), value: messageText.isEmpty)
+                    }
+                    .disabled(messageText.isEmpty)
                 }
-                
-                TextField("Message", text: $messageText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .padding(10)
-                    .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 20))
-                    .focused($isInputFocused)
-                    .lineLimit(1...5)
-                
-                Button {
-                    sendMessage()
-                } label: {
-                    Image(systemName: messageText.isEmpty ? "mic.fill" : "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(messageText.isEmpty ? .secondary : AppTheme.accent)
-                }
-                .disabled(messageText.isEmpty)
+                .padding(.horizontal)
+                .padding(.vertical, 10)
             }
-            .padding()
-            .background(AppTheme.bg.opacity(0.95))
+            .background(AppTheme.bg)
         }
         .navigationTitle(conversation.isGroupChat ? (conversation.groupName ?? "Group") : (conversation.participantProfiles?.values.first?.displayName ?? "Chat"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 8) {
-                    if let profile = conversation.participantProfiles?.values.first,
-                       let urlString = (profile.mediaURLs ?? []).first,
-                       let url = URL(string: urlString) {
-                        CachedAsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .clipped()
-                        } placeholder: {
-                            Circle()
-                                .fill(AppTheme.accent.opacity(0.2))
-                        }
-                        .frame(width: 44, height: 44)
-                        .clipShape(Circle())
-
-                    }
-                    
-                    Text(conversation.participantProfiles?.values.first?.displayName ?? "Chat")
-                        .font(.headline)
-                }
+                ChatToolbarContent(conversation: conversation)
             }
         }
         .background(AppTheme.bg)
         .onAppear {
             guard let conversationId = conversation.id else { return }
 
-            // Load initial messages
+            // Load initial messages and scroll to bottom
             Task {
                 await viewModel.loadMessages(conversationId: conversationId)
                 await viewModel.markAsRead(conversationId: conversationId)
+                // Scroll to bottom after messages load
+                if let proxy = scrollProxy {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        scrollToBottom(proxy: proxy)
+                    }
+                }
             }
 
             // Start real-time listener for new messages
@@ -491,14 +676,6 @@ struct ChatView: View {
                     selectedImage = nil
                 }
             }
-        }
-        .alert("Message Error", isPresented: Binding(
-            get: { viewModel.sendError != nil },
-            set: { if !$0 { viewModel.sendError = nil } }
-        )) {
-            Button("OK") { viewModel.sendError = nil }
-        } message: {
-            Text(viewModel.sendError ?? "")
         }
     }
     
@@ -553,8 +730,15 @@ struct ChatView: View {
 
         } catch {
             print("❌ Error sending image: \(error.localizedDescription)")
-            viewModel.sendError = "Failed to send image. Please try again."
             Haptics.notify(.error)
+        }
+    }
+
+    private func scrollToBottom(proxy: ScrollViewProxy) {
+        if let lastMessage = viewModel.messages.last {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+            }
         }
     }
 }
@@ -564,57 +748,178 @@ struct ChatView: View {
 struct MessageBubble: View {
     let message: Message
     let isFromCurrentUser: Bool
-    
+    @State private var showFullImage = false
+
     var body: some View {
         HStack {
             if isFromCurrentUser { Spacer(minLength: 60) }
 
             VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                // Show image if mediaURL exists
+                // Show image if mediaURL exists - CLICKABLE
                 if let mediaURL = message.mediaURL, let url = URL(string: mediaURL) {
-                    CachedAsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 200, height: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    } placeholder: {
-                        ProgressView()
-                            .frame(width: 200, height: 200)
+                    Button {
+                        Haptics.impact(.light)
+                        showFullImage = true
+                    } label: {
+                        CachedAsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 200, height: 200)
+                                .clipped()
+                        } placeholder: {
+                            RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
+                                .fill(AppTheme.card)
+                                .frame(width: 200, height: 200)
+                                .overlay(ProgressView().tint(AppTheme.accent))
+                        }
+                        .frame(width: 200, height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous))
+                        .shadow(color: AppTheme.shadowLight, radius: 4, x: 0, y: 2)
                     }
-                    .frame(width: 200, height: 200)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(isFromCurrentUser ? AppTheme.accent : Color.clear, lineWidth: 2)
-                    )
+                    .buttonStyle(.plain)
+                    .fullScreenCover(isPresented: $showFullImage) {
+                        FullScreenImageView(imageURL: mediaURL)
+                    }
                 }
 
                 // Show text content (always show for context, especially for images)
-                if !message.content.isEmpty {
+                if !message.content.isEmpty && message.content != "📷 Photo" {
                     Text(message.content)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(
-                            isFromCurrentUser ? AppTheme.accent : AppTheme.card,
-                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            Group {
+                                if isFromCurrentUser {
+                                    RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
+                                        .fill(AppTheme.gradient)
+                                } else {
+                                    RoundedRectangle(cornerRadius: AppTheme.radiusLarge, style: .continuous)
+                                        .fill(AppTheme.card)
+                                }
+                            }
                         )
                         .foregroundStyle(isFromCurrentUser ? .white : .primary)
+                        .shadow(color: isFromCurrentUser ? AppTheme.shadowAccent.opacity(0.3) : AppTheme.shadowLight, radius: 4, x: 0, y: 2)
                 }
 
-                Text(timeString)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
+                // Time and read receipt
+                HStack(spacing: 4) {
+                    Text(timeString)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    // Read receipt for sent messages
+                    if isFromCurrentUser {
+                        Image(systemName: message.isRead ? "checkmark.circle.fill" : "checkmark.circle")
+                            .font(.caption2)
+                            .foregroundStyle(message.isRead ? AppTheme.success : .secondary)
+                    }
+                }
+                .padding(.horizontal, 4)
             }
 
             if !isFromCurrentUser { Spacer(minLength: 60) }
         }
     }
-    
+
     private var timeString: String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return formatter.string(from: message.sentAt)
+    }
+}
+
+// MARK: - Full Screen Image View
+
+struct FullScreenImageView: View {
+    let imageURL: String
+    @Environment(\.dismiss) var dismiss
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            CachedAsyncImage(url: URL(string: imageURL)) { image in
+                image
+                    .resizable()
+                    .scaledToFit()
+                    .scaleEffect(scale)
+                    .offset(offset)
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                scale = lastScale * value
+                            }
+                            .onEnded { value in
+                                lastScale = scale
+                                if scale < 1.0 {
+                                    withAnimation(.spring()) {
+                                        scale = 1.0
+                                        lastScale = 1.0
+                                        offset = .zero
+                                        lastOffset = .zero
+                                    }
+                                }
+                            }
+                    )
+                    .simultaneousGesture(
+                        DragGesture()
+                            .onChanged { value in
+                                if scale > 1.0 {
+                                    offset = CGSize(
+                                        width: lastOffset.width + value.translation.width,
+                                        height: lastOffset.height + value.translation.height
+                                    )
+                                }
+                            }
+                            .onEnded { value in
+                                lastOffset = offset
+                            }
+                    )
+                    .onTapGesture(count: 2) {
+                        withAnimation(.spring()) {
+                            if scale > 1.0 {
+                                scale = 1.0
+                                lastScale = 1.0
+                                offset = .zero
+                                lastOffset = .zero
+                            } else {
+                                scale = 2.5
+                                lastScale = 2.5
+                            }
+                        }
+                    }
+            } placeholder: {
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.5)
+            }
+
+            // Close button
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        Haptics.impact(.light)
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(.white.opacity(0.8))
+                            .padding()
+                    }
+                }
+                Spacer()
+            }
+        }
+        .onTapGesture {
+            dismiss()
+        }
     }
 }
 
@@ -667,8 +972,6 @@ final class MessagesViewModel: ObservableObject {
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
-    @Published var sendError: String?
-    @Published var isSending = false
 
     private let service = FirebaseService()
     private var listener: ListenerRegistration?
@@ -719,10 +1022,7 @@ final class ChatViewModel: ObservableObject {
             sentAt: Date(),
             readAt: nil
         )
-
-        isSending = true
-        sendError = nil
-
+        
         do {
             try await service.sendMessage(message)
             // print confirmation a message was sent
@@ -731,10 +1031,8 @@ final class ChatViewModel: ObservableObject {
             messages.append(message)
         } catch {
             print("Error sending message: \(error)")
-            sendError = "Failed to send message. Please try again."
         }
-
-        isSending = false
+        
     }
     
     func markAsRead(conversationId: String) async {
@@ -749,8 +1047,6 @@ struct NewChatView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = NewChatViewModel()
     @State private var searchText = ""
-    @State private var selectedConversation: Conversation?
-    @State private var showChat = false
 
     var filteredMatches: [(match: Match, profile: UserProfile?)] {
         if searchText.isEmpty {
@@ -791,12 +1087,8 @@ struct NewChatView: View {
                                 if let profile = filteredMatches[index].profile {
                                     Button {
                                         Task {
-                                            if let conversation = await viewModel.createConversation(with: profile) {
-                                                selectedConversation = conversation
-                                                // Add profile to conversation for display
-                                                selectedConversation?.participantProfiles = [profile.uid: profile]
-                                                showChat = true
-                                            }
+                                            await viewModel.createConversation(with: profile)
+                                            dismiss()
                                         }
                                     } label: {
                                         HStack(spacing: 12) {
@@ -805,9 +1097,12 @@ struct NewChatView: View {
                                                 image
                                                     .resizable()
                                                     .scaledToFill()
+                                                    .frame(width: 50, height: 50)
+                                                    .clipped()
                                             } placeholder: {
                                                 Circle()
                                                     .fill(AppTheme.accent.opacity(0.2))
+                                                    .frame(width: 50, height: 50)
                                                     .overlay {
                                                         Text(profile.displayName.prefix(1))
                                                             .font(.title2.bold())
@@ -864,40 +1159,6 @@ struct NewChatView: View {
             } message: {
                 Text(viewModel.errorMessage)
             }
-            .sheet(isPresented: $showChat) {
-                if let conversation = selectedConversation {
-                    NavigationStack {
-                        ChatView(conversation: conversation)
-                            .toolbar {
-                                ToolbarItem(placement: .topBarLeading) {
-                                    Button("Done") {
-                                        showChat = false
-                                        dismiss()
-                                    }
-                                }
-                            }
-                    }
-                }
-            }
-            .overlay {
-                if viewModel.isCreatingConversation {
-                    ZStack {
-                        Color.black.opacity(0.3)
-                            .ignoresSafeArea()
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .scaleEffect(1.2)
-                                .tint(.white)
-                            Text("Starting conversation...")
-                                .font(.subheadline)
-                                .foregroundStyle(.white)
-                        }
-                        .padding(24)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    }
-                }
-            }
-            .allowsHitTesting(!viewModel.isCreatingConversation)
         }
     }
 }
@@ -908,7 +1169,6 @@ struct NewChatView: View {
 final class NewChatViewModel: ObservableObject {
     @Published var matches: [(match: Match, profile: UserProfile?)] = []
     @Published var isLoading = false
-    @Published var isCreatingConversation = false
     @Published var showError = false
     @Published var errorMessage = ""
 
@@ -946,15 +1206,8 @@ final class NewChatViewModel: ObservableObject {
         }
     }
 
-    func createConversation(with profile: UserProfile) async -> Conversation? {
-        guard let currentUserId = Auth.auth().currentUser?.uid else {
-            errorMessage = "Please sign in to continue"
-            showError = true
-            return nil
-        }
-
-        isCreatingConversation = true
-        defer { isCreatingConversation = false }
+    func createConversation(with profile: UserProfile) async {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
 
         do {
             let conversation = try await service.getOrCreateConversation(
@@ -967,15 +1220,10 @@ final class NewChatViewModel: ObservableObject {
             // Track analytics
             AnalyticsManager.shared.trackConversationStarted(withUserId: profile.uid)
 
-            Haptics.notify(.success)
-            return conversation
-
         } catch {
-            errorMessage = "Failed to start conversation. Please try again."
+            errorMessage = "Failed to create conversation: \(error.localizedDescription)"
             showError = true
-            Haptics.notify(.error)
             print("❌ Error creating conversation: \(error)")
-            return nil
         }
     }
 }

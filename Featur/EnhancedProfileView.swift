@@ -267,7 +267,12 @@ private struct MainProfileContent: View {
             .sheet(isPresented: $showShareSheet) {
                 let profileURL = "https://featur.app/profile/\(profile.uid)"
                 let shareText = "Check out \(profile.displayName)'s profile on Featur!"
-                ShareSheet(items: [shareText, URL(string: profileURL)!])
+                let items: [Any] = if let url = URL(string: profileURL) {
+                    [shareText, url]
+                } else {
+                    [shareText]
+                }
+                ShareSheet(items: items)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
@@ -370,9 +375,16 @@ private struct MainProfileContent: View {
                             image
                                 .resizable()
                                 .scaledToFill()
+                                .frame(width: 140, height: 140)
+                                .clipped()
                         case .empty:
-                            ProgressView()
-                                .tint(.white)
+                            ZStack {
+                                Circle()
+                                    .fill(AppTheme.accent.opacity(0.2))
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                            .frame(width: 140, height: 140)
                         case .failure:
                             InitialsAvatar(name: profile.displayName, size: 140)
                         @unknown default:
@@ -537,107 +549,120 @@ private struct MainProfileContent: View {
         let profile: UserProfile
         let onTapStats: () -> Void
 
-        @State private var animateNumbers = false
-        @StateObject private var analytics = ProfileAnalyticsViewModel()
+        @State private var showLikedProfiles = false
+        @State private var showMatchedProfiles = false
+        @State private var showFavoriteProfiles = false
+        @State private var showViewedProfiles = false
 
         var body: some View {
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
-                    AnimatedStatCard(
-                        title: "Followers",
-                        value: profile.followerCount ?? 0,
-                        icon: "person.3.fill",
-                        color: .purple,
-                        animate: animateNumbers,
-                        trendData: generateRealisticTrendData(currentValue: profile.followerCount ?? 0)
-                    )
-
-                    AnimatedStatCard(
-                        title: "Matches",
-                        value: analytics.matchCount,
+                    ActivityCardButton(
+                        title: "Liked",
                         icon: "heart.fill",
-                        color: .pink,
-                        animate: animateNumbers,
-                        trendData: generateRealisticTrendData(currentValue: analytics.matchCount)
-                    )
+                        color: .pink
+                    ) {
+                        showLikedProfiles = true
+                    }
+
+                    ActivityCardButton(
+                        title: "Matches",
+                        icon: "heart.circle.fill",
+                        color: .purple
+                    ) {
+                        showMatchedProfiles = true
+                    }
                 }
 
                 HStack(spacing: 12) {
-                    AnimatedStatCard(
-                        title: "Profile Views",
-                        value: analytics.profileViewCount,
-                        icon: "eye.fill",
-                        color: .blue,
-                        animate: animateNumbers,
-                        trendData: generateRealisticTrendData(currentValue: analytics.profileViewCount)
-                    )
-
-                    AnimatedStatCard(
-                        title: "Collabs",
-                        value: analytics.collabCount,
+                    ActivityCardButton(
+                        title: "Favorites",
                         icon: "star.fill",
-                        color: .orange,
-                        animate: animateNumbers,
-                        trendData: generateRealisticTrendData(currentValue: analytics.collabCount)
-                    )
-                }
-            }
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    withAnimation(.spring()) {
-                        animateNumbers = true
+                        color: .yellow
+                    ) {
+                        showFavoriteProfiles = true
+                    }
+
+                    ActivityCardButton(
+                        title: "Viewed",
+                        icon: "eye.fill",
+                        color: .blue
+                    ) {
+                        showViewedProfiles = true
                     }
                 }
             }
-            .onTapGesture(perform: onTapStats)
-            .task {
-                await analytics.loadAnalytics(userId: profile.uid)
+            .sheet(isPresented: $showLikedProfiles) {
+                ActivityProfilesSheet(
+                    title: "Liked Profiles",
+                    icon: "heart.fill",
+                    actionType: .like,
+                    userId: profile.uid
+                )
+            }
+            .sheet(isPresented: $showMatchedProfiles) {
+                MatchedProfilesSheet(userId: profile.uid)
+            }
+            .sheet(isPresented: $showFavoriteProfiles) {
+                ActivityProfilesSheet(
+                    title: "Favorite Profiles",
+                    icon: "star.fill",
+                    actionType: .superLike,
+                    userId: profile.uid
+                )
+            }
+            .sheet(isPresented: $showViewedProfiles) {
+                ActivityProfilesSheet(
+                    title: "Viewed Profiles",
+                    icon: "eye.fill",
+                    actionType: nil,
+                    userId: profile.uid
+                )
             }
         }
+    }
 
-        // Generate realistic trend data that shows growth, never negative
-        func generateRealisticTrendData(currentValue: Int) -> [Double] {
-            guard currentValue > 0 else {
-                return Array(repeating: 0.0, count: 7)
+    // Simple activity card button - no data, just clickable
+    private struct ActivityCardButton: View {
+        let title: String
+        let icon: String
+        let color: Color
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: {
+                Haptics.impact(.light)
+                action()
+            }) {
+                HStack(spacing: 10) {
+                    Image(systemName: icon)
+                        .font(.title3)
+                        .foregroundStyle(color)
+                        .frame(width: 28, height: 28)
+
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(color.opacity(0.15), lineWidth: 1)
+                )
             }
-
-            let doubleValue = Double(currentValue)
-
-            // Generate realistic data with natural fluctuations
-            // Use consistent seed based on current value for reproducibility
-            var generator = SeededRandomGenerator(seed: UInt64(currentValue))
-
-            // Start from a lower base value
-            let startValue = doubleValue * Double.random(in: 0.5...0.7, using: &generator)
-            var data: [Double] = [startValue]
-
-            // Generate 6 more days with realistic ups and downs
-            for i in 1..<7 {
-                let previousValue = data[i - 1]
-                let targetValue = doubleValue // We want to trend toward current value
-
-                // Calculate how far we still need to grow
-                let remainingGrowth = targetValue - previousValue
-                let daysRemaining = Double(7 - i)
-
-                // Base growth per day (to reach target)
-                let baseGrowth = remainingGrowth / daysRemaining
-
-                // Add realistic variation (+/- 30% of base growth)
-                let variation = baseGrowth * Double.random(in: -0.3...0.5, using: &generator)
-                let dailyChange = baseGrowth + variation
-
-                // Calculate next value, ensuring we don't go negative or overshoot too much
-                var nextValue = previousValue + dailyChange
-                nextValue = max(0, min(nextValue, targetValue * 1.1))
-
-                data.append(nextValue)
-            }
-
-            // Ensure last value is exactly the current value
-            data[6] = doubleValue
-
-            return data
+            .buttonStyle(.plain)
         }
     }
 
@@ -715,8 +740,7 @@ private struct MainProfileContent: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 28)
+            .padding(20)
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
@@ -897,15 +921,15 @@ private struct MainProfileContent: View {
                     title: "First Match",
                     description: "Got your first match!",
                     color: .pink,
-                    requirement: { ($0.followerCount ?? 0) > 0 }
+                    requirement: { _ in true } // Will be checked via matches count
                 ),
                 Achievement(
-                    id: "popular",
+                    id: "active_creator",
                     icon: "star.fill",
-                    title: "Popular Creator",
-                    description: "Reached 1K followers",
+                    title: "Active Creator",
+                    description: "Has multiple content styles",
                     color: .orange,
-                    requirement: { ($0.followerCount ?? 1000) >= 1000 }
+                    requirement: { $0.contentStyles.count >= 3 }
                 ),
                 Achievement(
                     id: "verified",
@@ -1073,6 +1097,7 @@ private struct MainProfileContent: View {
                                             .resizable()
                                             .scaledToFill()
                                             .frame(width: 120, height: 160)
+                                            .clipped()
                                             .clipShape(RoundedRectangle(cornerRadius: 12))
                                             .onTapGesture {
                                                 selectedImageIndex = index
@@ -1082,7 +1107,7 @@ private struct MainProfileContent: View {
                                         RoundedRectangle(cornerRadius: 12)
                                             .fill(Color.gray.opacity(0.2))
                                             .frame(width: 120, height: 160)
-                                            .overlay(ProgressView())
+                                            .overlay(ProgressView().tint(AppTheme.accent))
                                     default:
                                         RoundedRectangle(cornerRadius: 12)
                                             .fill(Color.gray.opacity(0.2))
@@ -1328,7 +1353,6 @@ private struct MainProfileContent: View {
     private struct VerificationSection: View {
         let profile: UserProfile
         @State private var showEmailVerification = false
-        @State private var showPhoneVerification = false
 
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
@@ -1347,27 +1371,12 @@ private struct MainProfileContent: View {
                     ) {
                         showEmailVerification = true
                     }
-
-                    // Phone Verification
-                    VerificationRow(
-                        title: "Phone Number",
-                        subtitle: profile.phoneNumber ?? "Not provided",
-                        isVerified: profile.isPhoneVerified ?? false,
-                        icon: "phone.fill",
-                        color: .green,
-                        showButton: profile.isPhoneVerified != true
-                    ) {
-                        showPhoneVerification = true
-                    }
                 }
             }
             .padding()
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             .sheet(isPresented: $showEmailVerification) {
                 EmailVerificationView(profile: profile)
-            }
-            .sheet(isPresented: $showPhoneVerification) {
-                PhoneVerificationView(profile: profile)
             }
         }
     }
@@ -1438,46 +1447,39 @@ private struct MainProfileContent: View {
     private struct SocialLinkRow: View {
         let platform: String
         let username: String
-        let followers: Int?
         let isVerified: Bool
         let icon: String
         let color: Color
-        
+
         var body: some View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.title3)
                     .foregroundStyle(color)
                     .frame(width: 32)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
                         Text(platform)
                             .font(.subheadline.weight(.semibold))
-                        
+
                         if isVerified {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.caption)
                                 .foregroundStyle(.blue)
                         }
                     }
-                    
+
                     Text("@\(username)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Spacer()
-                
-                if let followers = followers {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(formatNumber(followers))
-                            .font(.caption.bold())
-                        Text("followers")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
             .padding()
             .background(Color.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
@@ -1619,9 +1621,14 @@ private struct MainProfileContent: View {
                         // Profile image
                         if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
                             AsyncImage(url: url) { image in
-                                image.resizable().scaledToFill()
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 80, height: 80)
+                                    .clipped()
                             } placeholder: {
                                 Color.white.opacity(0.3)
+                                    .frame(width: 80, height: 80)
                             }
                             .frame(width: 80, height: 80)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -1648,7 +1655,7 @@ private struct MainProfileContent: View {
                                 .foregroundStyle(.white.opacity(0.8))
                             
                             HStack(spacing: 12) {
-                                CardStat(icon: "heart.fill", value: "\(formatNumber(profile.followerCount ?? 0))")
+                                CardStat(icon: "photo.fill", value: "\((profile.mediaURLs ?? []).count)")
                                 CardStat(icon: "star.fill", value: "\(profile.contentStyles.count)")
                             }
                         }
@@ -2227,9 +2234,16 @@ private struct MainProfileContent: View {
                         HStack {
                             if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
                                 AsyncImage(url: url) { image in
-                                    image.resizable().scaledToFill()
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 80, height: 80)
+                                        .clipped()
                                 } placeholder: {
-                                    Color.gray
+                                    Circle()
+                                        .fill(Color.gray.opacity(0.3))
+                                        .frame(width: 80, height: 80)
+                                        .overlay(ProgressView().tint(AppTheme.accent))
                                 }
                                 .frame(width: 80, height: 80)
                                 .clipShape(Circle())
@@ -2288,6 +2302,7 @@ private struct MainProfileContent: View {
                                                     .resizable()
                                                     .scaledToFill()
                                                     .frame(width: 100, height: 100)
+                                                    .clipped()
                                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                                             case .failure(_):
                                                 RoundedRectangle(cornerRadius: 12)
@@ -2589,9 +2604,15 @@ private struct MainProfileContent: View {
                     VStack(spacing: 8) {
                         if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
                             AsyncImage(url: url) { image in
-                                image.resizable().scaledToFill()
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 60, height: 60)
+                                    .clipped()
                             } placeholder: {
-                                Color.gray
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 60, height: 60)
                             }
                             .frame(width: 60, height: 60)
                             .clipShape(Circle())
@@ -2697,10 +2718,10 @@ private struct MainProfileContent: View {
                                         isPositive: analyticsVM.profileViewsChangePositive
                                     )
                                     DetailedStatRow(
-                                        label: "New Followers",
-                                        value: "+\(analyticsVM.newFollowers)",
-                                        change: analyticsVM.followersChange,
-                                        isPositive: analyticsVM.followersChangePositive
+                                        label: "Likes Given",
+                                        value: "\(analyticsVM.likesGiven)",
+                                        change: analyticsVM.likesGivenChange,
+                                        isPositive: analyticsVM.likesGivenChangePositive
                                     )
                                     DetailedStatRow(
                                         label: "Likes Received",
@@ -3064,7 +3085,7 @@ private struct MainProfileContent: View {
                             }
                         }
 
-                        if let location = profile.location, profile.age != nil {
+                        if profile.location != nil, profile.age != nil {
                             Text("•")
                                 .foregroundStyle(.secondary)
                         }
@@ -3924,7 +3945,7 @@ private struct MainProfileContent: View {
         var networkingScore: Int {
             var score = 50
             if profile.isVerified ?? false { score += 20 }
-            if (profile.followerCount ?? 0) > 1000 { score += 15 }
+            if (profile.mediaURLs ?? []).count >= 3 { score += 15 }
             if !profile.contentStyles.isEmpty { score += 10 }
             if profile.socialLinks?.instagram != nil { score += 5 }
             return min(score, 100)
@@ -3976,7 +3997,7 @@ private struct MainProfileContent: View {
                     // Score Breakdown
                     VStack(alignment: .leading, spacing: 12) {
                         ScoreFactorRow(icon: "checkmark.seal.fill", label: "Verified", value: (profile.isVerified ?? false) ? 20 : 0, maxValue: 20)
-                        ScoreFactorRow(icon: "person.3.fill", label: "Followers", value: (profile.followerCount ?? 0) > 1000 ? 15 : 5, maxValue: 15)
+                        ScoreFactorRow(icon: "photo.on.rectangle", label: "Photos", value: (profile.mediaURLs ?? []).count >= 3 ? 15 : 5, maxValue: 15)
                         ScoreFactorRow(icon: "photo.fill", label: "Content", value: 10, maxValue: 10)
                         ScoreFactorRow(icon: "link", label: "Socials", value: 5, maxValue: 5)
                     }
@@ -4037,7 +4058,7 @@ private struct MainProfileContent: View {
         let profile: UserProfile
         
         let milestones = [
-            Milestone(icon: "star.fill", title: "Reached 1K Followers", date: "2 weeks ago", color: .yellow, isAchieved: true),
+            Milestone(icon: "star.fill", title: "Profile Complete", date: "2 weeks ago", color: .yellow, isAchieved: true),
             Milestone(icon: "heart.fill", title: "100 Matches", date: "1 month ago", color: .pink, isAchieved: true),
             Milestone(icon: "photo.fill", title: "Upload 50 Photos", date: "Next milestone", color: .blue, isAchieved: false),
             Milestone(icon: "flame.fill", title: "30 Day Streak", date: "Coming soon", color: .orange, isAchieved: false)
@@ -4362,14 +4383,47 @@ private struct MainProfileContent: View {
         let animate: Bool
 
         var body: some View {
-            LinearGradient(
-                colors: [
-                    Color(red: animate ? 0.4 : 0.5, green: 0.3, blue: animate ? 0.8 : 0.7),
-                    Color(red: animate ? 0.6 : 0.5, green: 0.4, blue: animate ? 0.9 : 1.0)
-                ],
-                startPoint: animate ? .topLeading : .bottomLeading,
-                endPoint: animate ? .bottomTrailing : .topTrailing
-            )
+            ZStack {
+                // Base gradient
+                LinearGradient(
+                    colors: [
+                        Color(red: animate ? 0.4 : 0.5, green: 0.3, blue: animate ? 0.8 : 0.7),
+                        Color(red: animate ? 0.6 : 0.5, green: 0.4, blue: animate ? 0.9 : 1.0)
+                    ],
+                    startPoint: animate ? .topLeading : .bottomLeading,
+                    endPoint: animate ? .bottomTrailing : .topTrailing
+                )
+
+                // Decorative circles - lightweight, no animation
+                GeometryReader { geo in
+                    Circle()
+                        .fill(.white.opacity(0.08))
+                        .frame(width: 200, height: 200)
+                        .blur(radius: 40)
+                        .offset(x: -60, y: -40)
+
+                    Circle()
+                        .fill(.white.opacity(0.06))
+                        .frame(width: 150, height: 150)
+                        .blur(radius: 30)
+                        .offset(x: geo.size.width - 80, y: 60)
+
+                    Circle()
+                        .fill(.white.opacity(0.05))
+                        .frame(width: 100, height: 100)
+                        .blur(radius: 25)
+                        .offset(x: geo.size.width / 2 - 50, y: geo.size.height - 80)
+
+                    // Subtle diagonal lines
+                    Path { path in
+                        for i in stride(from: -100, to: Int(geo.size.width) + 100, by: 40) {
+                            path.move(to: CGPoint(x: CGFloat(i), y: 0))
+                            path.addLine(to: CGPoint(x: CGFloat(i) + 150, y: geo.size.height))
+                        }
+                    }
+                    .stroke(.white.opacity(0.03), lineWidth: 1)
+                }
+            }
         }
     }
 
@@ -4462,7 +4516,7 @@ private struct MainProfileContent: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .onChange(of: currentIndex) { _ in
+                .onChange(of: currentIndex) { _, _ in
                     // Reset zoom when swiping to another image
                     withAnimation {
                         scale = 1.0
@@ -4927,7 +4981,7 @@ struct PhoneVerificationView: View {
                             .font(.title2.bold())
                             .padding()
                             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
-                            .onChange(of: verificationCode) { newValue in
+                            .onChange(of: verificationCode) { _, newValue in
                                 // Auto-verify when 6 digits entered
                                 if newValue.count == 6 {
                                     verifyCode()
@@ -5109,6 +5163,8 @@ final class ProfileAnalyticsViewModel: ObservableObject {
     @Published var matchCount: Int = 0
     @Published var profileViewCount: Int = 0
     @Published var collabCount: Int = 0
+    @Published var likesGivenCount: Int = 0
+    @Published var favoritesGivenCount: Int = 0
     @Published var isLoading: Bool = false
 
     private let service = FirebaseService()
@@ -5119,15 +5175,47 @@ final class ProfileAnalyticsViewModel: ObservableObject {
         async let matchesTask = fetchMatchCount(userId: userId)
         async let viewsTask = fetchProfileViewCount(userId: userId)
         async let collabsTask = fetchCollabCount(userId: userId)
+        async let likesTask = fetchLikesGivenCount(userId: userId)
+        async let favoritesTask = fetchFavoritesGivenCount(userId: userId)
 
-        let (matches, views, collabs) = await (matchesTask, viewsTask, collabsTask)
+        let (matches, views, collabs, likes, favorites) = await (matchesTask, viewsTask, collabsTask, likesTask, favoritesTask)
 
         matchCount = matches
         profileViewCount = views
         collabCount = collabs
+        likesGivenCount = likes
+        favoritesGivenCount = favorites
         isLoading = false
 
-        print("✅ Analytics loaded - Matches: \(matches), Views: \(views), Collabs: \(collabs)")
+        print("✅ Analytics loaded - Matches: \(matches), Views: \(views), Likes: \(likes), Favorites: \(favorites)")
+    }
+
+    private func fetchLikesGivenCount(userId: String) async -> Int {
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let snapshot = try await db.collection("swipes")
+                .whereField("userId", isEqualTo: userId)
+                .whereField("action", isEqualTo: "like")
+                .getDocuments()
+            return snapshot.documents.count
+        } catch {
+            print("❌ Error fetching likes given count: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchFavoritesGivenCount(userId: String) async -> Int {
+        do {
+            let db = FirebaseFirestore.Firestore.firestore()
+            let snapshot = try await db.collection("swipes")
+                .whereField("userId", isEqualTo: userId)
+                .whereField("action", isEqualTo: "superLike")
+                .getDocuments()
+            return snapshot.documents.count
+        } catch {
+            print("❌ Error fetching favorites given count: \(error)")
+            return 0
+        }
     }
 
     private func fetchMatchCount(userId: String) async -> Int {
@@ -5194,9 +5282,9 @@ final class DetailedAnalyticsViewModel: ObservableObject {
     @Published var profileViewsChange: String = "—"
     @Published var profileViewsChangePositive: Bool = true
 
-    @Published var newFollowers: Int = 0
-    @Published var followersChange: String = "—"
-    @Published var followersChangePositive: Bool = true
+    @Published var likesGiven: Int = 0
+    @Published var likesGivenChange: String = "—"
+    @Published var likesGivenChangePositive: Bool = true
 
     @Published var likesReceived: Int = 0
     @Published var likesChange: String = "—"
@@ -5237,7 +5325,7 @@ final class DetailedAnalyticsViewModel: ObservableObject {
 
         // Update current values
         profileViews = current.profileViews
-        newFollowers = current.newFollowers
+        likesGiven = current.likesGiven
         likesReceived = current.likesReceived
         totalMatches = current.totalMatches
         messagesSent = current.messagesSent
@@ -5256,8 +5344,8 @@ final class DetailedAnalyticsViewModel: ObservableObject {
         profileViewsChange = calculateChange(current: current.profileViews, previous: previous.profileViews)
         profileViewsChangePositive = current.profileViews >= previous.profileViews
 
-        followersChange = calculateChange(current: current.newFollowers, previous: previous.newFollowers)
-        followersChangePositive = current.newFollowers >= previous.newFollowers
+        likesGivenChange = calculateChange(current: current.likesGiven, previous: previous.likesGiven)
+        likesGivenChangePositive = current.likesGiven >= previous.likesGiven
 
         likesChange = calculateChange(current: current.likesReceived, previous: previous.likesReceived)
         likesChangePositive = current.likesReceived >= previous.likesReceived
@@ -5299,10 +5387,20 @@ final class DetailedAnalyticsViewModel: ObservableObject {
             endDate: endDate
         )
 
-        async let likesTask = fetchCount(
+        async let likesReceivedTask = fetchCount(
             db: db,
             collection: "swipes",
             field: "targetUserId",
+            userId: userId,
+            startDate: startDate,
+            endDate: endDate,
+            additionalFilter: ("action", "like")
+        )
+
+        async let likesGivenTask = fetchCount(
+            db: db,
+            collection: "swipes",
+            field: "userId",
             userId: userId,
             startDate: startDate,
             endDate: endDate,
@@ -5324,12 +5422,12 @@ final class DetailedAnalyticsViewModel: ObservableObject {
             endDate: endDate
         )
 
-        let (views, likes, matches, messages, collabs, swipes) = await (viewsTask, likesTask, matchesTask, messagesTask, collabsTask, swipesTask)
+        let (views, likesReceived, likesGiven, matches, messages, collabs, swipes) = await (viewsTask, likesReceivedTask, likesGivenTask, matchesTask, messagesTask, collabsTask, swipesTask)
 
         return PeriodStats(
             profileViews: views,
-            newFollowers: 0, // Would need follower tracking system
-            likesReceived: likes,
+            likesGiven: likesGiven,
+            likesReceived: likesReceived,
             totalMatches: matches,
             messagesSent: messages,
             activeCollabs: collabs,
@@ -5479,7 +5577,7 @@ final class DetailedAnalyticsViewModel: ObservableObject {
 
     struct PeriodStats {
         let profileViews: Int
-        let newFollowers: Int
+        let likesGiven: Int
         let likesReceived: Int
         let totalMatches: Int
         let messagesSent: Int
@@ -5497,9 +5595,15 @@ struct TestimonialCard: View {
             HStack(spacing: 12) {
                 if let imageURL = testimonial.authorImageURL, let url = URL(string: imageURL) {
                     AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 40, height: 40)
+                            .clipped()
                     } placeholder: {
-                        Circle().fill(AppTheme.accent.opacity(0.3))
+                        Circle()
+                            .fill(AppTheme.accent.opacity(0.3))
+                            .frame(width: 40, height: 40)
                     }
                     .frame(width: 40, height: 40)
                     .clipShape(Circle())
@@ -6247,9 +6351,15 @@ struct CollabHistoryCard: View {
             // Avatar
             if let imageURL = partnerProfile?.profileImageURL, let url = URL(string: imageURL) {
                 AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 50, height: 50)
+                        .clipped()
                 } placeholder: {
-                    Circle().fill(AppTheme.accent.opacity(0.3))
+                    Circle()
+                        .fill(AppTheme.accent.opacity(0.3))
+                        .frame(width: 50, height: 50)
                 }
                 .frame(width: 50, height: 50)
                 .clipShape(Circle())
