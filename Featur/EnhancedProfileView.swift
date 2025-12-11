@@ -715,7 +715,8 @@ private struct MainProfileContent: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 28)
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
