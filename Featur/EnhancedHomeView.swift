@@ -10,6 +10,7 @@ struct EnhancedHomeView: View {
     @State private var swipeCount = 0
     @State private var showFilters = false
     @State private var selectedProfile: UserProfile? = nil
+    @State private var showNotificationSettings = false
     
     var body: some View {
         ZStack {
@@ -58,12 +59,13 @@ struct EnhancedHomeView: View {
                     }
                     
                     Button {
-                        // Show notifications
+                        Haptics.impact(.light)
+                        showNotificationSettings = true
                     } label: {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "bell.fill")
                                 .foregroundStyle(AppTheme.accent)
-                            
+
                             if viewModel.hasNewMatches {
                                 Circle()
                                     .fill(.red)
@@ -82,7 +84,9 @@ struct EnhancedHomeView: View {
             ProfileDetailViewSimple(profile: profile)
                 .presentationDragIndicator(.visible)
         }
-
+        .sheet(isPresented: $showNotificationSettings) {
+            NotificationSettingsSheet()
+        }
         .task {
             // Track screen view
             AnalyticsManager.shared.trackScreenView(screenName: "Home", screenClass: "EnhancedHomeView")
@@ -195,7 +199,7 @@ struct EnhancedHomeView: View {
             // Pass Button
             ActionButton(
                 icon: "xmark",
-                color: .red,
+                color: AppTheme.error,
                 size: 60
             ) {
                 Haptics.impact(.rigid)
@@ -205,11 +209,11 @@ struct EnhancedHomeView: View {
                     }
                 }
             }
-            
+
             // Undo Button
             ActionButton(
                 icon: "arrow.uturn.left",
-                color: AppTheme.accent,
+                color: AppTheme.warning,
                 size: 50
             ) {
                 Haptics.impact(.soft)
@@ -221,11 +225,11 @@ struct EnhancedHomeView: View {
             }
             .disabled(viewModel.swipeHistory.isEmpty)
             .opacity(viewModel.swipeHistory.isEmpty ? 0.5 : 1.0)
-            
+
             // Super Like Button
             ActionButton(
                 icon: "star.fill",
-                color: .blue,
+                color: AppTheme.superLike,
                 size: 50
             ) {
                 Haptics.notify(.success)
@@ -236,11 +240,11 @@ struct EnhancedHomeView: View {
                     }
                 }
             }
-            
+
             // Like Button
             ActionButton(
                 icon: "heart.fill",
-                color: .green,
+                color: AppTheme.like,
                 size: 60
             ) {
                 Haptics.impact(.heavy)
@@ -271,36 +275,26 @@ struct EnhancedHomeView: View {
     }
     
     // MARK: - Empty State
-    
+
     private var emptyState: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "person.2.slash")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-            
-            Text("No More Profiles")
-                .font(.title2.bold())
-            
-            Text("Check back later or adjust your filters")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            
-            Button {
-                Task {
-                    await viewModel.refresh(currentUserId: auth.user?.uid ?? "")
-                }
-            } label: {
-                Text("Refresh")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(width: 200, height: 50)
-                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 25))
+        EmptyStateView(
+            icon: "sparkles",
+            title: "You've Seen Everyone!",
+            message: "Check back later for new creators or try adjusting your preferences",
+            actionTitle: "Refresh"
+        ) {
+            Task {
+                await viewModel.refresh(currentUserId: auth.user?.uid ?? "")
             }
-            .padding(.top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+        .onAppear {
+            // Auto-refresh after a short delay when empty state appears
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+                await viewModel.refresh(currentUserId: auth.user?.uid ?? "")
+            }
+        }
     }
     
     // MARK: - Error Toast
@@ -317,6 +311,7 @@ struct EnhancedHomeView: View {
             Spacer()
 
             Button {
+                Haptics.impact(.light)
                 Task {
                     await viewModel.loadProfiles(currentUserId: auth.user?.uid ?? "")
                 }
@@ -342,13 +337,14 @@ struct TinderSwipeCard: View {
     let onSwipeLeft: () -> Void
     let onSwipeRight: () -> Void
     let onTap: () -> Void
-    
+
     @State private var offset: CGSize = .zero
     @State private var rotation: Double = 0
     @State private var scale: CGFloat = 1.0
-    
+    @State private var hasTriggeredThresholdHaptic = false
+
     private let swipeThreshold: CGFloat = 100
-    
+
     var body: some View {
         ProfileCardView(profile: profile)
             .overlay(alignment: .topLeading) {
@@ -374,10 +370,20 @@ struct TinderSwipeCard: View {
                         offset = gesture.translation
                         rotation = Double(gesture.translation.width / 20)
                         scale = 0.95
+
+                        // Haptic feedback when crossing threshold
+                        let isOverThreshold = abs(gesture.translation.width) > swipeThreshold
+                        if isOverThreshold && !hasTriggeredThresholdHaptic {
+                            Haptics.impact(.medium)
+                            hasTriggeredThresholdHaptic = true
+                        } else if !isOverThreshold {
+                            hasTriggeredThresholdHaptic = false
+                        }
                     }
                     .onEnded { gesture in
                         let horizontalSwipe = gesture.translation.width
-                        
+                        hasTriggeredThresholdHaptic = false
+
                         if abs(horizontalSwipe) > swipeThreshold {
                             // Swipe completed
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -387,7 +393,7 @@ struct TinderSwipeCard: View {
                                 )
                                 rotation = horizontalSwipe > 0 ? 15 : -15
                             }
-                            
+
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 if horizontalSwipe > 0 {
                                     onSwipeRight()
@@ -396,7 +402,8 @@ struct TinderSwipeCard: View {
                                 }
                             }
                         } else {
-                            // Snap back
+                            // Snap back with light haptic
+                            Haptics.impact(.light)
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                                 offset = .zero
                                 rotation = 0
@@ -425,12 +432,18 @@ struct ProfileCardView: View {
         mediaURLs.count > 1
     }
 
+    // Safe current index that stays within bounds
+    private var safeCurrentIndex: Int {
+        guard !mediaURLs.isEmpty else { return 0 }
+        return min(currentImageIndex, mediaURLs.count - 1)
+    }
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
                 // Background Image/Gradient with Carousel (CACHED)
                 if !mediaURLs.isEmpty {
-                    let currentURL = mediaURLs[currentImageIndex]
+                    let currentURL = mediaURLs[safeCurrentIndex]
                     if let url = URL(string: currentURL.trimmingCharacters(in: .whitespacesAndNewlines)) {
                         CachedAsyncImage(url: url) { image in
                             image
@@ -442,8 +455,6 @@ struct ProfileCardView: View {
                                     // Add slight fade so gradient gently merges into image
                                     AppTheme.gradient.opacity(0.15)
                                 )
-                                .transition(.opacity)
-                                .animation(.easeInOut(duration: 0.3), value: UUID())
                         } placeholder: {
                             // While loading: subtle gradient + blur shimmer
                             ZStack {
@@ -454,14 +465,18 @@ struct ProfileCardView: View {
                                 ProgressView()
                                     .tint(.white)
                             }
-                            .transition(.opacity)
+                            .frame(width: geo.size.width, height: geo.size.height)
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
-                        .id(currentImageIndex) // Force reload when index changes
+                        .id(safeCurrentIndex) // Force reload when index changes
+                    } else {
+                        // Invalid URL fallback
+                        fallbackGradient(size: geo.size)
                     }
                 } else {
-                    AppTheme.gradient
+                    // No images fallback
+                    fallbackGradient(size: geo.size)
                 }
 
                 // Image Navigation Areas (tap left/right to navigate)
@@ -471,7 +486,7 @@ struct ProfileCardView: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                withAnimation {
+                                withAnimation(.easeInOut(duration: 0.2)) {
                                     currentImageIndex = max(0, currentImageIndex - 1)
                                 }
                                 Haptics.impact(.light)
@@ -481,7 +496,7 @@ struct ProfileCardView: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                withAnimation {
+                                withAnimation(.easeInOut(duration: 0.2)) {
                                     currentImageIndex = min(mediaURLs.count - 1, currentImageIndex + 1)
                                 }
                                 Haptics.impact(.light)
@@ -495,7 +510,7 @@ struct ProfileCardView: View {
                         HStack(spacing: 6) {
                             ForEach(0..<mediaURLs.count, id: \.self) { index in
                                 Capsule()
-                                    .fill(index == currentImageIndex ? .white : .white.opacity(0.5))
+                                    .fill(index == safeCurrentIndex ? .white : .white.opacity(0.5))
                                     .frame(height: 4)
                                     .frame(maxWidth: .infinity)
                             }
@@ -507,14 +522,14 @@ struct ProfileCardView: View {
                     }
                 }
 
-                
+
                 // Gradient Overlay
                 LinearGradient(
                     colors: [.clear, .black.opacity(0.8)],
                     startPoint: .center,
                     endPoint: .bottom
                 )
-                
+
                 // Profile Info
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -549,30 +564,32 @@ struct ProfileCardView: View {
                             .background(.green, in: Capsule())
                         }
                     }
-                    
-                    if let bio = profile.bio {
+
+                    if let bio = profile.bio, !bio.isEmpty {
                         Text(bio)
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.9))
                             .lineLimit(2)
                     }
-                    
+
                     // Content Styles
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(profile.contentStyles.prefix(3), id: \.self) { style in
-                                Text(style.rawValue)
-                                    .font(.caption.bold())
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(.white.opacity(0.2), in: Capsule())
-                                    .foregroundStyle(.white)
+                    if !profile.contentStyles.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(profile.contentStyles.prefix(3), id: \.self) { style in
+                                    Text(style.rawValue)
+                                        .font(.caption.bold())
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(.white.opacity(0.2), in: Capsule())
+                                        .foregroundStyle(.white)
+                                }
                             }
                         }
                     }
-                    
+
                     // Location
-                    if let location = profile.location, let city = location.city {
+                    if let location = profile.location, let city = location.city, !city.isEmpty {
                         HStack(spacing: 4) {
                             Image(systemName: "mappin.circle.fill")
                                 .font(.caption)
@@ -590,6 +607,24 @@ struct ProfileCardView: View {
             .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
         }
         .aspectRatio(0.7, contentMode: .fit)
+        .onChange(of: mediaURLs.count) { _, newCount in
+            // Reset index if it's out of bounds after mediaURLs changes
+            if currentImageIndex >= newCount {
+                currentImageIndex = max(0, newCount - 1)
+            }
+        }
+    }
+
+    // Fallback gradient view with person icon
+    @ViewBuilder
+    private func fallbackGradient(size: CGSize) -> some View {
+        ZStack {
+            AppTheme.gradient
+            Image(systemName: "person.fill")
+                .font(.system(size: 80))
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .frame(width: size.width, height: size.height)
     }
 }
 
@@ -623,20 +658,37 @@ struct ActionButton: View {
     let color: Color
     let size: CGFloat
     let action: () -> Void
-    
+
+    @State private var isPressed = false
+
     var body: some View {
         Button(action: action) {
             ZStack {
+                // Outer glow
+                Circle()
+                    .fill(color.opacity(0.15))
+                    .frame(width: size + 8, height: size + 8)
+                    .blur(radius: 4)
+
+                // Main button
                 Circle()
                     .fill(.white)
                     .frame(width: size, height: size)
-                    .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
-                
+                    .shadow(color: color.opacity(0.3), radius: isPressed ? 4 : 8, y: isPressed ? 2 : 4)
+
                 Image(systemName: icon)
                     .font(.system(size: size * 0.4, weight: .bold))
                     .foregroundStyle(color)
             }
+            .scaleEffect(isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isPressed)
         }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 
@@ -762,6 +814,9 @@ struct HomeFiltersSheet: View {
                     Toggle("Verified Creators Only", isOn: $viewModel.verifiedOnly)
                         .padding()
                         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 16))
+                        .onChange(of: viewModel.verifiedOnly) { _, _ in
+                            Haptics.selection()
+                        }
                 }
                 .padding()
             }
@@ -917,9 +972,6 @@ final class HomeViewModel: ObservableObject {
             if !profiles.isEmpty {
                 let userIds = profiles.map { $0.uid }
                 await PresenceManager.shared.fetchOnlineStatus(userIds: userIds)
-
-                // Prefetch images for smooth scrolling
-                prefetchProfileImages(profiles: profiles)
             }
 
             isLoading = false
@@ -1135,33 +1187,7 @@ final class HomeViewModel: ObservableObject {
     }
 
     func applyFilters() async {
-
-    }
-
-    /// Prefetch profile images for smooth scrolling
-    private func prefetchProfileImages(profiles: [UserProfile]) {
-        var urls: [URL] = []
-
-        for profile in profiles {
-            // Add profile image
-            if let urlString = profile.profileImageURL,
-               let url = URL(string: urlString) {
-                urls.append(url)
-            }
-
-            // Add media URLs (first 2 for each profile)
-            if let mediaURLs = profile.mediaURLs {
-                for urlString in mediaURLs.prefix(2) {
-                    if let url = URL(string: urlString.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                        urls.append(url)
-                    }
-                }
-            }
-        }
-
-        // Prefetch in background
-        ImageCache.shared.prefetch(urls: urls)
-        print("⚡ Prefetching \(urls.count) images for smooth scrolling")
+        
     }
 }
 
@@ -1175,16 +1201,157 @@ struct SwipeRecord: Identifiable {
     let swipeData: SwipeAction? // Store for undo functionality
 }
 
-// MARK: - Haptics Helper
+// MARK: - Notification Settings Sheet
 
-struct Haptics2 {
-    static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        let generator = UIImpactFeedbackGenerator(style: style)
-        generator.impactOccurred()
+struct NotificationSettingsSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @StateObject private var viewModel = NotificationSettingsSheetViewModel()
+
+    var body: some View {
+        NavigationStack {
+            List {
+                // Status Section
+                Section {
+                    HStack {
+                        Image(systemName: viewModel.notificationsEnabled ? "bell.badge.fill" : "bell.slash.fill")
+                            .font(.title2)
+                            .foregroundStyle(viewModel.notificationsEnabled ? .green : .red)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                (viewModel.notificationsEnabled ? Color.green : Color.red).opacity(0.15),
+                                in: RoundedRectangle(cornerRadius: 10)
+                            )
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(viewModel.notificationsEnabled ? "Notifications Enabled" : "Notifications Disabled")
+                                .font(.headline)
+
+                            Text(viewModel.notificationsEnabled
+                                 ? "You'll receive alerts for matches, messages, and more"
+                                 : "Enable notifications to stay updated")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+
+                // Notification Types
+                Section {
+                    Toggle(isOn: $viewModel.matchNotifications) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(.pink)
+                                .frame(width: 28)
+                            Text("New Matches")
+                        }
+                    }
+
+                    Toggle(isOn: $viewModel.messageNotifications) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "message.fill")
+                                .foregroundStyle(.blue)
+                                .frame(width: 28)
+                            Text("New Messages")
+                        }
+                    }
+
+                    Toggle(isOn: $viewModel.likeNotifications) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "star.fill")
+                                .foregroundStyle(.yellow)
+                                .frame(width: 28)
+                            Text("Someone Liked You")
+                        }
+                    }
+                } header: {
+                    Text("Notification Types")
+                } footer: {
+                    Text("Choose which notifications you want to receive")
+                }
+
+                // Enable/Disable Button
+                Section {
+                    if !viewModel.notificationsEnabled {
+                        Button {
+                            viewModel.requestNotificationPermission()
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Label("Enable Notifications", systemImage: "bell.badge")
+                                    .font(.headline)
+                                Spacer()
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.vertical, 14)
+                            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                    } else {
+                        Button {
+                            viewModel.openSettings()
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Label("Open System Settings", systemImage: "gear")
+                                    .font(.subheadline)
+                                Spacer()
+                            }
+                            .foregroundStyle(AppTheme.accent)
+                        }
+                    }
+                } footer: {
+                    if viewModel.notificationsEnabled {
+                        Text("To disable notifications completely, go to your device Settings")
+                    }
+                }
+            }
+            .navigationTitle("Notifications")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .task {
+                await viewModel.checkNotificationStatus()
+            }
+        }
     }
-    
-    static func notify(_ type: UINotificationFeedbackGenerator.FeedbackType) {
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(type)
+}
+
+@MainActor
+final class NotificationSettingsSheetViewModel: ObservableObject {
+    @Published var notificationsEnabled = false
+    @Published var matchNotifications = true
+    @Published var messageNotifications = true
+    @Published var likeNotifications = true
+
+    func checkNotificationStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        notificationsEnabled = settings.authorizationStatus == .authorized
+    }
+
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            DispatchQueue.main.async {
+                self.notificationsEnabled = granted
+                if granted {
+                    Haptics.notify(.success)
+                    UIApplication.shared.registerForRemoteNotifications()
+                } else {
+                    Haptics.notify(.warning)
+                }
+            }
+        }
+    }
+
+    func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
     }
 }

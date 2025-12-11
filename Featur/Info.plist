@@ -16,7 +16,45 @@
 	<string>1</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
+
+	<!-- Privacy Usage Descriptions (Required for App Store) -->
+	<key>NSCameraUsageDescription</key>
+	<string>Featur needs camera access to take photos for your profile and messages.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Featur needs photo library access to select photos for your profile and messages.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Featur needs permission to save photos to your library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Featur uses your location to help you discover and connect with people and features near you.</string>
+	<string>Featur uses your location to show nearby creators and help you connect with local collaborators.</string>
+
+	<!-- Export Compliance -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<!-- App Transport Security -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
+
+	<!-- Supported Interface Orientations -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- Background Modes (if needed for notifications) -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

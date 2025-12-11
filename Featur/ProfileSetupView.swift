@@ -46,6 +46,7 @@ struct ProfileSetupView: View {
                                         .resizable()
                                         .scaledToFill()
                                         .frame(width: 120, height: 120)
+                                        .clipped()
                                         .clipShape(Circle())
                                 } else {
                                     Image(systemName: "person.fill")
